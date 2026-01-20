@@ -9,9 +9,9 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Test Infrastructure
 
-- [ ] **TEST-01**: pytest framework configured and working
-- [ ] **TEST-02**: pytest-mock installed for API/external service mocking
-- [ ] **TEST-03**: Test fixtures infrastructure set up
+- [x] **TEST-01**: pytest framework configured and working
+- [x] **TEST-02**: pytest-mock installed for API/external service mocking
+- [x] **TEST-03**: Test fixtures infrastructure set up
 - [ ] **TEST-04**: Unit tests for auth module (get_access_token)
 - [ ] **TEST-05**: Unit tests for RedHatAPIClient with mocked requests
 - [ ] **TEST-06**: Unit tests for WorkspaceManager
@@ -98,9 +98,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEST-01 | Phase 1 | Pending |
-| TEST-02 | Phase 1 | Pending |
-| TEST-03 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
+| TEST-02 | Phase 1 | Complete |
+| TEST-03 | Phase 1 | Complete |
 | TEST-04 | Phase 2 | Pending |
 | TEST-05 | Phase 2 | Pending |
 | TEST-06 | Phase 2 | Pending |
