@@ -111,26 +111,26 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEBT-03 | Phase 3 | Pending |
 | DEBT-04 | Phase 3 | Pending |
 | DEBT-05 | Phase 3 | Pending |
-| BUG-01 | Phase 4 | Pending |
-| BUG-02 | Phase 4 | Pending |
-| SEC-01 | Phase 5 | Pending |
-| SEC-02 | Phase 5 | Pending |
-| SEC-03 | Phase 5 | Pending |
-| SEC-04 | Phase 5 | Pending |
-| PERF-01 | Phase 6 | Pending |
-| PERF-02 | Phase 6 | Pending |
-| PERF-03 | Phase 6 | Pending |
-| QUAL-01 | Phase 7 | Pending |
-| QUAL-02 | Phase 7 | Pending |
-| QUAL-03 | Phase 7 | Pending |
-| QUAL-04 | Phase 7 | Pending |
-| QUAL-05 | Phase 7 | Pending |
-| INFRA-01 | Phase 8 | Pending |
-| INFRA-02 | Phase 8 | Pending |
-| INFRA-03 | Phase 8 | Pending |
-| DEP-01 | Phase 9 | Pending |
-| DEP-02 | Phase 9 | Pending |
-| DEP-03 | Phase 9 | Pending |
+| BUG-01 | Phase 3 | Pending |
+| BUG-02 | Phase 3 | Pending |
+| SEC-01 | Phase 4 | Pending |
+| SEC-02 | Phase 4 | Pending |
+| SEC-03 | Phase 4 | Pending |
+| SEC-04 | Phase 4 | Pending |
+| QUAL-01 | Phase 5 | Pending |
+| QUAL-02 | Phase 5 | Pending |
+| QUAL-03 | Phase 5 | Pending |
+| QUAL-04 | Phase 5 | Pending |
+| QUAL-05 | Phase 5 | Pending |
+| INFRA-01 | Phase 6 | Pending |
+| INFRA-02 | Phase 6 | Pending |
+| INFRA-03 | Phase 6 | Pending |
+| PERF-01 | Phase 7 | Pending |
+| PERF-02 | Phase 7 | Pending |
+| PERF-03 | Phase 7 | Pending |
+| DEP-01 | Phase 8 | Pending |
+| DEP-02 | Phase 8 | Pending |
+| DEP-03 | Phase 8 | Pending |
 
 **Coverage:**
 - v1 requirements: 33 total
@@ -139,4 +139,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-20 after initial definition*
+*Last updated: 2026-01-20 after roadmap creation*
