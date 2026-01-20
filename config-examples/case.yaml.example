@@ -1,0 +1,29 @@
+# Case profile example
+# This file contains case-specific configuration
+
+case:
+  number: "12345678"
+  summary: "Example case summary"
+  status: "open"
+
+# Cluster assignment for this case
+cluster:
+  id: "cluster-001"
+  console_url: "https://console-openshift-console.apps.cluster.example.com"
+
+# Jira tickets related to this case
+jira:
+  tickets:
+    - "CUSTX-123"
+    - "CUSTX-456"
+
+# Container image override (optional)
+container:
+  image_tag: "v1.2.3"  # Pin to specific version if needed
+
+# Mount overrides for this case (optional)
+mount_overrides: []
+
+# Case-specific environment variables
+environment:
+  SPECIAL_CONFIG: "value"

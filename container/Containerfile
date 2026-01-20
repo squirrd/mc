@@ -1,0 +1,33 @@
+FROM registry.access.redhat.com/ubi9/ubi:latest
+
+# Install necessary tools
+RUN dnf install -y --allowerasing curl tar gzip unzip
+# Install oc CLI
+RUN curl -sLo openshift-client-linux.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-arm64.tar.gz && \
+    tar -xzf openshift-client-linux.tar.gz -C /usr/local/bin oc kubectl && \
+    rm openshift-client-linux.tar.gz
+
+# Install ocm CLI
+RUN curl -sLo ocm https://github.com/openshift-online/ocm-cli/releases/latest/download/ocm-linux-arm64 && \
+    chmod +x ocm && \
+    mv ocm /usr/local/bin/ && \
+    mkdir -p /root/.config/ocm
+
+# Install backplane CLI
+RUN curl -sL https://api.github.com/repos/openshift/backplane-cli/releases/latest | \
+    grep "browser_download_url.*Linux_arm64" | \
+    cut -d '"' -f 4 | \
+    xargs curl -sLo backplane-cli.tar.gz && \
+    tar -xzf backplane-cli.tar.gz -C /usr/local/bin ocm-backplane && \
+    rm backplane-cli.tar.gz && \
+    mkdir -p /root/.config/backplane
+
+RUN mkdir /root/Cases
+
+
+
+# Set a working directory
+WORKDIR /root
+
+# Set the entrypoint to bash
+CMD ["/bin/bash"]
