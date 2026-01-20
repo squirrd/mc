@@ -32,10 +32,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Test fixtures provide reusable mocks for API responses and test data
   3. Coverage reporting works and shows baseline coverage metrics
   4. CI integration is possible (pytest exits with proper codes)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: Configure pytest framework and coverage
+- [ ] 01-01-PLAN.md — Configure pytest framework with dependencies, create hierarchical fixtures, verify infrastructure
 
 ### Phase 2: Critical Path Testing
 **Goal**: Core modules have test coverage protecting against regression
