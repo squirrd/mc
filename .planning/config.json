@@ -1,0 +1,8 @@
+{
+  "workflow": {
+    "mode": "yolo",
+    "depth": "standard",
+    "parallelization": "enabled",
+    "commit_docs": true
+  }
+}
