@@ -35,6 +35,20 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# Claude-Related
+.claude/
+.claude_sessions/
+claude_sessions/
+Claude-*.log
+Claude-*.tmp
+Claude-*.cache
+Claude-*.bak
+claude.md
+Claude.md
+claude_backup.md
+
+
+
 # Environment variables
 .env
 *.env

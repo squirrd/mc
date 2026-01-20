@@ -74,13 +74,13 @@
 - Risk: Case number passed directly to API without validation
 - Files: `src/mc/cli/commands/case.py`, `src/mc/integrations/redhat_api.py`
 - Current mitigation: API will reject invalid case numbers
-- Recommendations: Add regex validation for case number format before API calls
+- Recommendations: Add regex validation for case number format before API calls.  Validation should validate this "04349708" all should be numbers, and its a fixed length
 
 **File Download Without Size Limits:**
-- Risk: `download_file()` in `src/mc/integrations/redhat_api.py:75-91` has no size limit check
-- Files: `src/mc/integrations/redhat_api.py`
-- Current mitigation: Streams in 8KB chunks
-- Recommendations: Add max file size check or prompt user for files over threshold (e.g., 1GB)
+- Note: Large files are expected in this use case; no size limits needed
+- Files: `src/mc/integrations/redhat_api.py:75-91`
+- Current state: Streams in 8KB chunks, no warnings
+- Recommendations: Warn (not prompt) for files >3GB; implement parallel downloads with 4+ threads using ThreadPoolExecutor for better performance
 
 ## Performance Bottlenecks
 
