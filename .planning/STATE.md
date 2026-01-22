@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 3 of 8 (Code Cleanup)
-Plan: 3 of 3 complete
-Status: Phase 3 complete
-Last activity: 2026-01-22 — Completed 03-03-PLAN.md (Typo Fixes)
+Plan: 2 of 3 complete
+Status: In progress
+Last activity: 2026-01-22 — Completed 03-01-PLAN.md (Config Migration)
 
 Progress: [██████░░░░] 62.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 3 min
-- Total execution time: 0.25 hours
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [██████░░░░] 62.5%
 |-------|-------|-------|----------|
 | 1 (Test Foundation) | 1 | 4min | 4min |
 | 2 (Critical Path Testing) | 3 | 8min | 2.7min |
-| 3 (Code Cleanup) | 1 | 2min | 2min |
+| 3 (Code Cleanup) | 2 | 9min | 4.5min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 2min, 3min, 3min, 2min
-- Trend: Consistent fast execution with established patterns
+- Last 5 plans: 2min, 3min, 3min, 2min, 7min
+- Trend: Consistent fast execution, recent 7min for config migration (expected for multi-file changes)
 
 *Updated after each plan completion*
 
@@ -61,6 +61,14 @@ Recent decisions affecting current work:
 - Docker LDAP integration tests with rroemhild/test-openldap for real parsing validation (02-03)
 - pytest.mark.integration for selective test execution in CI environments (02-03)
 - Server URL mocking in Docker tests to redirect hardcoded production LDAP to localhost (02-03)
+- TOML chosen for config file format over INI/YAML/JSON (Python 3.11+ stdlib support) (03-01)
+- platformdirs for cross-platform config paths (XDG on Linux, macOS/Windows equivalents) (03-01)
+- Fail-fast approach for legacy env vars with shell-specific unset instructions (no backward compat) (03-01)
+- Auto-run wizard on first use rather than requiring explicit setup command (better UX) (03-01)
+- Binary mode (rb/wb) for TOML I/O to avoid UnicodeDecodeError (03-01)
+- Parameter passing for offline_token through command handlers (no global state) (03-01)
+- setup.py removed completely in favor of pyproject.toml-only packaging (03-01)
+- importlib.metadata for version access with pyproject.toml fallback for development (03-01)
 - Fixed --All to --all following argparse lowercase convention (03-03)
 - Corrected CheckStaus to CheckStatus for professional output (03-03)
 - Fixed attachment message typo for better UX (03-03)
@@ -76,8 +84,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-22T04:27:44Z
-Stopped at: Completed 03-03-PLAN.md (Phase 3 Plan 3)
+Last session: 2026-01-22T04:32:00Z
+Stopped at: Completed 03-01-PLAN.md (Phase 3 Plan 1)
 Resume file: None
 
 ---
