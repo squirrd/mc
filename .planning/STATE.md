@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 6 of 8 (Infrastructure & Observability)
-Plan: 2 of 2 complete
+Plan: 3 of 3 complete
 Status: Phase 6 complete
-Last activity: 2026-01-22 — Completed 06-02-PLAN.md (Print to logging migration)
+Last activity: 2026-01-22 — Completed 06-03-PLAN.md (Download progress & retry)
 
-Progress: [████████░░] 73.7%
+Progress: [████████░░] 78.9%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 3.6 min
-- Total execution time: 0.93 hours
+- Total plans completed: 15
+- Average duration: 3.5 min
+- Total execution time: 0.95 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [████████░░] 73.7%
 | 3 (Code Cleanup) | 3 | 18min | 6min |
 | 4 (Security Hardening) | 3 | 12min | 4min |
 | 5 (Error Handling) | 3 | 11min | 3.7min |
-| 6 (Infrastructure & Observability) | 2 | 8min | 4min |
+| 6 (Infrastructure & Observability) | 3 | 10min | 3.3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 5min, 3min, 2min, 6min
-- Trend: Phase 6 complete with strong 4min average, maintaining velocity
+- Last 5 plans: 5min, 3min, 2min, 6min, 2min
+- Trend: Phase 6 complete with excellent 3.3min average, velocity increasing
 
 *Updated after each plan completion*
 
@@ -119,6 +119,12 @@ Recent decisions affecting current work:
 - Intentional user output preserved with # print OK markers (06-02)
 - Log levels: INFO for operations, DEBUG for details, WARNING/ERROR for issues (06-02)
 - Interactive prompts kept as print() for user experience (06-02)
+- tenacity retry decorator with exponential backoff (1s, 2s, 4s max) for network errors and transient failures (06-03)
+- tqdm progress bars with 100ms update interval and binary byte scaling (1024-based) (06-03)
+- HTTP Range header support for resumable downloads from partial file position (06-03)
+- 401/403 authentication errors fail fast without retry, 429/503 trigger retry (06-03)
+- Retry attempts logged at WARNING level via before_sleep_log (06-03)
+- Sequential downloads (one at a time) for clean terminal output with progress bars (06-03)
 
 ### Pending Todos
 
@@ -130,8 +136,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-22T07:56:45Z
-Stopped at: Completed 06-02-PLAN.md (Phase 6 Plan 2 - Print to logging migration)
+Last session: 2026-01-22T08:01:58Z
+Stopped at: Completed 06-03-PLAN.md (Phase 6 Plan 3 - Download progress & retry)
 Resume file: None
 
 ---
