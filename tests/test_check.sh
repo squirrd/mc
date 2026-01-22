@@ -19,7 +19,7 @@ rm -rf "${WORKSPACE_PATH}"
 echo ""
 echo "Test 1: Check non-existent workspace"
 OUTPUT=$(${MC_CMD} check ${TEST_CASE})
-if echo "$OUTPUT" | grep -q "CheckStaus: WARN"; then
+if echo "$OUTPUT" | grep -q "CheckStatus: WARN"; then
     echo "✓ PASS: Non-existent workspace returns WARN status"
 else
     echo "✗ FAIL: Expected WARN status for non-existent workspace"
@@ -56,7 +56,7 @@ fi
 echo ""
 echo "Test 4: Check existing workspace"
 OUTPUT=$(${MC_CMD} check ${TEST_CASE})
-if echo "$OUTPUT" | grep -q "CheckStaus: OK"; then
+if echo "$OUTPUT" | grep -q "CheckStatus: OK"; then
     echo "✓ PASS: Existing workspace returns OK status"
 else
     echo "✗ FAIL: Expected OK status for existing workspace"

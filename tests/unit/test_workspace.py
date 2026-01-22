@@ -87,7 +87,7 @@ def test_workspace_check_status_ok(tmp_path):
 
     # Verify status
     assert status == "OK"
-    assert "CheckStaus: OK" in output  # Note: typo exists in source
+    assert "CheckStatus: OK" in output
 
 
 def test_workspace_check_status_warn(tmp_path):
