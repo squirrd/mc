@@ -11,6 +11,7 @@ from mc.config.wizard import run_setup_wizard
 from mc.exceptions import MCError
 from mc.utils.errors import handle_cli_error
 from mc.utils.file_ops import does_path_exist
+from mc.utils.logging import setup_logging
 from mc.version import get_version
 
 
@@ -42,20 +43,17 @@ def check_legacy_env_vars():
 
 def main():
     """Main CLI entry point."""
-    # Configure logging early (before any operations that might log)
-    logging.basicConfig(
-        level=logging.DEBUG if '--debug' in sys.argv else logging.WARNING,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        stream=sys.stderr
-    )
-
     try:
         # Create argument parser early to handle --version/--help without config
         parser = argparse.ArgumentParser(prog='mc', description='MC CLI tool')
         parser.add_argument('--version', action='version',
                             version=f'%(prog)s {get_version()}')
         parser.add_argument('--debug', action='store_true',
-                            help='Enable debug mode with verbose logging and tracebacks')
+                            help='Enable debug logging')
+        parser.add_argument('--json-logs', action='store_true',
+                            help='Output logs as JSON (for CI/automation)')
+        parser.add_argument('--debug-file', type=str,
+                            help='Write debug logs to file')
         subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
         # Attach subcommand
@@ -88,6 +86,13 @@ def main():
 
         # Parse arguments (--version/--help exit here, before config check)
         args = parser.parse_args()
+
+        # Configure logging early (before any operations that might log)
+        logger = setup_logging(
+            json_logs=args.json_logs,
+            debug=args.debug,
+            debug_file=getattr(args, 'debug_file', None)
+        )
 
         # Check for legacy environment variables
         check_legacy_env_vars()
