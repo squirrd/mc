@@ -106,44 +106,51 @@ def download_attachments_parallel(
     )
 
     with progress:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {}
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {}
 
-            for file_meta in attachments:
-                filename = file_meta['fileName']
-                url = file_meta['link']
-                local_path = os.path.join(attach_dir, filename)
+                for file_meta in attachments:
+                    filename = file_meta['fileName']
+                    url = file_meta['link']
+                    local_path = os.path.join(attach_dir, filename)
 
-                # Skip if exists
-                if os.path.exists(local_path):
-                    # print OK - user-facing status
-                    print(f"Skipping {filename} (already exists)")
-                    success.append(filename)
-                    continue
+                    # Skip if exists
+                    if os.path.exists(local_path):
+                        # print OK - user-facing status
+                        print(f"Skipping {filename} (already exists)")
+                        success.append(filename)
+                        continue
 
-                # Add progress task
-                task_id = progress.add_task("download", filename=filename, start=False)
+                    # Add progress task
+                    task_id = progress.add_task("download", filename=filename, start=False)
 
-                # Submit download
-                future = pool.submit(
-                    _download_single_file,
-                    task_id,
-                    url,
-                    local_path,
-                    api_client,
-                    progress
-                )
-                futures[future] = filename
+                    # Submit download
+                    future = pool.submit(
+                        _download_single_file,
+                        task_id,
+                        url,
+                        local_path,
+                        api_client,
+                        progress
+                    )
+                    futures[future] = filename
 
-            # Collect results
-            for future in as_completed(futures):
-                filename = futures[future]
-                try:
-                    future.result()  # Raises if download failed
-                    success.append(filename)
-                except Exception as exc:
-                    failed.append((filename, str(exc)))
-                    progress.console.print(f"[red]Failed: {filename} - {exc}[/red]")
+                # Collect results
+                for future in as_completed(futures):
+                    filename = futures[future]
+                    try:
+                        future.result()  # Raises if download failed
+                        success.append(filename)
+                    except Exception as exc:
+                        failed.append((filename, str(exc)))
+                        progress.console.print(f"[red]Failed: {filename} - {exc}[/red]")
+
+        except KeyboardInterrupt:
+            progress.console.print("\n[yellow]Download interrupted by user[/yellow]")
+            # ThreadPoolExecutor context manager will wait for running tasks to finish
+            # Individual tasks handle cleanup in their own KeyboardInterrupt handlers
+            raise
 
     return {'success': success, 'failed': failed}
 
@@ -162,7 +169,7 @@ def download_attachments_parallel(
     )
 )
 def _download_single_file(task_id, url, local_path, api_client, progress):
-    """Download single file with progress updates.
+    """Download single file with progress updates and resume support.
 
     This function runs in ThreadPoolExecutor worker thread.
 
@@ -176,21 +183,49 @@ def _download_single_file(task_id, url, local_path, api_client, progress):
     Raises:
         Exception: Any download error
     """
+    # Check for partial download
+    downloaded_bytes = 0
+    if os.path.exists(local_path):
+        downloaded_bytes = os.path.getsize(local_path)
+        logger.debug("Found partial download: %s bytes", downloaded_bytes)
+
     try:
         # Get file size from HEAD request
         head_response = api_client.session.head(
             url, verify=api_client.verify_ssl, timeout=api_client.timeout
         )
         head_response.raise_for_status()
-        total = int(head_response.headers.get('content-length', 0))
+        total_size = int(head_response.headers.get('content-length', 0))
 
-        # Update progress with total size and start
-        progress.update(task_id, total=total)
+        # If partial download exists and is smaller than total, resume
+        if downloaded_bytes > 0 and downloaded_bytes < total_size:
+            logger.debug("Resuming download from byte %s", downloaded_bytes)
+            headers = {'Range': f'bytes={downloaded_bytes}-'}
+            mode = 'ab'  # Append mode
+            progress.update(task_id, total=total_size, completed=downloaded_bytes)
+        elif downloaded_bytes >= total_size:
+            # File already complete or corrupted (larger than expected)
+            logger.debug("Restarting download (existing file size: %s, expected: %s)",
+                        downloaded_bytes, total_size)
+            headers = {}
+            mode = 'wb'  # Write new file
+            downloaded_bytes = 0
+            progress.update(task_id, total=total_size)
+        else:
+            headers = {}
+            mode = 'wb'  # Write new file
+            downloaded_bytes = 0
+            progress.update(task_id, total=total_size)
+
         progress.start_task(task_id)
 
-        # Download with streaming
+        # Download with streaming (with Range header if resuming)
         response = api_client.session.get(
-            url, verify=api_client.verify_ssl, stream=True, timeout=api_client.timeout
+            url,
+            headers=headers,
+            verify=api_client.verify_ssl,
+            stream=True,
+            timeout=api_client.timeout
         )
 
         # Check for rate limiting
@@ -210,9 +245,12 @@ def _download_single_file(task_id, url, local_path, api_client, progress):
             # Raise to trigger backoff retry
             raise requests.exceptions.RequestException(response=response)
 
-        response.raise_for_status()
+        # Accept both 200 (full download) and 206 (partial content/resume)
+        if response.status_code not in [200, 206]:
+            response.raise_for_status()
 
-        with open(local_path, 'wb') as f:
+        # Write file
+        with open(local_path, mode) as f:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:  # Filter out keep-alive chunks
                     f.write(chunk)
@@ -220,6 +258,14 @@ def _download_single_file(task_id, url, local_path, api_client, progress):
 
         logger.debug("Successfully downloaded %s", local_path)
 
+    except KeyboardInterrupt:
+        # Clean up partial file on Ctrl+C
+        if os.path.exists(local_path):
+            logger.debug("Removing partial file after interrupt: %s", local_path)
+            os.remove(local_path)
+        raise  # Re-raise to propagate to main thread
+
     except Exception as exc:
+        # For other errors, leave partial file for resume on retry
         logger.error("Download failed for %s: %s", local_path, exc)
         raise  # Re-raise to be caught in as_completed loop

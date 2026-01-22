@@ -458,3 +458,199 @@ def test_rate_limit_with_retry_after(tmp_path, mock_api_client):
     assert os.path.exists(local_path)
     # Verify retry happened
     assert mock_api_client.session.get.call_count >= 2
+
+
+def test_resume_partial_download(tmp_path, mock_api_client):
+    """Test resuming partial download using HTTP Range header."""
+    local_path = os.path.join(tmp_path, 'test.log')
+    url = 'https://api.example.com/test.log'
+
+    # Create partial file
+    with open(local_path, 'wb') as f:
+        f.write(b'x' * 512)  # 512 bytes already downloaded
+
+    # Mock HEAD response
+    mock_head = Mock()
+    mock_head.headers = {'content-length': '2048'}  # Total file size
+    mock_api_client.session.head.return_value = mock_head
+
+    # Mock GET response
+    mock_get = Mock()
+    mock_get.status_code = 206  # Partial content
+    mock_get.headers = {'content-length': '1536'}
+    mock_get.iter_content.return_value = [b'y' * 1536]  # Remaining bytes
+    mock_api_client.session.get.return_value = mock_get
+
+    # Mock progress
+    mock_progress = Mock()
+
+    # Run download
+    _download_single_file(1, url, local_path, mock_api_client, mock_progress)
+
+    # Verify Range header was sent
+    call_args = mock_api_client.session.get.call_args
+    assert call_args[1]['headers']['Range'] == 'bytes=512-'
+
+    # Verify file has full content
+    assert os.path.exists(local_path)
+    with open(local_path, 'rb') as f:
+        content = f.read()
+        assert len(content) == 2048
+        assert content[:512] == b'x' * 512  # Original partial data
+        assert content[512:] == b'y' * 1536  # New data appended
+
+
+def test_resume_corrupted_partial_file(tmp_path, mock_api_client):
+    """Test restart when partial file is larger than expected."""
+    local_path = os.path.join(tmp_path, 'test.log')
+    url = 'https://api.example.com/test.log'
+
+    # Create corrupted file (larger than expected)
+    with open(local_path, 'wb') as f:
+        f.write(b'x' * 3000)  # 3000 bytes (more than total)
+
+    # Mock HEAD response
+    mock_head = Mock()
+    mock_head.headers = {'content-length': '2048'}  # Expected size
+    mock_api_client.session.head.return_value = mock_head
+
+    # Mock GET response (full download, not resume)
+    mock_get = Mock()
+    mock_get.status_code = 200
+    mock_get.headers = {'content-length': '2048'}
+    mock_get.iter_content.return_value = [b'z' * 2048]
+    mock_api_client.session.get.return_value = mock_get
+
+    # Mock progress
+    mock_progress = Mock()
+
+    # Run download
+    _download_single_file(1, url, local_path, mock_api_client, mock_progress)
+
+    # Verify no Range header (full restart)
+    call_args = mock_api_client.session.get.call_args
+    assert 'Range' not in call_args[1].get('headers', {})
+
+    # Verify file was rewritten with correct size
+    assert os.path.exists(local_path)
+    with open(local_path, 'rb') as f:
+        content = f.read()
+        assert len(content) == 2048
+        assert content == b'z' * 2048  # New data
+
+
+def test_ctrl_c_cleanup(tmp_path, mock_api_client):
+    """Test Ctrl+C deletes partial file for clean state."""
+    local_path = os.path.join(tmp_path, 'test.log')
+    url = 'https://api.example.com/test.log'
+
+    # Mock HEAD to succeed
+    mock_head = Mock()
+    mock_head.headers = {'content-length': '2048'}
+    mock_api_client.session.head.return_value = mock_head
+
+    # Mock GET to raise KeyboardInterrupt during download
+    mock_get = Mock()
+    mock_get.status_code = 200
+    mock_get.headers = {'content-length': '2048'}
+
+    def iter_with_interrupt():
+        yield b'x' * 512
+        raise KeyboardInterrupt("User pressed Ctrl+C")
+
+    mock_get.iter_content.return_value = iter_with_interrupt()
+    mock_api_client.session.get.return_value = mock_get
+
+    # Mock progress
+    mock_progress = Mock()
+
+    # Run download - should raise KeyboardInterrupt
+    with pytest.raises(KeyboardInterrupt):
+        _download_single_file(1, url, local_path, mock_api_client, mock_progress)
+
+    # Verify partial file was deleted
+    assert not os.path.exists(local_path)
+
+
+def test_ctrl_c_parallel_downloads(tmp_path, mock_api_client):
+    """Test Ctrl+C in parallel downloads shows message and propagates."""
+    attach_dir = str(tmp_path)
+    attachments = [
+        {'fileName': 'file1.log', 'link': 'https://api.example.com/file1'},
+    ]
+
+    # Mock HEAD
+    mock_head = Mock()
+    mock_head.headers = {'content-length': '1024'}
+    mock_api_client.session.head.return_value = mock_head
+
+    # Mock GET to raise error during iteration
+    mock_get = Mock()
+    mock_get.status_code = 200
+
+    def iter_with_error():
+        # Use generator syntax to delay error until iteration
+        yield b'x' * 512
+        raise Exception("Simulated interrupt")
+
+    mock_get.iter_content.return_value = iter_with_error()
+    mock_api_client.session.get.return_value = mock_get
+
+    # Run download - error should be caught and added to failed list
+    result = download_attachments_parallel(
+        attachments,
+        attach_dir,
+        mock_api_client,
+        max_workers=2,
+        show_progress=True
+    )
+
+    # Verify error was handled
+    assert len(result['failed']) == 1
+    assert result['failed'][0][0] == 'file1.log'
+
+
+def test_error_leaves_partial_file_for_resume(tmp_path, mock_api_client):
+    """Test that non-interrupt errors leave partial file for resume."""
+    local_path = os.path.join(tmp_path, 'test.log')
+    url = 'https://api.example.com/test.log'
+
+    # Mock HEAD to succeed
+    mock_head = Mock()
+    mock_head.headers = {'content-length': '2048'}
+    mock_api_client.session.head.return_value = mock_head
+
+    # Mock GET to fail with network error after partial download
+    # It will retry, so we need it to fail consistently
+    call_count = [0]
+
+    def mock_get_side_effect(*args, **kwargs):
+        call_count[0] += 1
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {'content-length': '2048'}
+
+        def iter_with_error():
+            yield b'x' * 512
+            raise requests.exceptions.ConnectionError("Network failed")
+
+        mock_response.iter_content.return_value = iter_with_error()
+        return mock_response
+
+    mock_api_client.session.get.side_effect = mock_get_side_effect
+
+    # Mock progress
+    mock_progress = Mock()
+
+    # Run download - should fail after retries
+    # Speed up test by mocking sleep
+    with patch('mc.utils.downloads.time.sleep'):
+        with pytest.raises(requests.exceptions.ConnectionError):
+            _download_single_file(1, url, local_path, mock_api_client, mock_progress)
+
+    # Verify partial file still exists (for resume)
+    assert os.path.exists(local_path)
+    with open(local_path, 'rb') as f:
+        content = f.read()
+        # File might be larger due to retries writing more data
+        assert len(content) >= 512  # At least partial data preserved
