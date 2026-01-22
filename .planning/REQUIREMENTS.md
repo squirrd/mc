@@ -33,10 +33,10 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Security Hardening
 
-- [ ] **SEC-01**: Add access token expiration validation and caching
-- [ ] **SEC-02**: Explicitly set verify=True in all requests calls
-- [ ] **SEC-03**: Add case number format validation (8 digits)
-- [ ] **SEC-04**: Add file size warning for downloads >3GB (no prompting)
+- [x] **SEC-01**: Add access token expiration validation and caching
+- [x] **SEC-02**: Explicitly set verify=True in all requests calls
+- [x] **SEC-03**: Add case number format validation (8 digits)
+- [x] **SEC-04**: Add file size warning for downloads >3GB (no prompting)
 
 ### Performance
 
@@ -113,10 +113,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEBT-05 | Phase 3 | Complete |
 | BUG-01 | Phase 3 | Complete |
 | BUG-02 | Phase 3 | Complete |
-| SEC-01 | Phase 4 | Pending |
-| SEC-02 | Phase 4 | Pending |
-| SEC-03 | Phase 4 | Pending |
-| SEC-04 | Phase 4 | Pending |
+| SEC-01 | Phase 4 | Complete |
+| SEC-02 | Phase 4 | Complete |
+| SEC-03 | Phase 4 | Complete |
+| SEC-04 | Phase 4 | Complete |
 | QUAL-01 | Phase 5 | Pending |
 | QUAL-02 | Phase 5 | Pending |
 | QUAL-03 | Phase 5 | Pending |
