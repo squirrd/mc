@@ -131,15 +131,17 @@ Plans:
 **Depends on**: Phase 6
 **Requirements**: PERF-01, PERF-02, PERF-03
 **Success Criteria** (what must be TRUE):
-  1. Multiple attachments download in parallel (4+ concurrent threads)
+  1. Multiple attachments download in parallel (8 concurrent threads)
   2. Case metadata is cached with TTL to avoid redundant API calls
   3. Access tokens are cached and reused until expiration
   4. Parallel downloads show aggregated progress and handle errors gracefully
   5. Cache invalidation works correctly (respects TTL, handles manual refresh)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: Implement performance improvements and caching
+- [ ] 07-01-PLAN.md — Case metadata caching with 30-minute TTL and age indicators
+- [ ] 07-02-PLAN.md — Parallel downloads with ThreadPoolExecutor and Rich progress tracking
+- [ ] 07-03-PLAN.md — Enhanced retry with backoff, resumable downloads, and Ctrl+C cleanup
 
 ### Phase 8: Type Safety & Modernization
 **Goal**: Codebase is future-proof with modern Python standards
@@ -169,9 +171,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Security Hardening | 3/3 | Complete | 2026-01-22 |
 | 5. Error Handling & Robustness | 0/3 | Planned | - |
 | 6. Infrastructure & Observability | 0/3 | Planned | - |
-| 7. Performance Optimization | 0/1 | Not started | - |
+| 7. Performance Optimization | 0/3 | Planned | - |
 | 8. Type Safety & Modernization | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 6 plans created*
+*Last updated: 2026-01-22 — Phase 7 plans created*
