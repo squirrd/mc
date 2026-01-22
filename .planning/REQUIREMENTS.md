@@ -101,11 +101,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Complete |
-| TEST-04 | Phase 2 | Pending |
-| TEST-05 | Phase 2 | Pending |
-| TEST-06 | Phase 2 | Pending |
-| TEST-07 | Phase 2 | Pending |
-| TEST-08 | Phase 2 | Pending |
+| TEST-04 | Phase 2 | Complete |
+| TEST-05 | Phase 2 | Complete |
+| TEST-06 | Phase 2 | Complete |
+| TEST-07 | Phase 2 | Complete |
+| TEST-08 | Phase 2 | Complete |
 | DEBT-01 | Phase 3 | Pending |
 | DEBT-02 | Phase 3 | Pending |
 | DEBT-03 | Phase 3 | Pending |
