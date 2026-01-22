@@ -153,7 +153,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 
 ### Blockers/Concerns
 
