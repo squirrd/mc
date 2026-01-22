@@ -6,6 +6,14 @@ import logging
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from tqdm import tqdm
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 from mc.exceptions import HTTPAPIError, APITimeoutError, APIConnectionError, APIError
 
 logger = logging.getLogger(__name__)
@@ -240,9 +248,25 @@ class RedHatAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"API request failed for case {case_number} attachments: {str(e)}")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        retry=(
+            retry_if_exception_type(requests.exceptions.Timeout) |
+            retry_if_exception_type(requests.exceptions.ConnectionError) |
+            retry_if_exception_type(requests.exceptions.HTTPError)
+        ),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def download_file(self, url, local_filename, force=False):
         """
-        Download a file from the API.
+        Download file with progress bar, automatic retry, and resume support.
+
+        Shows progress bar with transfer speed and ETA. Automatically retries
+        on network errors (timeout, connection) and transient API failures
+        (503, 429) with exponential backoff. Resumes interrupted downloads
+        from last byte position using HTTP Range requests.
 
         Args:
             url: URL to download from
@@ -250,65 +274,123 @@ class RedHatAPIClient:
             force: If True, skip large file warnings and proceed with download
 
         Raises:
-            HTTPAPIError: If download fails with HTTP error
+            HTTPAPIError: On authentication failure (401, 403)
             APITimeoutError: If download times out
             APIConnectionError: If connection fails
             APIError: For other download failures
-            RuntimeError: If insufficient disk space for download
+            RuntimeError: If insufficient disk space or download failure after retries
         """
         logger.debug("Downloading file from %s to %s", url, local_filename)
 
-        # Get file size from HEAD request
-        try:
-            head_response = self.session.head(url, verify=self.verify_ssl, timeout=self.timeout)
-            head_response.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            raise HTTPAPIError.from_response(e.response)
-        except requests.exceptions.Timeout:
-            raise APITimeoutError(
-                f"Request timed out while checking file size for {url}",
-                "Check: Network connectivity and try again"
-            )
-        except requests.exceptions.ConnectionError as e:
-            raise APIConnectionError(
-                f"Failed to connect to API for file download",
-                "Check: VPN connection and network access"
-            )
-        except requests.exceptions.RequestException as e:
-            raise APIError(f"API request failed for file download: {str(e)}")
+        # Check if partial file exists for resume
+        downloaded = 0
+        mode = 'wb'
+        headers = {}
 
-        file_size = int(head_response.headers.get('content-length', 0))
+        if os.path.exists(local_filename):
+            downloaded = os.path.getsize(local_filename)
+            if downloaded > 0:
+                headers['Range'] = f'bytes={downloaded}-'
+                mode = 'ab'
+                logger.debug("Resuming download from byte %d", downloaded)
 
-        # Check download safety
-        is_safe, warning = check_download_safety(file_size, local_filename)
+        # Get file size from HEAD request (unless resuming)
+        file_size = 0
+        if not downloaded:
+            try:
+                head_response = self.session.head(url, verify=self.verify_ssl, timeout=self.timeout)
+                head_response.raise_for_status()
+                file_size = int(head_response.headers.get('content-length', 0))
+            except requests.exceptions.HTTPError as e:
+                raise HTTPAPIError.from_response(e.response)
+            except requests.exceptions.Timeout:
+                raise APITimeoutError(
+                    f"Request timed out while checking file size for {url}",
+                    "Check: Network connectivity and try again"
+                )
+            except requests.exceptions.ConnectionError as e:
+                raise APIConnectionError(
+                    f"Failed to connect to API for file download",
+                    "Check: VPN connection and network access"
+                )
+            except requests.exceptions.RequestException as e:
+                raise APIError(f"API request failed for file download: {str(e)}")
 
-        if warning and not force:
-            logger.warning(warning)
-            if not is_safe:
-                raise RuntimeError("Download blocked due to insufficient disk space")
-            # For large files with sufficient space, just warn and continue
+            # Check download safety
+            is_safe, warning = check_download_safety(file_size, local_filename)
+
+            if warning and not force:
+                logger.warning(warning)
+                if not is_safe:
+                    raise RuntimeError("Download blocked due to insufficient disk space")
 
         # Proceed with download
         try:
-            with self.session.get(url, verify=self.verify_ssl, stream=True, timeout=self.timeout) as response:
+            # Merge Range header if resuming
+            request_headers = self.session.headers.copy()
+            if headers:
+                request_headers.update(headers)
+
+            response = self.session.get(url, headers=request_headers, verify=self.verify_ssl, stream=True, timeout=self.timeout)
+
+            # Don't retry 401/403 - these are auth failures (fail fast)
+            if response.status_code in (401, 403):
                 response.raise_for_status()
-                with open(local_filename, 'wb') as file:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        file.write(chunk)
+
+            # Handle 429 rate limiting - let retry decorator handle it
+            if response.status_code == 429:
+                logger.warning("Rate limit hit (429), will retry")
+                response.raise_for_status()
+
+            # Handle 503 service unavailable - let retry decorator handle it
+            if response.status_code == 503:
+                logger.warning("Service unavailable (503), will retry")
+                response.raise_for_status()
+
+            # Accept both 200 (full content) and 206 (partial content/resume)
+            if response.status_code not in (200, 206):
+                response.raise_for_status()
+
+            # Get total file size
+            if response.status_code == 206:
+                # Parse Content-Range header: "bytes 1000-2000/3000" -> total is 3000
+                content_range = response.headers.get('Content-Range', '')
+                if content_range:
+                    total_size = int(content_range.split('/')[-1])
+                else:
+                    total_size = downloaded + int(response.headers.get('Content-Length', 0))
+            else:
+                total_size = int(response.headers.get('Content-Length', 0))
+
+            # Download with progress bar
+            with open(local_filename, mode) as f, tqdm(
+                desc=os.path.basename(local_filename),
+                initial=downloaded,
+                total=total_size,
+                unit='B',
+                unit_scale=True,
+                unit_divisor=1024,
+                mininterval=0.1,
+            ) as pbar:
+                for chunk in response.iter_content(chunk_size=8192):
+                    size = f.write(chunk)
+                    pbar.update(size)
+
             logger.debug("Successfully downloaded file to %s", local_filename)
             logger.info("File downloaded successfully: %s", local_filename)
+
         except requests.exceptions.HTTPError as e:
-            raise HTTPAPIError.from_response(e.response)
+            # Check if it's an auth error (already raised above for fail-fast)
+            if e.response.status_code in (401, 403):
+                raise HTTPAPIError.from_response(e.response)
+            # For other HTTP errors (429, 503), let retry decorator handle
+            raise
         except requests.exceptions.Timeout:
-            raise APITimeoutError(
-                f"Request timed out while downloading file from {url}",
-                "Check: Network connectivity and try again"
-            )
+            logger.warning("Download timed out, will retry if attempts remain")
+            raise
         except requests.exceptions.ConnectionError as e:
-            raise APIConnectionError(
-                f"Failed to connect to API during file download",
-                "Check: VPN connection and network access"
-            )
+            logger.warning("Connection error during download, will retry if attempts remain")
+            raise
         except requests.exceptions.RequestException as e:
             raise APIError(f"Download failed: {str(e)}")
 
