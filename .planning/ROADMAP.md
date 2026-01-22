@@ -140,9 +140,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Case metadata caching with 30-minute TTL and age indicators
-- [ ] 07-02-PLAN.md — Parallel downloads with ThreadPoolExecutor and Rich progress tracking
-- [ ] 07-03-PLAN.md — Enhanced retry with backoff, resumable downloads, and Ctrl+C cleanup
+- [x] 07-01-PLAN.md — Case metadata caching with 30-minute TTL and age indicators
+- [x] 07-02-PLAN.md — Parallel downloads with ThreadPoolExecutor and Rich progress tracking
+- [x] 07-03-PLAN.md — Enhanced retry with backoff, resumable downloads, and Ctrl+C cleanup
 
 ### Phase 8: Type Safety & Modernization
 **Goal**: Codebase is future-proof with modern Python standards
@@ -172,9 +172,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 4. Security Hardening | 3/3 | Complete | 2026-01-22 |
 | 5. Error Handling & Robustness | 3/3 | Complete | 2026-01-22 |
 | 6. Infrastructure & Observability | 4/4 | Complete | 2026-01-22 |
-| 7. Performance Optimization | 0/3 | Planned | - |
+| 7. Performance Optimization | 3/3 | Complete | 2026-01-22 |
 | 8. Type Safety & Modernization | 0/1 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 6 complete (Infrastructure & Observability)*
+*Last updated: 2026-01-22 — Phase 7 complete (Performance Optimization)*

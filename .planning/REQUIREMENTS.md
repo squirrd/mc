@@ -40,8 +40,8 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Performance
 
-- [ ] **PERF-01**: Implement parallel attachment downloads (4+ threads with ThreadPoolExecutor)
-- [ ] **PERF-02**: Add file-based caching for case metadata with TTL
+- [x] **PERF-01**: Implement parallel attachment downloads (4+ threads with ThreadPoolExecutor)
+- [x] **PERF-02**: Add file-based caching for case metadata with TTL
 - [x] **PERF-03**: Cache access tokens with expiration tracking (completed in Phase 4 as SEC-01)
 
 ### Code Quality
@@ -125,8 +125,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-01 | Phase 6 | Complete |
 | INFRA-02 | Phase 6 | Complete |
 | INFRA-03 | Phase 6 | Complete |
-| PERF-01 | Phase 7 | Pending |
-| PERF-02 | Phase 7 | Pending |
+| PERF-01 | Phase 7 | Complete |
+| PERF-02 | Phase 7 | Complete |
 | PERF-03 | Phase 4 | Complete |
 | DEP-01 | Phase 8 | Pending |
 | DEP-02 | Phase 8 | Pending |
