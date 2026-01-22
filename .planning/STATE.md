@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-20)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** Phase 3 - Code Cleanup
+**Current focus:** Phase 4 - Security Hardening
 
 ## Current Position
 
-Phase: 3 of 8 (Code Cleanup)
-Plan: 3 of 3 complete
-Status: Phase 3 complete, verified
-Last activity: 2026-01-22 — Completed Phase 3 (Config migration, version consolidation, typo fixes)
+Phase: 4 of 8 (Security Hardening)
+Plan: 1 of 4 complete
+Status: In progress
+Last activity: 2026-01-22 — Completed 04-01-PLAN.md (Token caching and input validation)
 
-Progress: [█████░░░░░] 62.5%
+Progress: [██████░░░░] 66.7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 3 min
-- Total execution time: 0.47 hours
+- Total plans completed: 8
+- Average duration: 3.4 min
+- Total execution time: 0.52 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [█████░░░░░] 62.5%
 | 1 (Test Foundation) | 1 | 4min | 4min |
 | 2 (Critical Path Testing) | 3 | 8min | 2.7min |
 | 3 (Code Cleanup) | 3 | 18min | 6min |
+| 4 (Security Hardening) | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 3min, 2min, 7min, 9min
-- Trend: Phase 3 averaging 6min/plan (multi-file refactoring work)
+- Last 5 plans: 3min, 2min, 7min, 9min, 3min
+- Trend: Phase 4 started with quick 3min plan (auth caching + validation)
 
 *Updated after each plan completion*
 
@@ -76,6 +77,12 @@ Recent decisions affecting current work:
 - PEP 621 compliant pyproject.toml with SPDX license expression (03-02)
 - Early argument parsing for --version/--help before config check (03-02)
 - Version fallback pattern: importlib.metadata → pyproject.toml parsing (03-02)
+- File-based token cache over keyring library (simpler, no dependencies) (04-01)
+- Atomic file write using os.open with O_CREAT flag for secure permissions (04-01)
+- 5-minute expiry buffer prevents tokens expiring mid-request (04-01)
+- 1-hour default TTL when SSO doesn't provide expires_in (04-01)
+- Validation at command layer (not API client) for fail-fast error handling (04-01)
+- Regex validation for exactly 8 digits (Red Hat case number format) (04-01)
 
 ### Pending Todos
 
@@ -87,8 +94,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-22T04:34:16Z
-Stopped at: Completed 03-02-PLAN.md (Phase 3 Plan 2)
+Last session: 2026-01-22T06:40:40Z
+Stopped at: Completed 04-01-PLAN.md (Phase 4 Plan 1)
 Resume file: None
 
 ---
