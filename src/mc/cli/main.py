@@ -60,6 +60,10 @@ def main():
         # Attach subcommand
         parser_attach = subparsers.add_parser('attach', help='Download attachments for a case')
         parser_attach.add_argument('case_number', type=str, help='Case number')
+        parser_attach.add_argument('--serial', action='store_true',
+                                    help='Download attachments one at a time (for debugging)')
+        parser_attach.add_argument('--quiet', action='store_true',
+                                    help='Suppress progress output (errors only)')
 
         # Check subcommand
         parser_check = subparsers.add_parser('check', help='Check the state of a workspace for a case')
@@ -120,7 +124,8 @@ def main():
 
         # Route to appropriate command
         if args.command == 'attach':
-            case.attach(args.case_number, base_dir, offline_token)
+            case.attach(args.case_number, base_dir, offline_token,
+                       serial=args.serial, quiet=args.quiet)
         elif args.command == 'check':
             case.check(args.case_number, base_dir, offline_token, fix=args.fix)
         elif args.command == 'create':

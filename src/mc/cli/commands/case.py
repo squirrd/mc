@@ -5,6 +5,7 @@ import logging
 from mc.utils.auth import get_access_token
 from mc.utils.validation import validate_case_number
 from mc.utils.cache import get_case_metadata, get_cached_age_minutes
+from mc.utils.downloads import download_attachments_parallel
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.controller.workspace import WorkspaceManager
 from mc.exceptions import HTTPAPIError, APIError, ValidationError
@@ -12,7 +13,7 @@ from mc.exceptions import HTTPAPIError, APIError, ValidationError
 logger = logging.getLogger(__name__)
 
 
-def attach(case_number, base_dir, offline_token):
+def attach(case_number, base_dir, offline_token, serial=False, quiet=False):
     """
     Download attachments for a case.
 
@@ -20,6 +21,8 @@ def attach(case_number, base_dir, offline_token):
         case_number: Case number
         base_dir: Base directory for cases
         offline_token: Red Hat API offline token
+        serial: If True, download one at a time (default: False)
+        quiet: If True, suppress progress output (default: False)
     """
     # Validate case number format
     try:
@@ -50,44 +53,81 @@ def attach(case_number, base_dir, offline_token):
             case_details['summary']
         )
 
-        # List and download attachments
+        # List attachments
         attachments = api_client.list_attachments(case_number)
         attach_dir = workspace.get_attachment_dir()
 
-        # Track download results
-        total_files = len(attachments)
-        downloaded = 0
-        skipped = 0
-        failed_files = []
+        if not attachments:
+            # print OK - user-facing message
+            print("No attachments found for this case")
+            return
 
-        logger.info("Starting download of %d attachments for case %s", total_files, case_number)
+        logger.info("Starting download of %d attachments for case %s", len(attachments), case_number)
 
-        for file_meta in attachments:
-            filename = f"{attach_dir}/{file_meta['fileName']}"
-            url = file_meta['link']
-            logger.debug("Processing attachment: %s (URL: %s)", filename, url)
+        # Download in parallel or serial mode
+        if serial:
+            # Serial mode: download one at a time with simple output
+            logger.info("Serial mode: downloading attachments one at a time")
+            downloaded = 0
+            skipped = 0
+            failed_files = []
 
-            if os.path.exists(filename):
-                logger.info("File already exists, skipping: %s", file_meta['fileName'])
-                skipped += 1
-            else:
-                # Progress bar from download_file() will show download progress
-                try:
-                    api_client.download_file(url, filename)
-                    downloaded += 1
-                except (RuntimeError, HTTPAPIError, APIError) as e:
-                    logger.error("Download failed for %s: %s", file_meta['fileName'], e)
-                    failed_files.append(file_meta['fileName'])
-                    # Continue to next attachment instead of crashing
-                    continue
+            for file_meta in attachments:
+                filename = f"{attach_dir}/{file_meta['fileName']}"
+                url = file_meta['link']
+                logger.debug("Processing attachment: %s (URL: %s)", filename, url)
 
-        # Print summary
-        logger.info("----------------------------")
-        logger.info("Download summary: %d downloaded, %d skipped, %d failed", downloaded, skipped, len(failed_files))
+                if os.path.exists(filename):
+                    # print OK - user-facing message
+                    print(f"Skipping {file_meta['fileName']} (already exists)")
+                    logger.info("File already exists, skipping: %s", file_meta['fileName'])
+                    skipped += 1
+                else:
+                    # print OK - user-facing message
+                    print(f"Downloading {file_meta['fileName']}...")
+                    try:
+                        api_client.download_file(url, filename)
+                        downloaded += 1
+                    except (RuntimeError, HTTPAPIError, APIError) as e:
+                        # print OK - user-facing error
+                        print(f"Download failed: {e}")
+                        logger.error("Download failed for %s: %s", file_meta['fileName'], e)
+                        failed_files.append(file_meta['fileName'])
+                        # Continue to next attachment instead of crashing
+                        continue
 
-        if failed_files:
-            logger.error("Failed files: %s", ', '.join(failed_files))
-            raise APIError(f"Failed to download {len(failed_files)} file(s)")
+            # Print summary
+            logger.info("Download summary: %d downloaded, %d skipped, %d failed", downloaded, skipped, len(failed_files))
+
+            if failed_files:
+                logger.error("Failed files: %s", ', '.join(failed_files))
+                raise APIError(f"Failed to download {len(failed_files)} file(s)")
+
+        else:
+            # Parallel mode: download concurrently with rich progress
+            logger.info("Parallel mode: downloading up to 8 attachments concurrently")
+            show_progress = not quiet
+            result = download_attachments_parallel(
+                attachments,
+                attach_dir,
+                api_client,
+                max_workers=8,
+                show_progress=show_progress
+            )
+
+            # Print summary
+            if result['success']:
+                # print OK - user-facing summary
+                print(f"\n✓ Successfully downloaded {len(result['success'])} file(s)")
+                logger.info("Successfully downloaded %d files", len(result['success']))
+
+            if result['failed']:
+                # print OK - user-facing error summary
+                print(f"\n✗ Failed to download {len(result['failed'])} file(s):")
+                for filename, error in result['failed']:
+                    print(f"  - {filename}: {error}")
+                logger.error("Failed to download %d files", len(result['failed']))
+                raise APIError(f"Failed to download {len(result['failed'])} file(s)")
 
     except HTTPAPIError as e:
         logger.error("Failed to fetch case %s: %s", case_number, e)
