@@ -2,6 +2,7 @@
 
 import os
 from mc.utils.auth import get_access_token
+from mc.utils.validation import validate_case_number
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.controller.workspace import WorkspaceManager
 
@@ -15,6 +16,13 @@ def attach(case_number, base_dir, offline_token):
         base_dir: Base directory for cases
         offline_token: Red Hat API offline token
     """
+    # Validate case number format
+    try:
+        case_number = validate_case_number(case_number)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
+
     print(f"Downloading attachments for case number: {case_number}")
 
     # Get API client
@@ -60,6 +68,13 @@ def check(case_number, base_dir, offline_token, fix=False):
         offline_token: Red Hat API offline token
         fix: If True, create missing files
     """
+    # Validate case number format
+    try:
+        case_number = validate_case_number(case_number)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
+
     # Get API client
     access_token = get_access_token(offline_token)
     api_client = RedHatAPIClient(access_token)
@@ -100,6 +115,13 @@ def create(case_number, base_dir, offline_token, download=False, no_check=False)
         download: If True, also download attachments
         no_check: If True, skip initial check
     """
+    # Validate case number format
+    try:
+        case_number = validate_case_number(case_number)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
+
     print("Creating files", end="")
     if download:
         print(f" and downloading attachments for case: {case_number}")
@@ -149,6 +171,13 @@ def case_comments(case_number, offline_token):
         offline_token: Red Hat API offline token
     """
     from pprint import pprint
+
+    # Validate case number format
+    try:
+        case_number = validate_case_number(case_number)
+    except ValueError as e:
+        print(f"Error: {e}")
+        exit(1)
 
     # Get API client
     access_token = get_access_token(offline_token)
