@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Code Cleanup** - Fix tech debt and bugs under test coverage
 - [x] **Phase 4: Security Hardening** - Production-ready security measures
 - [x] **Phase 5: Error Handling & Robustness** - Graceful failures and resilience
-- [ ] **Phase 6: Infrastructure & Observability** - Structured logging and recovery
+- [x] **Phase 6: Infrastructure & Observability** - Structured logging and recovery
 - [ ] **Phase 7: Performance Optimization** - Speed improvements and caching
 - [ ] **Phase 8: Type Safety & Modernization** - Future-proof with Python 3.10+ and type hints
 
@@ -122,10 +122,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Logging infrastructure with dual-mode formatters and sensitive data redaction
-- [ ] 06-02-PLAN.md — Print statement migration to structured logging (74 print() statements across 8 files)
-- [ ] 06-03-PLAN.md — Progress bars and retry logic for downloads with resumable support
-- [ ] 06-04-PLAN.md — Fix lazy % formatting in logger calls (gap closure)
+- [x] 06-01-PLAN.md — Logging infrastructure with dual-mode formatters and sensitive data redaction
+- [x] 06-02-PLAN.md — Print statement migration to structured logging (74 print() statements across 8 files)
+- [x] 06-03-PLAN.md — Progress bars and retry logic for downloads with resumable support
+- [x] 06-04-PLAN.md — Fix lazy % formatting in logger calls (gap closure)
 
 ### Phase 7: Performance Optimization
 **Goal**: Tool is fast and efficient for typical workflows
@@ -171,10 +171,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Code Cleanup | 3/3 | Complete | 2026-01-22 |
 | 4. Security Hardening | 3/3 | Complete | 2026-01-22 |
 | 5. Error Handling & Robustness | 3/3 | Complete | 2026-01-22 |
-| 6. Infrastructure & Observability | 0/4 | Planned | - |
+| 6. Infrastructure & Observability | 4/4 | Complete | 2026-01-22 |
 | 7. Performance Optimization | 0/3 | Planned | - |
 | 8. Type Safety & Modernization | 0/1 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 6 gap closure plan added*
+*Last updated: 2026-01-22 — Phase 6 complete (Infrastructure & Observability)*
