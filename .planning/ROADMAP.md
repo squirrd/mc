@@ -148,15 +148,15 @@ Plans:
 **Depends on**: Phase 7
 **Requirements**: DEP-01, DEP-02, DEP-03
 **Success Criteria** (what must be TRUE):
-  1. Minimum Python version is 3.10+ (updated in pyproject.toml)
+  1. Minimum Python version is 3.11+ (updated in pyproject.toml)
   2. All modules have type hints for function signatures and return types
   3. mypy strict mode runs without errors (or with documented exceptions)
-  4. Type checking is integrated into CI pipeline
+  4. Type checking is integrated into development workflow
   5. Type hints improve IDE autocomplete and catch bugs at development time
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 08-01: Add type hints and modernize Python version
+- [ ] 08-01-PLAN.md — Python 3.11+ upgrade, comprehensive type hints, mypy strict mode, modern syntax
 
 ## Progress
 
@@ -172,8 +172,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. Error Handling & Robustness | 3/3 | Complete | 2026-01-22 |
 | 6. Infrastructure & Observability | 0/1 | Planned | - |
 | 7. Performance Optimization | 0/1 | Planned | - |
-| 8. Type Safety & Modernization | 0/1 | Not started | - |
+| 8. Type Safety & Modernization | 0/1 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 5 complete*
+*Last updated: 2026-01-22 — Phase 8 planned*
