@@ -3,6 +3,13 @@
 import pytest
 
 
+def pytest_configure(config):
+    """Register custom markers for integration tests."""
+    config.addinivalue_line(
+        "markers", "integration: marks tests as integration tests (require external services)"
+    )
+
+
 @pytest.fixture
 def workspace_base_dir(tmp_path):
     """
