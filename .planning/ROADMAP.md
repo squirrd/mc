@@ -101,10 +101,12 @@ Plans:
   4. HTTP errors (401, 403, 404, 500) display user-friendly messages explaining what went wrong
   5. Transient API failures automatically retry with exponential backoff
   6. Tool exits with specific error codes for different failure types
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: Improve error handling and add retry logic
+- [ ] 05-01-PLAN.md — Exception hierarchy and error formatting infrastructure
+- [ ] 05-02-PLAN.md — HTTP retry logic and enhanced error handling
+- [ ] 05-03-PLAN.md — Pathlib migration and LDAP robustness
 
 ### Phase 6: Infrastructure & Observability
 **Goal**: Operations are observable and recoverable
@@ -163,11 +165,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Critical Path Testing | 3/3 | Complete | 2026-01-22 |
 | 3. Code Cleanup | 0/3 | Not started | - |
 | 4. Security Hardening | 0/3 | Planned | - |
-| 5. Error Handling & Robustness | 0/1 | Not started | - |
+| 5. Error Handling & Robustness | 0/3 | Planned | - |
 | 6. Infrastructure & Observability | 0/1 | Not started | - |
 | 7. Performance Optimization | 0/1 | Not started | - |
 | 8. Type Safety & Modernization | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 4 planned*
+*Last updated: 2026-01-22 — Phase 5 planned*
