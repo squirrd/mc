@@ -48,10 +48,12 @@ Plans:
   4. Utility functions (formatters, file_ops) have comprehensive test coverage
   5. LDAP integration can be tested without hitting real LDAP server
   6. Coverage reaches at least 60% for tested modules
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Write unit tests for critical path modules
+- [ ] 02-01-PLAN.md — Auth and API client tests with HTTP mocking (responses library)
+- [ ] 02-02-PLAN.md — Workspace and utilities tests with filesystem testing (tmp_path)
+- [ ] 02-03-PLAN.md — LDAP tests with subprocess mocking and Docker integration
 
 ### Phase 3: Code Cleanup
 **Goal**: Codebase is clean, consistent, and free of obvious bugs
@@ -154,7 +156,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Foundation | 1/1 | Complete | 2026-01-20 |
-| 2. Critical Path Testing | 0/1 | Not started | - |
+| 2. Critical Path Testing | 0/3 | Not started | - |
 | 3. Code Cleanup | 0/1 | Not started | - |
 | 4. Security Hardening | 0/1 | Not started | - |
 | 5. Error Handling & Robustness | 0/1 | Not started | - |
@@ -164,4 +166,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-20 — Phase 1 complete*
+*Last updated: 2026-01-22 — Phase 2 planned*
