@@ -73,8 +73,30 @@ def main():
     parser_go.add_argument('case_number', type=str, help='Case number')
     parser_go.add_argument('-l', '--launch', action='store_true', help='Launch URL in Chrome')
 
-    # Parse arguments
+    # Parse arguments (--version/--help exit here, before config check)
     args = parser.parse_args()
+
+    # Check for legacy environment variables
+    check_legacy_env_vars()
+
+    # Load or create configuration
+    config_mgr = ConfigManager()
+    if not config_mgr.exists():
+        print("No config file found. Running setup wizard...")
+        print()
+        config = run_setup_wizard()
+        config_mgr.save(config)
+    else:
+        config = config_mgr.load()
+
+    # Get configuration values
+    base_dir = config["base_directory"]
+    offline_token = config["api"]["offline_token"]
+
+    # Verify base directory exists
+    if not does_path_exist(base_dir):
+        print(f"The directory '{base_dir}' must exist")
+        exit(1)
 
     # Route to appropriate command
     if args.command == 'attach':
