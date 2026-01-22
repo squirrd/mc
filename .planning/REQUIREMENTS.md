@@ -20,16 +20,16 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Tech Debt
 
-- [ ] **DEBT-01**: Fix hardcoded base directory (use TOML config file with default)
-- [ ] **DEBT-02**: Remove environment variable dependencies and duplicate validation
-- [ ] **DEBT-03**: Consolidate version management (single source of truth)
-- [ ] **DEBT-04**: Migrate fully to pyproject.toml (remove setup.py)
-- [ ] **DEBT-05**: Fix typo "dowloading attachemnts" → "downloading attachments"
+- [x] **DEBT-01**: Fix hardcoded base directory (use TOML config file with default)
+- [x] **DEBT-02**: Remove environment variable dependencies and duplicate validation
+- [x] **DEBT-03**: Consolidate version management (single source of truth)
+- [x] **DEBT-04**: Migrate fully to pyproject.toml (remove setup.py)
+- [x] **DEBT-05**: Fix typo "dowloading attachemnts" → "downloading attachments"
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Fix LDAP --All flag (change to --all lowercase)
-- [ ] **BUG-02**: Fix CheckStaus → CheckStatus typo throughout
+- [x] **BUG-01**: Fix LDAP --All flag (change to --all lowercase)
+- [x] **BUG-02**: Fix CheckStaus → CheckStatus typo throughout
 
 ### Security Hardening
 
@@ -106,13 +106,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-06 | Phase 2 | Complete |
 | TEST-07 | Phase 2 | Complete |
 | TEST-08 | Phase 2 | Complete |
-| DEBT-01 | Phase 3 | Pending |
-| DEBT-02 | Phase 3 | Pending |
-| DEBT-03 | Phase 3 | Pending |
-| DEBT-04 | Phase 3 | Pending |
-| DEBT-05 | Phase 3 | Pending |
-| BUG-01 | Phase 3 | Pending |
-| BUG-02 | Phase 3 | Pending |
+| DEBT-01 | Phase 3 | Complete |
+| DEBT-02 | Phase 3 | Complete |
+| DEBT-03 | Phase 3 | Complete |
+| DEBT-04 | Phase 3 | Complete |
+| DEBT-05 | Phase 3 | Complete |
+| BUG-01 | Phase 3 | Complete |
+| BUG-02 | Phase 3 | Complete |
 | SEC-01 | Phase 4 | Pending |
 | SEC-02 | Phase 4 | Pending |
 | SEC-03 | Phase 4 | Pending |
