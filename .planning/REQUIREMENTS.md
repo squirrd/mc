@@ -60,9 +60,9 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Dependencies
 
-- [ ] **DEP-01**: Update minimum Python version to 3.11+ (rationale: native union syntax without __future__ imports, 10-60% performance improvement over 3.10, better error messages)
-- [ ] **DEP-02**: Add type hints to all modules
-- [ ] **DEP-03**: Configure mypy strict mode and resolve issues
+- [x] **DEP-01**: Update minimum Python version to 3.11+ (rationale: native union syntax without __future__ imports, 10-60% performance improvement over 3.10, better error messages)
+- [x] **DEP-02**: Add type hints to all modules
+- [x] **DEP-03**: Configure mypy strict mode and resolve issues
 
 ## v2 Requirements
 
@@ -128,9 +128,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERF-01 | Phase 7 | Complete |
 | PERF-02 | Phase 7 | Complete |
 | PERF-03 | Phase 4 | Complete |
-| DEP-01 | Phase 8 | Pending |
-| DEP-02 | Phase 8 | Pending |
-| DEP-03 | Phase 8 | Pending |
+| DEP-01 | Phase 8 | Complete |
+| DEP-02 | Phase 8 | Complete |
+| DEP-03 | Phase 8 | Complete |
 
 **Coverage:**
 - v1 requirements: 33 total
@@ -139,4 +139,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-22 after Phase 8 planning (updated DEP-01 to specify 3.11+)*
+*Last updated: 2026-01-22 after Phase 8 execution (DEP-01, DEP-02, DEP-03 complete)*
