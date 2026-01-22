@@ -3,7 +3,7 @@
 import re
 
 
-def shorten_and_format(input_string):
+def shorten_and_format(input_string: str) -> str:
     """
     Shorten and format a string for use in file/directory names.
 

@@ -4,6 +4,7 @@ import json
 import os
 import time
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ CACHE_DIR = os.path.expanduser("~/.mc/cache")
 CACHE_TTL_SECONDS = 1800  # 30 minutes
 
 
-def get_cache_path(case_number):
+def get_cache_path(case_number: str) -> str:
     """
     Get cache file path for a case number.
 
@@ -26,7 +27,7 @@ def get_cache_path(case_number):
     return os.path.join(CACHE_DIR, f"case_{case_number}.json")
 
 
-def is_cache_expired(cached_at, ttl_seconds=CACHE_TTL_SECONDS):
+def is_cache_expired(cached_at: float, ttl_seconds: int = CACHE_TTL_SECONDS) -> bool:
     """
     Check if cache is expired.
 
@@ -41,7 +42,7 @@ def is_cache_expired(cached_at, ttl_seconds=CACHE_TTL_SECONDS):
     return current_time >= (cached_at + ttl_seconds)
 
 
-def load_cache(case_number):
+def load_cache(case_number: str) -> dict[str, Any] | None:
     """
     Load cached case metadata if it exists.
 
@@ -70,7 +71,7 @@ def load_cache(case_number):
         return None
 
 
-def cache_case_metadata(case_number, case_details, account_details):
+def cache_case_metadata(case_number: str, case_details: dict[str, Any], account_details: dict[str, Any]) -> None:
     """
     Save case metadata to cache with timestamp.
 
@@ -100,7 +101,7 @@ def cache_case_metadata(case_number, case_details, account_details):
     logger.debug("Cached metadata for case %s", case_number)
 
 
-def get_cached_age_minutes(case_number):
+def get_cached_age_minutes(case_number: str) -> int | None:
     """
     Get age of cached data in minutes.
 
@@ -118,7 +119,7 @@ def get_cached_age_minutes(case_number):
     return int(age_seconds / 60)
 
 
-def get_case_metadata(case_number, api_client, force_refresh=False):
+def get_case_metadata(case_number: str, api_client: Any, force_refresh: bool = False) -> tuple[dict[str, Any], dict[str, Any], bool]:
     """
     Get case metadata from cache or API.
 

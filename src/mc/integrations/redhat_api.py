@@ -3,6 +3,7 @@
 import os
 import shutil
 import logging
+from typing import Any, TypedDict, NotRequired
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -19,7 +20,23 @@ from mc.exceptions import HTTPAPIError, APITimeoutError, APIConnectionError, API
 logger = logging.getLogger(__name__)
 
 
-def get_ca_bundle():
+class CaseDetails(TypedDict):
+    """Red Hat Support Case structure."""
+    summary: str
+    accountNumberRef: str
+    status: str
+    severity: NotRequired[str]
+    product: NotRequired[str]
+
+
+class AttachmentMetadata(TypedDict):
+    """Case attachment metadata."""
+    fileName: str
+    link: str
+    fileSize: NotRequired[int]
+
+
+def get_ca_bundle() -> str | bool:
     """
     Get CA bundle path from environment variables.
 
@@ -35,7 +52,7 @@ def get_ca_bundle():
     return ca_bundle if ca_bundle else True
 
 
-def check_download_safety(file_size, download_path, threshold_gb=3):
+def check_download_safety(file_size: int, download_path: str, threshold_gb: int = 3) -> tuple[bool, str | None]:
     """
     Check if download is safe (enough disk space, reasonable size).
 
@@ -82,7 +99,13 @@ class RedHatAPIClient:
 
     BASE_URL = "https://api.access.redhat.com/support/v1"
 
-    def __init__(self, access_token, verify_ssl=None, max_retries=3, timeout=(3.05, 27)):
+    def __init__(
+        self,
+        access_token: str,
+        verify_ssl: str | bool | None = None,
+        max_retries: int = 3,
+        timeout: tuple[float, float] = (3.05, 27)
+    ) -> None:
         """
         Initialize API client.
 
@@ -131,7 +154,7 @@ class RedHatAPIClient:
 
         return session
 
-    def fetch_case_details(self, case_number):
+    def fetch_case_details(self, case_number: str) -> CaseDetails:
         """
         Fetch details for a specific case.
 
@@ -170,7 +193,7 @@ class RedHatAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"API request failed for case {case_number}: {str(e)}")
 
-    def fetch_account_details(self, account_number):
+    def fetch_account_details(self, account_number: str) -> dict[str, Any]:
         """
         Fetch details for a specific account.
 
@@ -209,7 +232,7 @@ class RedHatAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"API request failed for account {account_number}: {str(e)}")
 
-    def list_attachments(self, case_number):
+    def list_attachments(self, case_number: str) -> list[AttachmentMetadata]:
         """
         List attachments for a case.
 
@@ -259,7 +282,7 @@ class RedHatAPIClient:
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    def download_file(self, url, local_filename, force=False):
+    def download_file(self, url: str, local_filename: str, force: bool = False) -> None:
         """
         Download file with progress bar, automatic retry, and resume support.
 
@@ -394,14 +417,14 @@ class RedHatAPIClient:
         except requests.exceptions.RequestException as e:
             raise APIError(f"Download failed: {str(e)}")
 
-    def close(self):
+    def close(self) -> None:
         """Close session and cleanup resources."""
         self.session.close()
 
-    def __enter__(self):
+    def __enter__(self) -> 'RedHatAPIClient':
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> None:
         """Context manager exit."""
         self.close()

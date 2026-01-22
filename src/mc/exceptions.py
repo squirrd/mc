@@ -4,7 +4,6 @@ This module defines domain-specific exceptions with appropriate exit codes
 following Unix sysexits.h conventions.
 """
 
-from typing import Optional
 import requests
 
 
@@ -21,7 +20,7 @@ class MCError(Exception):
 
     exit_code = 1  # Generic error
 
-    def __init__(self, message: str, suggestion: Optional[str] = None):
+    def __init__(self, message: str, suggestion: str | None = None) -> None:
         """Initialize MCError.
 
         Args:
@@ -68,7 +67,7 @@ class HTTPAPIError(APIError):
         response: Original requests.Response object
     """
 
-    def __init__(self, message: str, suggestion: Optional[str] = None):
+    def __init__(self, message: str, suggestion: str | None = None) -> None:
         """Initialize HTTPAPIError.
 
         Args:
@@ -76,8 +75,8 @@ class HTTPAPIError(APIError):
             suggestion: Optional suggestion for fixing the error
         """
         super().__init__(message, suggestion)
-        self.status_code: Optional[int] = None
-        self.response: Optional[requests.Response] = None
+        self.status_code: int | None = None
+        self.response: requests.Response | None = None
 
     @classmethod
     def from_response(cls, response: requests.Response) -> 'HTTPAPIError':

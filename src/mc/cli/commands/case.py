@@ -13,7 +13,7 @@ from mc.exceptions import HTTPAPIError, APIError, ValidationError
 logger = logging.getLogger(__name__)
 
 
-def attach(case_number, base_dir, offline_token, serial=False, quiet=False):
+def attach(case_number: str, base_dir: str, offline_token: str, serial: bool = False, quiet: bool = False) -> None:
     """
     Download attachments for a case.
 
@@ -137,7 +137,7 @@ def attach(case_number, base_dir, offline_token, serial=False, quiet=False):
         raise
 
 
-def check(case_number, base_dir, offline_token, fix=False):
+def check(case_number: str, base_dir: str, offline_token: str, fix: bool = False) -> None:
     """
     Check workspace status for a case.
 
@@ -194,7 +194,7 @@ def check(case_number, base_dir, offline_token, fix=False):
         raise
 
 
-def create(case_number, base_dir, offline_token, download=False, no_check=False):
+def create(case_number: str, base_dir: str, offline_token: str, download: bool = False, no_check: bool = False) -> None:
     """
     Create workspace for a case.
 
@@ -262,7 +262,7 @@ def create(case_number, base_dir, offline_token, download=False, no_check=False)
         raise
 
 
-def case_comments(case_number, offline_token):
+def case_comments(case_number: str, offline_token: str) -> None:
     """
     Display case comments.
 

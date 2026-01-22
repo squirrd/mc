@@ -7,7 +7,7 @@ from mc.integrations.ldap import ldap_search
 logger = logging.getLogger(__name__)
 
 
-def go(case_number, launch=False):
+def go(case_number: str, launch: bool = False) -> None:
     """
     Print or launch Salesforce case URL.
 
@@ -29,7 +29,7 @@ def go(case_number, launch=False):
         print(url)  # print OK
 
 
-def ls(uid, show_all=False):
+def ls(uid: str, show_all: bool = False) -> None:
     """
     Search for a user in LDAP.
 

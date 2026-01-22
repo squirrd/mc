@@ -9,7 +9,7 @@ from mc.exceptions import ValidationError
 logger = logging.getLogger(__name__)
 
 
-def ldap_search(uid, show_all=False):
+def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
     """
     Search LDAP for a user and display their details.
 
@@ -72,7 +72,7 @@ def ldap_search(uid, show_all=False):
     return True, output
 
 
-def print_ldap_cards(output):
+def print_ldap_cards(output: str) -> None:
     """
     Print formatted LDAP user information cards with error handling.
 

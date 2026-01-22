@@ -3,7 +3,7 @@
 import re
 
 
-def validate_case_number(case_number):
+def validate_case_number(case_number: str | int) -> str:
     """
     Validate case number is exactly 8 digits.
 

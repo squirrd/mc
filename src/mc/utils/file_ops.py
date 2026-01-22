@@ -8,7 +8,7 @@ from mc.exceptions import FileOperationError, WorkspaceError
 logger = logging.getLogger(__name__)
 
 
-def does_path_exist(path):
+def does_path_exist(path: str | Path) -> bool:
     """
     Check if a path exists.
 
@@ -21,7 +21,7 @@ def does_path_exist(path):
     return Path(path).exists()
 
 
-def create_file(file_path):
+def create_file(file_path: str | Path) -> None:
     """
     Create an empty file.
 
@@ -46,7 +46,7 @@ def create_file(file_path):
         )
 
 
-def create_directory(dir_path):
+def create_directory(dir_path: str | Path) -> None:
     """
     Create a directory (and parents if needed).
 
@@ -69,7 +69,7 @@ def create_directory(dir_path):
         )
 
 
-def safe_read_file(file_path):
+def safe_read_file(file_path: str | Path) -> str:
     """
     Read file with error handling.
 

@@ -7,7 +7,6 @@ messages and handling CLI errors with appropriate exit codes and logging.
 import sys
 import logging
 import traceback
-from typing import Union
 
 from mc.exceptions import MCError
 

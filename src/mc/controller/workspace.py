@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class WorkspaceManager:
     """Manages case workspace files and directories."""
 
-    def __init__(self, base_dir, case_number, account_name, case_summary):
+    def __init__(self, base_dir: str | Path, case_number: str, account_name: str, case_summary: str) -> None:
         """
         Initialize workspace manager.
 
@@ -42,7 +42,7 @@ class WorkspaceManager:
         self.case_summary_formatted = shorten_and_format(case_summary)
         self.file_dir_list = self._generate_file_dir_list()
 
-    def _generate_file_dir_list(self):
+    def _generate_file_dir_list(self) -> list[tuple[str, Path]]:
         """
         Generate list of expected files and directories for workspace.
 
@@ -77,7 +77,7 @@ class WorkspaceManager:
                 "Check: Account name and case summary contain valid characters"
             )
 
-    def check(self):
+    def check(self) -> str:
         """
         Check workspace file status.
 
@@ -117,7 +117,7 @@ class WorkspaceManager:
         logger.info("CheckStatus: %s", status)
         return status
 
-    def create_files(self):
+    def create_files(self) -> None:
         """Create all workspace files and directories."""
         for file_type, file_path in self.file_dir_list:
             logger.debug("  Type: %s, Path: %s", file_type, file_path)
@@ -126,7 +126,7 @@ class WorkspaceManager:
             else:
                 create_directory(file_path)
 
-    def get_attachment_dir(self):
+    def get_attachment_dir(self) -> Path | None:
         """Get the attachment directory path.
 
         Returns:

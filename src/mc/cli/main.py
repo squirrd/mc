@@ -5,6 +5,7 @@ import argparse
 import logging
 import os
 import sys
+from typing import Literal
 from mc.cli.commands import case, other
 from mc.config.manager import ConfigManager
 from mc.config.wizard import run_setup_wizard
@@ -14,8 +15,10 @@ from mc.utils.file_ops import does_path_exist
 from mc.utils.logging import setup_logging
 from mc.version import get_version
 
+ExitCode = Literal[0, 1, 2, 65, 69, 73, 74, 130]
 
-def check_legacy_env_vars():
+
+def check_legacy_env_vars() -> None:
     """Check for deprecated environment variables and guide migration."""
     legacy_vars = ["MC_BASE_DIR", "RH_API_OFFLINE_TOKEN"]
     found_vars = [var for var in legacy_vars if var in os.environ]
@@ -42,7 +45,7 @@ def check_legacy_env_vars():
     sys.exit(1)
 
 
-def main():
+def main() -> ExitCode:
     """Main CLI entry point."""
     try:
         # Create argument parser early to handle --version/--help without config

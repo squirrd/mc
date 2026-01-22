@@ -4,6 +4,7 @@ import json
 import os
 import time
 import logging
+from typing import Any
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -18,7 +19,7 @@ EXPIRY_BUFFER_SECONDS = 300  # 5-minute buffer
 DEFAULT_TTL_SECONDS = 3600  # 1 hour default
 
 
-def get_ca_bundle():
+def get_ca_bundle() -> str | bool:
     """
     Get CA bundle path from environment variables.
 
@@ -34,7 +35,7 @@ def get_ca_bundle():
     return ca_bundle if ca_bundle else True
 
 
-def is_token_expired(expires_at, buffer_seconds=300):
+def is_token_expired(expires_at: float, buffer_seconds: int = 300) -> bool:
     """
     Check if token is expired or will expire within buffer period.
 
@@ -49,7 +50,7 @@ def is_token_expired(expires_at, buffer_seconds=300):
     return current_time >= (expires_at - buffer_seconds)
 
 
-def load_token_cache():
+def load_token_cache() -> dict[str, Any] | None:
     """
     Load token from cache file if it exists.
 
@@ -69,7 +70,7 @@ def load_token_cache():
         return None
 
 
-def save_token_cache(access_token, expires_in=None):
+def save_token_cache(access_token: str, expires_in: int | None = None) -> None:
     """
     Save token to cache file with secure permissions.
 

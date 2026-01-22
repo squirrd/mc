@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 class JSONFormatter(logging.Formatter):
     """Custom logging formatter that outputs JSON with structured fields."""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         """
         Format the log record as JSON.
 
@@ -45,7 +45,7 @@ class SensitiveDataFilter(logging.Filter):
     ]
 
     @staticmethod
-    def redact_token(token):
+    def redact_token(token: str) -> str:
         """
         Show last 4 chars if token is >20 chars, otherwise fully redact.
 
@@ -59,7 +59,7 @@ class SensitiveDataFilter(logging.Filter):
             return f"...{token[-4:]}"
         return "<REDACTED>"
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         """
         Redact sensitive data from log record message.
 
@@ -82,7 +82,7 @@ class SensitiveDataFilter(logging.Filter):
         return True
 
 
-def setup_logging(json_logs=False, debug=False, debug_file=None):
+def setup_logging(json_logs: bool = False, debug: bool = False, debug_file: str | None = None) -> logging.Logger:
     """
     Configure logging for the application.
 

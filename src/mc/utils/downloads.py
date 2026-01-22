@@ -3,6 +3,7 @@
 import os
 import time
 import logging
+from typing import Any
 import backoff
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,7 +19,7 @@ from rich.progress import (
 logger = logging.getLogger(__name__)
 
 
-def _should_retry(exc):
+def _should_retry(exc: Exception) -> bool:
     """Determine if exception should trigger retry.
 
     Retry transient failures (5xx, 429, timeouts, connection errors).
@@ -45,12 +46,12 @@ def _should_retry(exc):
 
 
 def download_attachments_parallel(
-    attachments,
-    attach_dir,
-    api_client,
-    max_workers=8,
-    show_progress=True
-):
+    attachments: list[dict[str, Any]],
+    attach_dir: Any,
+    api_client: Any,
+    max_workers: int = 8,
+    show_progress: bool = True
+) -> dict[str, list[Any]]:
     """Download attachments in parallel with progress tracking.
 
     Args:
@@ -168,7 +169,7 @@ def download_attachments_parallel(
         details['wait']
     )
 )
-def _download_single_file(task_id, url, local_path, api_client, progress):
+def _download_single_file(task_id: Any, url: str, local_path: str, api_client: Any, progress: Progress) -> None:
     """Download single file with progress updates and resume support.
 
     This function runs in ThreadPoolExecutor worker thread.
