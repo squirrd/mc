@@ -1,7 +1,12 @@
 """LDAP search integration."""
 
+import logging
 import re
 import subprocess
+
+from mc.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 def ldap_search(uid, show_all=False):
@@ -17,7 +22,10 @@ def ldap_search(uid, show_all=False):
     """
     # Validate search term length
     if not (4 <= len(uid) <= 15):
-        return False, "Error: Search term must be between 4 and 15 characters long."
+        raise ValidationError(
+            f"Search term '{uid}' must be between 4 and 15 characters",
+            "Try: Use a more specific search term"
+        )
 
     # Determine search pattern
     if not (5 <= len(uid) < 15):
@@ -65,7 +73,7 @@ def ldap_search(uid, show_all=False):
 
 def print_ldap_cards(output):
     """
-    Print formatted LDAP user information cards.
+    Print formatted LDAP user information cards with error handling.
 
     Args:
         output: Raw LDAP output string
@@ -85,23 +93,52 @@ def print_ldap_cards(output):
     ]
     field_map = dict(ordered_keys)
 
-    for entry in output.strip().split('\n\n'):
-        user_data = {}
-        for line in entry.split('\n'):
-            if ':' in line:
-                key, value = line.split(':', 1)
-                if key in field_map:
-                    user_data[key] = value.strip()
+    entries_processed = 0
+    entries_failed = 0
 
-        print("-" * 40)
-        for key, display_name in ordered_keys:
-            if key in user_data:
-                value = user_data[key]
-                # Special formatting for the manager field
-                if key == 'manager':
-                    manager_uid = re.search(r'uid=([^,]+)', value)
-                    display_value = manager_uid.group(1) if manager_uid else value
-                else:
-                    display_value = value
-                print(f"{display_name:<12}: {display_value}")
-        print("-" * 40)
+    for entry in output.strip().split('\n\n'):
+        if not entry.strip():
+            continue
+
+        try:
+            user_data = {}
+            for line in entry.split('\n'):
+                if ':' in line:
+                    parts = line.split(':', 1)
+                    if len(parts) == 2:
+                        key, value = parts
+                        if key in field_map:
+                            user_data[key] = value.strip()
+
+            # Only print if we got at least one field
+            if not user_data:
+                logger.warning("Skipping empty LDAP entry")
+                entries_failed += 1
+                continue
+
+            print("-" * 40)
+            for key, display_name in ordered_keys:
+                # Use .get() instead of direct access to handle missing fields
+                if key in user_data:
+                    value = user_data[key]
+                    # Special formatting for the manager field
+                    if key == 'manager':
+                        try:
+                            manager_uid = re.search(r'uid=([^,]+)', value)
+                            display_value = manager_uid.group(1) if manager_uid else value
+                        except (AttributeError, IndexError):
+                            display_value = value
+                    else:
+                        display_value = value
+                    print(f"{display_name:<12}: {display_value}")
+            print("-" * 40)
+            entries_processed += 1
+
+        except Exception as e:
+            # Log but continue processing other entries
+            logger.warning(f"Failed to parse LDAP entry: {e}")
+            entries_failed += 1
+            continue
+
+    if entries_failed > 0:
+        logger.info(f"Processed {entries_processed} entries, {entries_failed} failed to parse")
