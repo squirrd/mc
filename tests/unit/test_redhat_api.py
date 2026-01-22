@@ -90,6 +90,14 @@ def test_download_file_success(api_client, tmp_path):
     local_file = tmp_path / "downloaded_file.txt"
     test_content = b"This is test file content\nLine 2\nLine 3"
 
+    # Mock HEAD request for file size check
+    responses.add(
+        responses.HEAD,
+        file_url,
+        headers={'content-length': str(len(test_content))},
+        status=200
+    )
+
     # Mock streaming download
     responses.add(
         responses.GET,
