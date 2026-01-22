@@ -119,10 +119,12 @@ Plans:
   4. Large file downloads show progress indicators with ETA
   5. Log output includes timestamps, levels, and module names
   6. Sensitive data (tokens, credentials) never appears in logs
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 06-01: Implement structured logging and infrastructure features
+- [ ] 06-01-PLAN.md — Logging infrastructure with dual-mode formatters and sensitive data redaction
+- [ ] 06-02-PLAN.md — Print statement migration to structured logging (74 print() statements across 8 files)
+- [ ] 06-03-PLAN.md — Progress bars and retry logic for downloads with resumable support
 
 ### Phase 7: Performance Optimization
 **Goal**: Tool is fast and efficient for typical workflows
@@ -166,10 +168,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Code Cleanup | 3/3 | Complete | 2026-01-22 |
 | 4. Security Hardening | 3/3 | Complete | 2026-01-22 |
 | 5. Error Handling & Robustness | 0/3 | Planned | - |
-| 6. Infrastructure & Observability | 0/1 | Not started | - |
+| 6. Infrastructure & Observability | 0/3 | Planned | - |
 | 7. Performance Optimization | 0/1 | Not started | - |
 | 8. Type Safety & Modernization | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 4 complete*
+*Last updated: 2026-01-22 — Phase 6 plans created*
