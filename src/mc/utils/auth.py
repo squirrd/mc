@@ -3,7 +3,13 @@
 import json
 import os
 import time
+import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from mc.exceptions import AuthenticationError, APITimeoutError, APIConnectionError
+
+logger = logging.getLogger(__name__)
 
 
 # Token cache configuration
@@ -108,15 +114,18 @@ def get_access_token(offline_token: str) -> str:
         str: Access token
 
     Raises:
-        requests.HTTPError: If token refresh fails
-        requests.exceptions.SSLError: If SSL verification fails
+        AuthenticationError: If authentication fails
+        APITimeoutError: If SSO request times out
+        APIConnectionError: If connection to SSO fails
     """
     # Try to load cached token
     cache = load_token_cache()
     if cache and not is_token_expired(cache['expires_at'], EXPIRY_BUFFER_SECONDS):
+        logger.debug("Using cached access token")
         return cache['access_token']
 
     # Cache doesn't exist or is expired - fetch new token
+    logger.debug("Fetching access token from Red Hat SSO")
     url = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     payload = {
         'grant_type': 'refresh_token',
@@ -124,15 +133,48 @@ def get_access_token(offline_token: str) -> str:
         'refresh_token': offline_token
     }
 
+    # Create session with retry configuration
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        backoff_factor=0.3,
+        respect_retry_after_header=True
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
     ca_bundle = get_ca_bundle()
+
     try:
-        response = requests.post(url, data=payload, verify=ca_bundle, timeout=30)
+        response = session.post(url, data=payload, verify=ca_bundle, timeout=(3.05, 27))
         response.raise_for_status()
-    except requests.exceptions.SSLError as e:
-        print(f"SSL certificate verification failed for {url}")
-        print(f"Reason: {str(e)}")
-        print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-        raise
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code in (400, 401, 403):
+            raise AuthenticationError(
+                "Invalid offline token",
+                "Try: Check RH_API_OFFLINE_TOKEN value or obtain new token from https://access.redhat.com/management/api"
+            )
+        else:
+            raise AuthenticationError(f"SSO authentication failed: HTTP {e.response.status_code}")
+    except requests.exceptions.Timeout:
+        raise APITimeoutError(
+            "SSO authentication timed out",
+            "Check: Network connectivity and VPN connection"
+        )
+    except requests.exceptions.ConnectionError:
+        raise APIConnectionError(
+            "Cannot connect to Red Hat SSO",
+            "Check: VPN connection and network access"
+        )
+    except requests.exceptions.RequestException as e:
+        raise AuthenticationError(f"Authentication request failed: {str(e)}")
+    finally:
+        session.close()
 
     # Extract token data
     token_data = response.json()
@@ -141,5 +183,6 @@ def get_access_token(offline_token: str) -> str:
 
     # Save to cache
     save_token_cache(access_token, expires_in)
+    logger.debug("Access token retrieved successfully")
 
     return access_token
