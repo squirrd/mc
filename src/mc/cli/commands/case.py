@@ -56,18 +56,18 @@ def attach(case_number, base_dir, offline_token):
         skipped = 0
         failed_files = []
 
+        logger.info("Starting download of %d attachments for case %s", total_files, case_number)
+
         for file_meta in attachments:
-            logger.info("----------------------------")
             filename = f"{attach_dir}/{file_meta['fileName']}"
             url = file_meta['link']
-            logger.debug("Filename: %s", filename)
-            logger.debug("URL: %s", url)
+            logger.debug("Processing attachment: %s (URL: %s)", filename, url)
 
             if os.path.exists(filename):
                 logger.info("File already exists, skipping: %s", file_meta['fileName'])
                 skipped += 1
             else:
-                logger.info("Downloading file: %s", file_meta['fileName'])
+                # Progress bar from download_file() will show download progress
                 try:
                     api_client.download_file(url, filename)
                     downloaded += 1
