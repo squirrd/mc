@@ -1,7 +1,10 @@
 """Parallel download manager with rich progress tracking."""
 
 import os
+import time
 import logging
+import backoff
+import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import (
     Progress,
@@ -13,6 +16,32 @@ from rich.progress import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _should_retry(exc):
+    """Determine if exception should trigger retry.
+
+    Retry transient failures (5xx, 429, timeouts, connection errors).
+    Fail fast on permanent errors (404, 401, 403).
+    """
+    if not isinstance(exc, requests.exceptions.RequestException):
+        return False
+
+    if not hasattr(exc, 'response') or exc.response is None:
+        # Network error (timeout, connection reset) - retry
+        return True
+
+    status = exc.response.status_code
+
+    # Retry these status codes
+    if status in [429, 500, 502, 503, 504]:
+        return True
+
+    # Don't retry 4xx client errors (except 429 handled above)
+    if 400 <= status < 500:
+        return False
+
+    return True
 
 
 def download_attachments_parallel(
@@ -119,6 +148,19 @@ def download_attachments_parallel(
     return {'success': success, 'failed': failed}
 
 
+@backoff.on_exception(
+    backoff.expo,
+    requests.exceptions.RequestException,
+    max_tries=5,
+    giveup=lambda e: not _should_retry(e),
+    jitter=backoff.full_jitter,
+    on_backoff=lambda details: logger.debug(
+        "Retry %s/%s, waiting %.1fs",
+        details['tries'],
+        details.get('max_tries', 5),
+        details['wait']
+    )
+)
 def _download_single_file(task_id, url, local_path, api_client, progress):
     """Download single file with progress updates.
 
@@ -150,6 +192,24 @@ def _download_single_file(task_id, url, local_path, api_client, progress):
         response = api_client.session.get(
             url, verify=api_client.verify_ssl, stream=True, timeout=api_client.timeout
         )
+
+        # Check for rate limiting
+        if response.status_code == 429:
+            retry_after = response.headers.get('Retry-After')
+            if retry_after:
+                try:
+                    wait_seconds = int(retry_after)
+                    logger.debug("Rate limited, server says retry after %ss", wait_seconds)
+                    progress.console.print(
+                        f"[yellow]Rate limited on {os.path.basename(local_path)}, "
+                        f"waiting {wait_seconds}s[/yellow]"
+                    )
+                    time.sleep(wait_seconds)
+                except ValueError:
+                    pass  # Retry-After might be HTTP date format - ignore for now
+            # Raise to trigger backoff retry
+            raise requests.exceptions.RequestException(response=response)
+
         response.raise_for_status()
 
         with open(local_path, 'wb') as f:
