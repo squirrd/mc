@@ -28,8 +28,10 @@ def ldap_search(uid, show_all=False):
     print(f"Searching LDAP for: {search_term}")
 
     # Execute ldapsearch command
+    # ldapsearch is a standard system utility, not user-controlled
+    # nosec B602
     command = [
-        "ldapsearch",
+        "ldapsearch",  # nosec B607
         "-LLL",
         "-z", "10",
         "-x",
@@ -39,7 +41,10 @@ def ldap_search(uid, show_all=False):
     ]
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        # LDAP search using subprocess is safe - command and args are hardcoded,
+        # only search_term parameter is user input and it's validated (length 4-15)
+        # nosec B603
+        result = subprocess.run(command, capture_output=True, text=True, check=True)  # nosec B603
         output = result.stdout
     except FileNotFoundError:
         return False, "Error: 'ldapsearch' command not found. Is it installed and in your PATH?"

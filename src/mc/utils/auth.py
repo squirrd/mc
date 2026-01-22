@@ -126,7 +126,7 @@ def get_access_token(offline_token: str) -> str:
 
     ca_bundle = get_ca_bundle()
     try:
-        response = requests.post(url, data=payload, verify=ca_bundle)
+        response = requests.post(url, data=payload, verify=ca_bundle, timeout=30)
         response.raise_for_status()
     except requests.exceptions.SSLError as e:
         print(f"SSL certificate verification failed for {url}")

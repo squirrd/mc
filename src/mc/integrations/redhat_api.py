@@ -97,7 +97,7 @@ class RedHatAPIClient:
         """
         url = f"{self.BASE_URL}/cases/{case_number}"
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl)
+            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.SSLError as e:
@@ -122,7 +122,7 @@ class RedHatAPIClient:
         """
         url = f"{self.BASE_URL}/accounts/{account_number}"
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl)
+            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.SSLError as e:
@@ -147,7 +147,7 @@ class RedHatAPIClient:
         """
         url = f"{self.BASE_URL}/cases/{case_number}/attachments/"
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl)
+            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.SSLError as e:
@@ -172,7 +172,7 @@ class RedHatAPIClient:
         """
         # Get file size from HEAD request
         try:
-            head_response = requests.head(url, headers=self.headers, verify=self.verify_ssl)
+            head_response = requests.head(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
             head_response.raise_for_status()
         except requests.exceptions.SSLError as e:
             print(f"SSL certificate verification failed for {url}")
@@ -193,7 +193,7 @@ class RedHatAPIClient:
 
         # Proceed with download
         try:
-            with requests.get(url, headers=self.headers, verify=self.verify_ssl, stream=True) as response:
+            with requests.get(url, headers=self.headers, verify=self.verify_ssl, stream=True, timeout=30) as response:
                 response.raise_for_status()
                 with open(local_filename, 'wb') as file:
                     for chunk in response.iter_content(chunk_size=8192):
