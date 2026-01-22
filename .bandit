@@ -1,0 +1,19 @@
+# Bandit security linter configuration
+# https://bandit.readthedocs.io/
+
+# Exclude directories
+exclude_dirs:
+  - /tests/
+  - /docs/
+  - /.planning/
+  - /.claude/
+
+# Skip specific test IDs (none initially - address issues as they arise)
+skips: []
+
+# Only fail on HIGH severity issues
+severity: HIGH
+confidence: MEDIUM
+
+# Tests to run (default: all)
+tests: []
