@@ -20,8 +20,8 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Tech Debt
 
-- [ ] **DEBT-01**: Fix hardcoded base directory (use MC_BASE_DIR env var with default)
-- [ ] **DEBT-02**: Remove duplicate RH_API_OFFLINE_TOKEN validation
+- [ ] **DEBT-01**: Fix hardcoded base directory (use TOML config file with default)
+- [ ] **DEBT-02**: Remove environment variable dependencies and duplicate validation
 - [ ] **DEBT-03**: Consolidate version management (single source of truth)
 - [ ] **DEBT-04**: Migrate fully to pyproject.toml (remove setup.py)
 - [ ] **DEBT-05**: Fix typo "dowloading attachemnts" → "downloading attachments"

@@ -60,8 +60,8 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: DEBT-01, DEBT-02, DEBT-03, DEBT-04, DEBT-05, BUG-01, BUG-02
 **Success Criteria** (what must be TRUE):
-  1. Base directory is configurable via MC_BASE_DIR environment variable with sensible default
-  2. No duplicate environment variable validation exists
+  1. Base directory is configurable via TOML config file with sensible default (~/mc)
+  2. Legacy environment variables are explicitly rejected with migration guidance
   3. Version is managed from single source of truth (pyproject.toml)
   4. setup.py removed, pyproject.toml is sole packaging configuration
   5. All typos fixed (CLI flags, status classes, help text)
