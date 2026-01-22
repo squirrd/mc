@@ -3,7 +3,8 @@
 import pytest
 import requests
 import responses
-from mc.integrations.redhat_api import RedHatAPIClient
+from unittest.mock import Mock, patch
+from mc.integrations.redhat_api import RedHatAPIClient, check_download_safety
 
 
 @responses.activate
@@ -180,3 +181,34 @@ def test_list_attachments_http_errors(api_client, mock_api_base_url, status_code
 
     # Verify status code matches expected
     assert exc_info.value.response.status_code == status_code
+
+
+def test_check_download_safety_small_file():
+    """Small files should not trigger warnings."""
+    file_size = 1 * 1024 * 1024 * 1024  # 1 GB
+    is_safe, warning = check_download_safety(file_size, "/tmp/test.bin")
+    assert is_safe is True
+    assert warning is None
+
+
+@patch('shutil.disk_usage')
+def test_check_download_safety_large_file_sufficient_space(mock_disk_usage):
+    """Large files with sufficient space should warn but allow download."""
+    mock_disk_usage.return_value = Mock(free=100 * 1024**3)  # 100 GB free
+    file_size = 5 * 1024 * 1024 * 1024  # 5 GB file
+    is_safe, warning = check_download_safety(file_size, "/tmp/test.bin")
+    assert is_safe is True
+    assert warning is not None
+    assert "5.00 GB" in warning
+    assert "100.00 GB" in warning
+
+
+@patch('shutil.disk_usage')
+def test_check_download_safety_insufficient_space(mock_disk_usage):
+    """Large files without sufficient space should block download."""
+    mock_disk_usage.return_value = Mock(free=2 * 1024**3)  # 2 GB free
+    file_size = 5 * 1024 * 1024 * 1024  # 5 GB file
+    is_safe, warning = check_download_safety(file_size, "/tmp/test.bin")
+    assert is_safe is False
+    assert warning is not None
+    assert "Insufficient disk space" in warning

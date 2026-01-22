@@ -55,7 +55,12 @@ def attach(case_number, base_dir, offline_token):
             print(f"File already exists no need to download")
         else:
             print(f"Downloading file...")
-            api_client.download_file(url, filename)
+            try:
+                api_client.download_file(url, filename)
+            except RuntimeError as e:
+                print(f"Download failed: {e}")
+                # Continue to next attachment instead of crashing
+                continue
 
 
 def check(case_number, base_dir, offline_token, fix=False):
