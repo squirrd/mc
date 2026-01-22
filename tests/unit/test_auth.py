@@ -1,9 +1,22 @@
 """Unit tests for auth module."""
 
+import os
 import pytest
 import responses
 import requests
-from mc.utils.auth import get_access_token
+from mc.utils.auth import get_access_token, TOKEN_CACHE_PATH
+
+
+@pytest.fixture(autouse=True)
+def clear_token_cache():
+    """Clear token cache before and after each test."""
+    # Clear before test
+    if os.path.exists(TOKEN_CACHE_PATH):
+        os.remove(TOKEN_CACHE_PATH)
+    yield
+    # Clear after test
+    if os.path.exists(TOKEN_CACHE_PATH):
+        os.remove(TOKEN_CACHE_PATH)
 
 
 @responses.activate
