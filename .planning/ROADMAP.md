@@ -51,9 +51,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Auth and API client tests with HTTP mocking (responses library)
-- [ ] 02-02-PLAN.md — Workspace and utilities tests with filesystem testing (tmp_path)
-- [ ] 02-03-PLAN.md — LDAP tests with subprocess mocking and Docker integration
+- [x] 02-01-PLAN.md — Auth and API client tests with HTTP mocking (responses library)
+- [x] 02-02-PLAN.md — Workspace and utilities tests with filesystem testing (tmp_path)
+- [x] 02-03-PLAN.md — LDAP tests with subprocess mocking and Docker integration
 
 ### Phase 3: Code Cleanup
 **Goal**: Codebase is clean, consistent, and free of obvious bugs
@@ -66,10 +66,12 @@ Plans:
   4. setup.py removed, pyproject.toml is sole packaging configuration
   5. All typos fixed (CLI flags, status classes, help text)
   6. All tests still pass after cleanup
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Resolve technical debt and fix bugs
+- [ ] 03-01-PLAN.md — Config migration to TOML with env var detection and wizard
+- [ ] 03-02-PLAN.md — Version consolidation and setup.py removal
+- [ ] 03-03-PLAN.md — Typo fixes and test updates
 
 ### Phase 4: Security Hardening
 **Goal**: Tool follows security best practices for production use
@@ -157,7 +159,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Test Foundation | 1/1 | Complete | 2026-01-20 |
 | 2. Critical Path Testing | 3/3 | Complete | 2026-01-22 |
-| 3. Code Cleanup | 0/1 | Not started | - |
+| 3. Code Cleanup | 0/3 | Not started | - |
 | 4. Security Hardening | 0/1 | Not started | - |
 | 5. Error Handling & Robustness | 0/1 | Not started | - |
 | 6. Infrastructure & Observability | 0/1 | Not started | - |
@@ -166,4 +168,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 2 complete*
+*Last updated: 2026-01-22 — Phase 3 planned*
