@@ -6,18 +6,19 @@ from mc.integrations.redhat_api import RedHatAPIClient
 from mc.controller.workspace import WorkspaceManager
 
 
-def attach(case_number, base_dir):
+def attach(case_number, base_dir, offline_token):
     """
     Download attachments for a case.
 
     Args:
         case_number: Case number
         base_dir: Base directory for cases
+        offline_token: Red Hat API offline token
     """
     print(f"Downloading attachments for case number: {case_number}")
 
     # Get API client
-    access_token = get_access_token()
+    access_token = get_access_token(offline_token)
     api_client = RedHatAPIClient(access_token)
 
     # Fetch case and account details
@@ -49,17 +50,18 @@ def attach(case_number, base_dir):
             api_client.download_file(url, filename)
 
 
-def check(case_number, base_dir, fix=False):
+def check(case_number, base_dir, offline_token, fix=False):
     """
     Check workspace status for a case.
 
     Args:
         case_number: Case number
         base_dir: Base directory for cases
+        offline_token: Red Hat API offline token
         fix: If True, create missing files
     """
     # Get API client
-    access_token = get_access_token()
+    access_token = get_access_token(offline_token)
     api_client = RedHatAPIClient(access_token)
 
     # Fetch case and account details
@@ -80,20 +82,21 @@ def check(case_number, base_dir, fix=False):
     if fix:
         if status == "WARN":
             print("Fixing missing files")
-            create(case_number, base_dir, download=False, no_check=True)
+            create(case_number, base_dir, offline_token, download=False, no_check=True)
         elif status == "FATAL":
             print("Fatal errors in check.  Nothing can be fixed")
         else:
             print("Files OK.  Nothing to fix")
 
 
-def create(case_number, base_dir, download=False, no_check=False):
+def create(case_number, base_dir, offline_token, download=False, no_check=False):
     """
     Create workspace for a case.
 
     Args:
         case_number: Case number
         base_dir: Base directory for cases
+        offline_token: Red Hat API offline token
         download: If True, also download attachments
         no_check: If True, skip initial check
     """
@@ -104,7 +107,7 @@ def create(case_number, base_dir, download=False, no_check=False):
         print(f" for case: {case_number}")
 
     # Get API client
-    access_token = get_access_token()
+    access_token = get_access_token(offline_token)
     api_client = RedHatAPIClient(access_token)
 
     # Fetch case and account details
@@ -134,20 +137,21 @@ def create(case_number, base_dir, download=False, no_check=False):
         workspace.create_files()
 
     if download:
-        attach(case_number, base_dir)
+        attach(case_number, base_dir, offline_token)
 
 
-def case_comments(case_number):
+def case_comments(case_number, offline_token):
     """
     Display case comments.
 
     Args:
         case_number: Case number
+        offline_token: Red Hat API offline token
     """
     from pprint import pprint
 
     # Get API client
-    access_token = get_access_token()
+    access_token = get_access_token(offline_token)
     api_client = RedHatAPIClient(access_token)
 
     # Fetch case details

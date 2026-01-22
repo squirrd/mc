@@ -68,5 +68,7 @@ class ConfigManager:
             config: Configuration dictionary to save
         """
         config_path = self.get_config_path()
+        # Ensure parent directory exists
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "wb") as f:
             tomli_w.dump(config, f)

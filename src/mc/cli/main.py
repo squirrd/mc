@@ -39,29 +39,7 @@ def check_legacy_env_vars():
 
 def main():
     """Main CLI entry point."""
-    # Check for legacy environment variables FIRST
-    check_legacy_env_vars()
-
-    # Load or create configuration
-    config_mgr = ConfigManager()
-    if not config_mgr.exists():
-        print("No config file found. Running setup wizard...")
-        print()
-        config = run_setup_wizard()
-        config_mgr.save(config)
-    else:
-        config = config_mgr.load()
-
-    # Get configuration values
-    base_dir = config["base_directory"]
-    offline_token = config["api"]["offline_token"]
-
-    # Verify base directory exists
-    if not does_path_exist(base_dir):
-        print(f"The directory '{base_dir}' must exist")
-        exit(1)
-
-    # Create argument parser
+    # Create argument parser early to handle --version/--help without config
     parser = argparse.ArgumentParser(prog='mc', description='MC CLI tool')
     parser.add_argument('--version', action='version',
                         version=f'%(prog)s {get_version()}')
@@ -100,13 +78,13 @@ def main():
 
     # Route to appropriate command
     if args.command == 'attach':
-        case.attach(args.case_number, base_dir)
+        case.attach(args.case_number, base_dir, offline_token)
     elif args.command == 'check':
-        case.check(args.case_number, base_dir, fix=args.fix)
+        case.check(args.case_number, base_dir, offline_token, fix=args.fix)
     elif args.command == 'create':
-        case.create(args.case_number, base_dir, download=args.download)
+        case.create(args.case_number, base_dir, offline_token, download=args.download)
     elif args.command == 'case-comments':
-        case.case_comments(args.case_number)
+        case.case_comments(args.case_number, offline_token)
     elif args.command == 'ls':
         other.ls(args.uid, show_all=args.all)
     elif args.command == 'go':
