@@ -54,7 +54,7 @@ def handle_cli_error(error: Exception, debug: bool = False) -> int:
         Appropriate exit code for the error (from error.exit_code if available, else 1)
     """
     # Log error with full details (exc_info includes traceback in logs)
-    logger.error(f"Error: {error}", exc_info=debug)
+    logger.error("Error: %s", error, exc_info=debug)
 
     # Print user-friendly message to stderr
     error_msg = format_error_message(error)

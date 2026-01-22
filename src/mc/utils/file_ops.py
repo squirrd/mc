@@ -33,7 +33,7 @@ def create_file(file_path):
         # Ensure parent directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch(exist_ok=True)
-        logger.debug(f"Created file: {path}")
+        logger.debug("Created file: %s", path)
     except PermissionError:
         raise FileOperationError(
             f"Permission denied creating file: {file_path}",
@@ -56,7 +56,7 @@ def create_directory(dir_path):
     try:
         path = Path(dir_path)
         path.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Created directory: {path}")
+        logger.debug("Created directory: %s", path)
     except PermissionError:
         raise WorkspaceError(
             f"Permission denied creating directory: {dir_path}",
