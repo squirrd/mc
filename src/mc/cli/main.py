@@ -48,7 +48,7 @@ def main():
     # LDAP Search subcommand
     parser_ls = subparsers.add_parser('ls', help='Search for a user in LDAP')
     parser_ls.add_argument('uid', type=str, help='The UID to search for in LDAP')
-    parser_ls.add_argument('-A', '--All', action='store_true')
+    parser_ls.add_argument('-A', '--all', action='store_true')
 
     # Go subcommand
     parser_go = subparsers.add_parser('go', help='Print or launch Salesforce case URL')
@@ -68,7 +68,7 @@ def main():
     elif args.command == 'case-comments':
         case.case_comments(args.case_number)
     elif args.command == 'ls':
-        other.ls(args.uid, show_all=args.All)
+        other.ls(args.uid, show_all=args.all)
     elif args.command == 'go':
         other.go(args.case_number, launch=args.launch)
     else:

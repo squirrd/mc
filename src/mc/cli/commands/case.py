@@ -99,7 +99,7 @@ def create(case_number, base_dir, download=False, no_check=False):
     """
     print("Creating files", end="")
     if download:
-        print(f" and dowloading attachemnts for case: {case_number}")
+        print(f" and downloading attachments for case: {case_number}")
     else:
         print(f" for case: {case_number}")
 
@@ -122,7 +122,7 @@ def create(case_number, base_dir, download=False, no_check=False):
     # Check first unless told not to
     if not no_check:
         status = workspace.check()
-        print(f"CheckStaus: {status}")
+        print(f"CheckStatus: {status}")
         if status == "FATAL":
             print(f"FATAL: Failed file check")
             exit(1)

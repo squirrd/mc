@@ -84,7 +84,7 @@ class WorkspaceManager:
                 status = "FATAL"
                 break
 
-        print(f"CheckStaus: {status}")
+        print(f"CheckStatus: {status}")
         return status
 
     def create_files(self):
