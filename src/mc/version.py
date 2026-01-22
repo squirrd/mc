@@ -3,6 +3,7 @@
 from importlib.metadata import version, PackageNotFoundError
 import sys
 from pathlib import Path
+from typing import cast
 
 
 def get_version() -> str:
@@ -24,4 +25,4 @@ def get_version() -> str:
         pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
-        return pyproject["project"]["version"]
+        return cast(str, pyproject["project"]["version"])

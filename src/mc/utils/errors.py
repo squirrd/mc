@@ -7,6 +7,7 @@ messages and handling CLI errors with appropriate exit codes and logging.
 import sys
 import logging
 import traceback
+from typing import cast
 
 from mc.exceptions import MCError
 
@@ -66,6 +67,6 @@ def handle_cli_error(error: Exception, debug: bool = False) -> int:
 
     # Return appropriate exit code
     if hasattr(error, 'exit_code'):
-        return error.exit_code
+        return cast(int, error.exit_code)
 
     return 1  # Generic error code

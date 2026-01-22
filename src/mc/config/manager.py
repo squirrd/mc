@@ -23,7 +23,7 @@ class ConfigManager:
             app_name: Application name for config directory
         """
         self.app_name = app_name
-        self._config_path = None
+        self._config_path: Path | None = None
 
     def get_config_path(self) -> Path:
         """Get config file path, creating directory if needed.

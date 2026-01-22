@@ -107,8 +107,10 @@ def attach(case_number: str, base_dir: str, offline_token: str, serial: bool = F
             # Parallel mode: download concurrently with rich progress
             logger.info("Parallel mode: downloading up to 8 attachments concurrently")
             show_progress = not quiet
+            # Cast attachments from TypedDict list to dict list for downloads module
+            attachment_dicts = [dict(a) for a in attachments]
             result = download_attachments_parallel(
-                attachments,
+                attachment_dicts,
                 attach_dir,
                 api_client,
                 max_workers=8,

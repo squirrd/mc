@@ -5,7 +5,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Literal
+from typing import Literal, cast
 from mc.cli.commands import case, other
 from mc.config.manager import ConfigManager
 from mc.config.wizard import run_setup_wizard
@@ -147,7 +147,7 @@ def main() -> ExitCode:
     except MCError as e:
         # Handle MC-specific errors with proper exit codes
         debug_mode = '--debug' in sys.argv
-        return handle_cli_error(e, debug=debug_mode)
+        return cast(ExitCode, handle_cli_error(e, debug=debug_mode))
 
     except KeyboardInterrupt:
         # Handle user interruption (Ctrl+C)

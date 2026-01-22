@@ -4,7 +4,7 @@ import json
 import os
 import time
 import logging
-from typing import Any
+from typing import Any, cast
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -64,7 +64,7 @@ def load_token_cache() -> dict[str, Any] | None:
     try:
         with open(TOKEN_CACHE_PATH, 'r') as f:
             cache = json.load(f)
-        return cache
+        return cast(dict[str, Any], cache)
     except (json.JSONDecodeError, IOError):
         # Corrupted cache, ignore it
         return None
@@ -123,7 +123,7 @@ def get_access_token(offline_token: str) -> str:
     cache = load_token_cache()
     if cache and not is_token_expired(cache['expires_at'], EXPIRY_BUFFER_SECONDS):
         logger.debug("Using cached access token (expires at %s)", cache.get('expires_at'))
-        return cache['access_token']
+        return cast(str, cache['access_token'])
 
     # Cache doesn't exist or is expired - fetch new token
     logger.debug("Fetching new access token from Red Hat SSO")
@@ -179,7 +179,7 @@ def get_access_token(offline_token: str) -> str:
 
     # Extract token data
     token_data = response.json()
-    access_token = token_data['access_token']
+    access_token = cast(str, token_data['access_token'])
     expires_in = token_data.get('expires_in')
 
     # Save to cache

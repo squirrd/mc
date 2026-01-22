@@ -3,7 +3,7 @@
 import os
 import shutil
 import logging
-from typing import Any, TypedDict, NotRequired
+from typing import Any, TypedDict, NotRequired, cast
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -177,7 +177,7 @@ class RedHatAPIClient:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
             logger.debug("Successfully fetched case %s", case_number)
-            return response.json()
+            return cast(CaseDetails, response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
         except requests.exceptions.Timeout:
@@ -216,7 +216,7 @@ class RedHatAPIClient:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
             logger.debug("Successfully fetched account %s", account_number)
-            return response.json()
+            return cast(dict[str, Any], response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
         except requests.exceptions.Timeout:
@@ -255,7 +255,7 @@ class RedHatAPIClient:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
             logger.debug("Successfully listed attachments for case %s", case_number)
-            return response.json()
+            return cast(list[AttachmentMetadata], response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
         except requests.exceptions.Timeout:
@@ -350,7 +350,7 @@ class RedHatAPIClient:
         # Proceed with download
         try:
             # Merge Range header if resuming
-            request_headers = self.session.headers.copy()
+            request_headers = dict(self.session.headers)
             if headers:
                 request_headers.update(headers)
 

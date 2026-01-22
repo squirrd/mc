@@ -4,7 +4,7 @@ import json
 import os
 import time
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def load_cache(case_number: str) -> dict[str, Any] | None:
     try:
         with open(cache_path, 'r') as f:
             cache = json.load(f)
-        return cache
+        return cast(dict[str, Any], cache)
     except (json.JSONDecodeError, IOError) as e:
         # Corrupted cache, delete it
         logger.debug("Corrupted cache file, deleting: %s", e)
