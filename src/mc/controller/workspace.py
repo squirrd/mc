@@ -1,8 +1,13 @@
 """Workspace management for cases."""
 
-import os
+import logging
+from pathlib import Path
+
+from mc.exceptions import WorkspaceError
 from mc.utils.formatters import shorten_and_format
 from mc.utils.file_ops import create_file, create_directory
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceManager:
@@ -18,7 +23,20 @@ class WorkspaceManager:
             account_name: Account name (will be formatted)
             case_summary: Case summary (will be formatted)
         """
-        self.base_dir = base_dir
+        self.base_dir = Path(base_dir)
+
+        # Validate base_dir exists and is a directory
+        if not self.base_dir.exists():
+            raise WorkspaceError(
+                f"Base directory does not exist: {self.base_dir}",
+                f"Try: Create it with 'mkdir -p {self.base_dir}'"
+            )
+        if not self.base_dir.is_dir():
+            raise WorkspaceError(
+                f"Base path is not a directory: {self.base_dir}",
+                "Check: Path conflicts with existing file"
+            )
+
         self.case_number = case_number
         self.account_name_formatted = shorten_and_format(account_name)
         self.case_summary_formatted = shorten_and_format(case_summary)
@@ -31,23 +49,33 @@ class WorkspaceManager:
         Returns:
             list: List of tuples (type, path) where type is 'D' or 'F'
         """
-        file_dir_list = []
-        case_dir = f"{self.base_dir}/{self.account_name_formatted}/{self.case_number}-{self.case_summary_formatted}"
+        try:
+            file_dir_list = []
+            case_dir = (
+                self.base_dir /
+                self.account_name_formatted /
+                f"{self.case_number}-{self.case_summary_formatted}"
+            )
 
-        # Add directories (leaf directories only)
-        file_dir_list.append(("D", f"{case_dir}/files"))
-        file_dir_list.append(("D", f"{case_dir}/files/attach"))
-        file_dir_list.append(("D", f"{case_dir}/files/dp"))
-        file_dir_list.append(("D", f"{case_dir}/files/cp"))
+            # Add directories (leaf directories only)
+            file_dir_list.append(("D", case_dir / "files"))
+            file_dir_list.append(("D", case_dir / "files" / "attach"))
+            file_dir_list.append(("D", case_dir / "files" / "dp"))
+            file_dir_list.append(("D", case_dir / "files" / "cp"))
 
-        # Add files
-        file_dir_list.append(("F", f"{case_dir}/00-caseComments.md"))
-        file_dir_list.append(("F", f"{case_dir}/10-notes.md"))
-        file_dir_list.append(("F", f"{case_dir}/20-notes.md"))
-        file_dir_list.append(("F", f"{case_dir}/30-notes.md"))
-        file_dir_list.append(("F", f"{case_dir}/80-scratch.md"))
+            # Add files
+            file_dir_list.append(("F", case_dir / "00-caseComments.md"))
+            file_dir_list.append(("F", case_dir / "10-notes.md"))
+            file_dir_list.append(("F", case_dir / "20-notes.md"))
+            file_dir_list.append(("F", case_dir / "30-notes.md"))
+            file_dir_list.append(("F", case_dir / "80-scratch.md"))
 
-        return file_dir_list
+            return file_dir_list
+        except OSError as e:
+            raise WorkspaceError(
+                f"Failed to construct workspace path: {e}",
+                "Check: Account name and case summary contain valid characters"
+            )
 
     def check(self):
         """
@@ -61,16 +89,18 @@ class WorkspaceManager:
 
         for file_type, file_path in self.file_dir_list:
             print(f"  Type: {file_type}, Path: {file_path}")
-            if os.path.exists(file_path):
-                if os.path.isfile(file_path) and file_type == "F":
+            if file_path.exists():
+                if file_path.is_file() and file_type == "F":
                     file_check.append("OK")
                     print("    OK")
-                elif os.path.isdir(file_path) and file_type == "D":
+                elif file_path.is_dir() and file_type == "D":
                     file_check.append("OK")
                     print("    OK")
                 else:
                     file_check.append("WrongType")
-                    print("    FATAL - Wrong file type")
+                    actual_type = 'file' if file_path.is_file() else 'directory'
+                    expected_type = 'file' if file_type == "F" else 'directory'
+                    print(f"    FATAL - Expected {expected_type}, found {actual_type}")
             else:
                 file_check.append("Missing")
                 print(f"    WARN - does not exist")
@@ -97,8 +127,12 @@ class WorkspaceManager:
                 create_directory(file_path)
 
     def get_attachment_dir(self):
-        """Get the attachment directory path."""
+        """Get the attachment directory path.
+
+        Returns:
+            Path: Attachment directory path or None if not found
+        """
         for file_type, file_path in self.file_dir_list:
-            if file_path.endswith('/attach'):
+            if file_path.name == 'attach':
                 return file_path
         return None
