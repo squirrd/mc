@@ -60,8 +60,8 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: DEBT-01, DEBT-02, DEBT-03, DEBT-04, DEBT-05, BUG-01, BUG-02
 **Success Criteria** (what must be TRUE):
-  1. Base directory is configurable via TOML config file with sensible default (~/mc)
-  2. Legacy environment variables are explicitly rejected with migration guidance
+  1. Base directory is configurable via MC_BASE_DIR environment variable with sensible default
+  2. No duplicate environment variable validation exists
   3. Version is managed from single source of truth (pyproject.toml)
   4. setup.py removed, pyproject.toml is sole packaging configuration
   5. All typos fixed (CLI flags, status classes, help text)
@@ -83,10 +83,12 @@ Plans:
   3. Case number input is validated (8 digits) before making API calls
   4. Large file downloads (>3GB) show warning but don't block workflow
   5. Security linting (bandit) passes with no critical issues
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: Implement security hardening measures
+- [ ] 04-01-PLAN.md — Token caching with expiration validation and case number input validation
+- [ ] 04-02-PLAN.md — SSL verification and large file download safety checks
+- [ ] 04-03-PLAN.md — Bandit security linting configuration and scan
 
 ### Phase 5: Error Handling & Robustness
 **Goal**: Tool fails gracefully with helpful error messages
@@ -160,7 +162,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Test Foundation | 1/1 | Complete | 2026-01-20 |
 | 2. Critical Path Testing | 3/3 | Complete | 2026-01-22 |
 | 3. Code Cleanup | 0/3 | Not started | - |
-| 4. Security Hardening | 0/1 | Not started | - |
+| 4. Security Hardening | 0/3 | Planned | - |
 | 5. Error Handling & Robustness | 0/1 | Not started | - |
 | 6. Infrastructure & Observability | 0/1 | Not started | - |
 | 7. Performance Optimization | 0/1 | Not started | - |
@@ -168,4 +170,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-22 — Phase 3 planned*
+*Last updated: 2026-01-22 — Phase 4 planned*
