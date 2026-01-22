@@ -33,7 +33,7 @@ def ldap_search(uid, show_all=False):
     else:
         search_term = f"(|(uid=*{uid}*)(cn=*{uid}*))"
 
-    print(f"Searching LDAP for: {search_term}")
+    logger.info("Searching LDAP for: %s", search_term)
 
     # Execute ldapsearch command
     # ldapsearch is a standard system utility, not user-controlled
@@ -63,7 +63,8 @@ def ldap_search(uid, show_all=False):
         return False, "No results found."
 
     if show_all:
-        print(output)
+        # Intentional user output - raw LDAP data
+        print(output)  # print OK
         return True, output
 
     # Format and print results
@@ -116,7 +117,8 @@ def print_ldap_cards(output):
                 entries_failed += 1
                 continue
 
-            print("-" * 40)
+            # Intentional user output - formatted LDAP card
+            print("-" * 40)  # print OK
             for key, display_name in ordered_keys:
                 # Use .get() instead of direct access to handle missing fields
                 if key in user_data:
@@ -130,15 +132,15 @@ def print_ldap_cards(output):
                             display_value = value
                     else:
                         display_value = value
-                    print(f"{display_name:<12}: {display_value}")
-            print("-" * 40)
+                    print(f"{display_name:<12}: {display_value}")  # print OK
+            print("-" * 40)  # print OK
             entries_processed += 1
 
         except Exception as e:
             # Log but continue processing other entries
-            logger.warning(f"Failed to parse LDAP entry: {e}")
+            logger.warning("Failed to parse LDAP entry: %s", e)
             entries_failed += 1
             continue
 
     if entries_failed > 0:
-        logger.info(f"Processed {entries_processed} entries, {entries_failed} failed to parse")
+        logger.info("Processed %d entries, %d failed to parse", entries_processed, entries_failed)

@@ -1,7 +1,10 @@
 """Other utility commands."""
 
+import logging
 import subprocess
 from mc.integrations.ldap import ldap_search
+
+logger = logging.getLogger(__name__)
 
 
 def go(case_number, launch=False):
@@ -15,14 +18,15 @@ def go(case_number, launch=False):
     url = f"https://gss--c.vf.force.com/apex/Case_View?sbstr={case_number}"
 
     if launch:
-        print(f"Launching URL in Chrome: {url}")
+        logger.info("Launching URL in Chrome: %s", url)
         subprocess.run([
             "open",
             "-a", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             f"{url}"
         ])
     else:
-        print(url)
+        # Intentional user output - print URL for copy/paste
+        print(url)  # print OK
 
 
 def ls(uid, show_all=False):

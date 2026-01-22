@@ -1,7 +1,10 @@
 """Interactive configuration wizard."""
 
+import logging
 from pathlib import Path
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def run_setup_wizard() -> Dict[str, Any]:
@@ -10,9 +13,10 @@ def run_setup_wizard() -> Dict[str, Any]:
     Returns:
         Configuration dictionary from user input
     """
-    print("MC Configuration Setup")
-    print("=" * 50)
-    print()
+    # Interactive prompts - keep as print for user interaction
+    print("MC Configuration Setup")  # print OK
+    print("=" * 50)  # print OK
+    print()  # print OK
 
     # Prompt for base directory with default
     default_base = str(Path.home() / "mc")
@@ -23,15 +27,15 @@ def run_setup_wizard() -> Dict[str, Any]:
         base_dir = base_dir_input
 
     # Prompt for offline token (required)
-    print()
+    print()  # print OK
     while True:
         offline_token = input("Red Hat API offline token: ").strip()
         if offline_token:
             break
-        print("ERROR: Offline token is required")
+        print("ERROR: Offline token is required")  # print OK
 
-    print()
-    print("Configuration saved successfully!")
+    print()  # print OK
+    logger.info("Configuration saved successfully")
 
     return {
         "base_directory": base_dir,

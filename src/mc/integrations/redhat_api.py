@@ -140,12 +140,12 @@ class RedHatAPIClient:
             APIError: For other request failures
         """
         url = f"{self.BASE_URL}/cases/{case_number}"
-        logger.debug(f"Fetching case details for {case_number} from {url}")
+        logger.debug("Fetching case details for %s from %s", case_number, url)
 
         try:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
-            logger.debug(f"Successfully fetched case {case_number}")
+            logger.debug("Successfully fetched case %s", case_number)
             return response.json()
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
@@ -179,12 +179,12 @@ class RedHatAPIClient:
             APIError: For other request failures
         """
         url = f"{self.BASE_URL}/accounts/{account_number}"
-        logger.debug(f"Fetching account details for {account_number} from {url}")
+        logger.debug("Fetching account details for %s from %s", account_number, url)
 
         try:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
-            logger.debug(f"Successfully fetched account {account_number}")
+            logger.debug("Successfully fetched account %s", account_number)
             return response.json()
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
@@ -218,12 +218,12 @@ class RedHatAPIClient:
             APIError: For other request failures
         """
         url = f"{self.BASE_URL}/cases/{case_number}/attachments/"
-        logger.debug(f"Listing attachments for case {case_number} from {url}")
+        logger.debug("Listing attachments for case %s from %s", case_number, url)
 
         try:
             response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
-            logger.debug(f"Successfully listed attachments for case {case_number}")
+            logger.debug("Successfully listed attachments for case %s", case_number)
             return response.json()
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
@@ -256,7 +256,7 @@ class RedHatAPIClient:
             APIError: For other download failures
             RuntimeError: If insufficient disk space for download
         """
-        logger.debug(f"Downloading file from {url} to {local_filename}")
+        logger.debug("Downloading file from %s to %s", url, local_filename)
 
         # Get file size from HEAD request
         try:
@@ -283,7 +283,7 @@ class RedHatAPIClient:
         is_safe, warning = check_download_safety(file_size, local_filename)
 
         if warning and not force:
-            print(warning)
+            logger.warning(warning)
             if not is_safe:
                 raise RuntimeError("Download blocked due to insufficient disk space")
             # For large files with sufficient space, just warn and continue
@@ -295,8 +295,8 @@ class RedHatAPIClient:
                 with open(local_filename, 'wb') as file:
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
-            logger.debug(f"Successfully downloaded file to {local_filename}")
-            print(f"File downloaded successfully: {local_filename}")
+            logger.debug("Successfully downloaded file to %s", local_filename)
+            logger.info("File downloaded successfully: %s", local_filename)
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
         except requests.exceptions.Timeout:

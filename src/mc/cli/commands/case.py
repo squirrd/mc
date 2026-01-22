@@ -24,10 +24,10 @@ def attach(case_number, base_dir, offline_token):
     try:
         case_number = validate_case_number(case_number)
     except ValueError as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
         exit(1)
 
-    print(f"Downloading attachments for case number: {case_number}")
+    logger.info("Downloading attachments for case number: %s", case_number)
 
     try:
         # Get API client
@@ -57,40 +57,39 @@ def attach(case_number, base_dir, offline_token):
         failed_files = []
 
         for file_meta in attachments:
-            print("----------------------------")
+            logger.info("----------------------------")
             filename = f"{attach_dir}/{file_meta['fileName']}"
             url = file_meta['link']
-            print(f"Filename: {filename}")
-            print(f"url: {url}")
+            logger.debug("Filename: %s", filename)
+            logger.debug("URL: %s", url)
 
             if os.path.exists(filename):
-                print(f"File already exists no need to download")
+                logger.info("File already exists, skipping: %s", file_meta['fileName'])
                 skipped += 1
             else:
-                print(f"Downloading file...")
+                logger.info("Downloading file: %s", file_meta['fileName'])
                 try:
                     api_client.download_file(url, filename)
                     downloaded += 1
                 except (RuntimeError, HTTPAPIError, APIError) as e:
-                    print(f"Download failed: {e}")
-                    logger.error(f"Failed to download {file_meta['fileName']}: {e}")
+                    logger.error("Download failed for %s: %s", file_meta['fileName'], e)
                     failed_files.append(file_meta['fileName'])
                     # Continue to next attachment instead of crashing
                     continue
 
         # Print summary
-        print("----------------------------")
-        print(f"Download summary: {downloaded} downloaded, {skipped} skipped, {len(failed_files)} failed")
+        logger.info("----------------------------")
+        logger.info("Download summary: %d downloaded, %d skipped, %d failed", downloaded, skipped, len(failed_files))
 
         if failed_files:
-            print(f"Failed files: {', '.join(failed_files)}")
+            logger.error("Failed files: %s", ', '.join(failed_files))
             raise APIError(f"Failed to download {len(failed_files)} file(s)")
 
     except HTTPAPIError as e:
-        logger.error(f"Failed to fetch case {case_number}: {e}")
+        logger.error("Failed to fetch case %s: %s", case_number, e)
         raise
     except APIError as e:
-        logger.error(f"API error in attach command: {e}")
+        logger.error("API error in attach command: %s", e)
         raise
 
 
@@ -108,7 +107,7 @@ def check(case_number, base_dir, offline_token, fix=False):
     try:
         case_number = validate_case_number(case_number)
     except ValueError as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
         exit(1)
 
     try:
@@ -133,18 +132,18 @@ def check(case_number, base_dir, offline_token, fix=False):
 
         if fix:
             if status == "WARN":
-                print("Fixing missing files")
+                logger.info("Fixing missing files")
                 create(case_number, base_dir, offline_token, download=False, no_check=True)
             elif status == "FATAL":
-                print("Fatal errors in check.  Nothing can be fixed")
+                logger.error("Fatal errors in check. Nothing can be fixed")
             else:
-                print("Files OK.  Nothing to fix")
+                logger.info("Files OK. Nothing to fix")
 
     except HTTPAPIError as e:
-        logger.error(f"Failed to fetch case {case_number}: {e}")
+        logger.error("Failed to fetch case %s: %s", case_number, e)
         raise
     except APIError as e:
-        logger.error(f"API error in check command: {e}")
+        logger.error("API error in check command: %s", e)
         raise
 
 
@@ -163,14 +162,13 @@ def create(case_number, base_dir, offline_token, download=False, no_check=False)
     try:
         case_number = validate_case_number(case_number)
     except ValueError as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
         exit(1)
 
-    print("Creating files", end="")
     if download:
-        print(f" and downloading attachments for case: {case_number}")
+        logger.info("Creating files and downloading attachments for case: %s", case_number)
     else:
-        print(f" for case: {case_number}")
+        logger.info("Creating files for case: %s", case_number)
 
     try:
         # Get API client
@@ -192,25 +190,25 @@ def create(case_number, base_dir, offline_token, download=False, no_check=False)
         # Check first unless told not to
         if not no_check:
             status = workspace.check()
-            print(f"CheckStatus: {status}")
+            logger.info("CheckStatus: %s", status)
             if status == "FATAL":
-                print(f"FATAL: Failed file check")
+                logger.error("FATAL: Failed file check")
                 exit(1)
         else:
             status = "WARN"
 
         if status == "WARN":
-            print(f"WARN: Some or all files do not exist.  Creating them.")
+            logger.warning("WARN: Some or all files do not exist. Creating them.")
             workspace.create_files()
 
         if download:
             attach(case_number, base_dir, offline_token)
 
     except HTTPAPIError as e:
-        logger.error(f"Failed to fetch case {case_number}: {e}")
+        logger.error("Failed to fetch case %s: %s", case_number, e)
         raise
     except APIError as e:
-        logger.error(f"API error in create command: {e}")
+        logger.error("API error in create command: %s", e)
         raise
 
 
@@ -222,13 +220,13 @@ def case_comments(case_number, offline_token):
         case_number: Case number
         offline_token: Red Hat API offline token
     """
-    from pprint import pprint
+    import json
 
     # Validate case number format
     try:
         case_number = validate_case_number(case_number)
     except ValueError as e:
-        print(f"Error: {e}")
+        logger.error("Error: %s", e)
         exit(1)
 
     try:
@@ -239,12 +237,12 @@ def case_comments(case_number, offline_token):
         # Fetch case details
         case_details = api_client.fetch_case_details(case_number)
 
-        print("Logging into OCM backplane")
-        pprint(case_details['comments'])
+        logger.debug("Fetching case comments for case %s", case_number)
+        logger.info("Case comments:\n%s", json.dumps(case_details['comments'], indent=2))
 
     except HTTPAPIError as e:
-        logger.error(f"Failed to fetch case {case_number}: {e}")
+        logger.error("Failed to fetch case %s: %s", case_number, e)
         raise
     except APIError as e:
-        logger.error(f"API error in case_comments command: {e}")
+        logger.error("API error in case_comments command: %s", e)
         raise

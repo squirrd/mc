@@ -31,13 +31,14 @@ def check_legacy_env_vars():
     else:  # bash/zsh
         unset_cmd = "\n".join(f"unset {var}" for var in found_vars)
 
-    print(f"ERROR: Legacy environment variables detected: {', '.join(found_vars)}")
-    print("\nEnvironment variables are no longer supported.")
-    print("Configuration is now managed via config file.")
-    print("\nTo migrate:")
-    print("1. Remove environment variables:")
-    print(f"\n{unset_cmd}\n")
-    print("2. Run 'mc --help' to trigger configuration wizard")
+    # Use print for this error since logging isn't configured yet
+    print(f"ERROR: Legacy environment variables detected: {', '.join(found_vars)}")  # print OK
+    print("\nEnvironment variables are no longer supported.")  # print OK
+    print("Configuration is now managed via config file.")  # print OK
+    print("\nTo migrate:")  # print OK
+    print("1. Remove environment variables:")  # print OK
+    print(f"\n{unset_cmd}\n")  # print OK
+    print("2. Run 'mc --help' to trigger configuration wizard")  # print OK
     sys.exit(1)
 
 
@@ -100,8 +101,9 @@ def main():
         # Load or create configuration
         config_mgr = ConfigManager()
         if not config_mgr.exists():
-            print("No config file found. Running setup wizard...")
-            print()
+            # Use print for setup wizard trigger since it's before main execution
+            print("No config file found. Running setup wizard...")  # print OK
+            print()  # print OK
             config = run_setup_wizard()
             config_mgr.save(config)
         else:
@@ -113,7 +115,7 @@ def main():
 
         # Verify base directory exists
         if not does_path_exist(base_dir):
-            print(f"The directory '{base_dir}' must exist")
+            logger.error("The directory '%s' must exist", base_dir)
             return 1
 
         # Route to appropriate command
@@ -141,7 +143,8 @@ def main():
 
     except KeyboardInterrupt:
         # Handle user interruption (Ctrl+C)
-        print("\nInterrupted by user", file=sys.stderr)
+        # Use print since this is a terminal event
+        print("\nInterrupted by user", file=sys.stderr)  # print OK
         return 130  # Standard exit code for SIGINT
 
     except Exception as e:
@@ -154,8 +157,8 @@ def main():
         if debug_mode:
             raise
 
-        # Otherwise print simple error message
-        print(f"Unexpected error: {e}", file=sys.stderr)
+        # Otherwise use logger for error message
+        logger.error("Unexpected error: %s", e)
         return 1
 
 

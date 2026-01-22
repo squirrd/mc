@@ -84,26 +84,26 @@ class WorkspaceManager:
         Returns:
             str: Status - 'OK', 'WARN', or 'FATAL'
         """
-        print(f"Checking file status for case: {self.case_number}")
+        logger.info("Checking file status for case: %s", self.case_number)
         file_check = []
 
         for file_type, file_path in self.file_dir_list:
-            print(f"  Type: {file_type}, Path: {file_path}")
+            logger.debug("  Type: %s, Path: %s", file_type, file_path)
             if file_path.exists():
                 if file_path.is_file() and file_type == "F":
                     file_check.append("OK")
-                    print("    OK")
+                    logger.debug("    OK")
                 elif file_path.is_dir() and file_type == "D":
                     file_check.append("OK")
-                    print("    OK")
+                    logger.debug("    OK")
                 else:
                     file_check.append("WrongType")
                     actual_type = 'file' if file_path.is_file() else 'directory'
                     expected_type = 'file' if file_type == "F" else 'directory'
-                    print(f"    FATAL - Expected {expected_type}, found {actual_type}")
+                    logger.error("    FATAL - Expected %s, found %s", expected_type, actual_type)
             else:
                 file_check.append("Missing")
-                print(f"    WARN - does not exist")
+                logger.warning("    WARN - does not exist")
 
         # Determine overall status
         status = "OK"
@@ -114,13 +114,13 @@ class WorkspaceManager:
                 status = "FATAL"
                 break
 
-        print(f"CheckStatus: {status}")
+        logger.info("CheckStatus: %s", status)
         return status
 
     def create_files(self):
         """Create all workspace files and directories."""
         for file_type, file_path in self.file_dir_list:
-            print(f"  Type: {file_type}, Path: {file_path}")
+            logger.debug("  Type: %s, Path: %s", file_type, file_path)
             if file_type == "F":
                 create_file(file_path)
             else:

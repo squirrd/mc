@@ -121,11 +121,11 @@ def get_access_token(offline_token: str) -> str:
     # Try to load cached token
     cache = load_token_cache()
     if cache and not is_token_expired(cache['expires_at'], EXPIRY_BUFFER_SECONDS):
-        logger.debug("Using cached access token")
+        logger.debug("Using cached access token (expires at %s)", cache.get('expires_at'))
         return cache['access_token']
 
     # Cache doesn't exist or is expired - fetch new token
-    logger.debug("Fetching access token from Red Hat SSO")
+    logger.debug("Fetching new access token from Red Hat SSO")
     url = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
     payload = {
         'grant_type': 'refresh_token',
@@ -183,6 +183,6 @@ def get_access_token(offline_token: str) -> str:
 
     # Save to cache
     save_token_cache(access_token, expires_in)
-    logger.debug("Access token retrieved successfully")
+    logger.debug("Access token retrieved and cached successfully")
 
     return access_token
