@@ -3,28 +3,68 @@
 
 import argparse
 import os
+import sys
 from mc.cli.commands import case, other
+from mc.config.manager import ConfigManager
+from mc.config.wizard import run_setup_wizard
 from mc.utils.file_ops import does_path_exist
+from mc.version import get_version
+
+
+def check_legacy_env_vars():
+    """Check for deprecated environment variables and guide migration."""
+    legacy_vars = ["MC_BASE_DIR", "RH_API_OFFLINE_TOKEN"]
+    found_vars = [var for var in legacy_vars if var in os.environ]
+
+    if not found_vars:
+        return
+
+    # Detect shell for tailored instructions
+    shell = os.environ.get("SHELL", "").lower()
+
+    if "fish" in shell:
+        unset_cmd = "\n".join(f"set -e {var}" for var in found_vars)
+    else:  # bash/zsh
+        unset_cmd = "\n".join(f"unset {var}" for var in found_vars)
+
+    print(f"ERROR: Legacy environment variables detected: {', '.join(found_vars)}")
+    print("\nEnvironment variables are no longer supported.")
+    print("Configuration is now managed via config file.")
+    print("\nTo migrate:")
+    print("1. Remove environment variables:")
+    print(f"\n{unset_cmd}\n")
+    print("2. Run 'mc --help' to trigger configuration wizard")
+    sys.exit(1)
 
 
 def main():
     """Main CLI entry point."""
-    # Set base directory
-    base_dir = "/Users/dsquirre/Cases"
+    # Check for legacy environment variables FIRST
+    check_legacy_env_vars()
+
+    # Load or create configuration
+    config_mgr = ConfigManager()
+    if not config_mgr.exists():
+        print("No config file found. Running setup wizard...")
+        print()
+        config = run_setup_wizard()
+        config_mgr.save(config)
+    else:
+        config = config_mgr.load()
+
+    # Get configuration values
+    base_dir = config["base_directory"]
+    offline_token = config["api"]["offline_token"]
 
     # Verify base directory exists
     if not does_path_exist(base_dir):
         print(f"The directory '{base_dir}' must exist")
         exit(1)
 
-    # Verify offline token is set
-    offline_token = os.environ.get('RH_API_OFFLINE_TOKEN', None)
-    if offline_token is None:
-        print("The env variable 'RH_API_OFFLINE_TOKEN' must be set")
-        exit(1)
-
     # Create argument parser
     parser = argparse.ArgumentParser(prog='mc', description='MC CLI tool')
+    parser.add_argument('--version', action='version',
+                        version=f'%(prog)s {get_version()}')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
     # Attach subcommand
