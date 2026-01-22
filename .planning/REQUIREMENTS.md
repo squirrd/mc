@@ -46,11 +46,11 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Code Quality
 
-- [ ] **QUAL-01**: Improve workspace path construction error handling
-- [ ] **QUAL-02**: Add robust LDAP parsing with error handling for malformed responses
-- [ ] **QUAL-03**: Improve file existence checks (better error messages, pathlib)
-- [ ] **QUAL-04**: Add HTTP error handling with meaningful messages (401, 403, 404, 500)
-- [ ] **QUAL-05**: Add retry logic for transient API failures
+- [x] **QUAL-01**: Improve workspace path construction error handling
+- [x] **QUAL-02**: Add robust LDAP parsing with error handling for malformed responses
+- [x] **QUAL-03**: Improve file existence checks (better error messages, pathlib)
+- [x] **QUAL-04**: Add HTTP error handling with meaningful messages (401, 403, 404, 500)
+- [x] **QUAL-05**: Add retry logic for transient API failures
 
 ### Infrastructure
 
