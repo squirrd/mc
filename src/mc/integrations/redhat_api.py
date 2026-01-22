@@ -2,7 +2,13 @@
 
 import os
 import shutil
+import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from mc.exceptions import HTTPAPIError, APITimeoutError, APIConnectionError, APIError
+
+logger = logging.getLogger(__name__)
 
 
 def get_ca_bundle():
@@ -68,7 +74,7 @@ class RedHatAPIClient:
 
     BASE_URL = "https://api.access.redhat.com/support/v1"
 
-    def __init__(self, access_token, verify_ssl=None):
+    def __init__(self, access_token, verify_ssl=None, max_retries=3, timeout=(3.05, 27)):
         """
         Initialize API client.
 
@@ -76,10 +82,46 @@ class RedHatAPIClient:
             access_token: Red Hat API access token
             verify_ssl: SSL verification setting (True/False/path to CA bundle).
                        If None, uses get_ca_bundle() to check environment variables.
+            max_retries: Maximum number of retry attempts (default: 3)
+            timeout: Request timeout as (connect, read) tuple in seconds (default: (3.05, 27))
         """
         self.access_token = access_token
-        self.headers = {'Authorization': f'Bearer {access_token}'}
         self.verify_ssl = verify_ssl if verify_ssl is not None else get_ca_bundle()
+        self.timeout = timeout
+        self.session = self._create_session(max_retries)
+
+    def _create_session(self, max_retries: int) -> requests.Session:
+        """Create session with retry configuration.
+
+        Args:
+            max_retries: Maximum number of retry attempts
+
+        Returns:
+            requests.Session: Configured session with retry strategy
+        """
+        session = requests.Session()
+
+        retry_strategy = Retry(
+            total=max_retries,
+            connect=max_retries,
+            read=max_retries,
+            status=max_retries,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            backoff_factor=0.3,
+            respect_retry_after_header=True
+        )
+
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        session.headers.update({
+            'Authorization': f'Bearer {self.access_token}',
+            'User-Agent': 'mc-cli/0.1.0'
+        })
+
+        return session
 
     def fetch_case_details(self, case_number):
         """
@@ -92,19 +134,33 @@ class RedHatAPIClient:
             dict: Case details
 
         Raises:
-            requests.HTTPError: If API request fails
-            requests.exceptions.SSLError: If SSL verification fails
+            HTTPAPIError: If API request returns HTTP error
+            APITimeoutError: If request times out
+            APIConnectionError: If connection fails
+            APIError: For other request failures
         """
         url = f"{self.BASE_URL}/cases/{case_number}"
+        logger.debug(f"Fetching case details for {case_number} from {url}")
+
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
+            response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
+            logger.debug(f"Successfully fetched case {case_number}")
             return response.json()
-        except requests.exceptions.SSLError as e:
-            print(f"SSL certificate verification failed for {url}")
-            print(f"Reason: {str(e)}")
-            print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-            raise
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while fetching case {case_number}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API for case {case_number}",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"API request failed for case {case_number}: {str(e)}")
 
     def fetch_account_details(self, account_number):
         """
@@ -117,19 +173,33 @@ class RedHatAPIClient:
             dict: Account details
 
         Raises:
-            requests.HTTPError: If API request fails
-            requests.exceptions.SSLError: If SSL verification fails
+            HTTPAPIError: If API request returns HTTP error
+            APITimeoutError: If request times out
+            APIConnectionError: If connection fails
+            APIError: For other request failures
         """
         url = f"{self.BASE_URL}/accounts/{account_number}"
+        logger.debug(f"Fetching account details for {account_number} from {url}")
+
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
+            response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
+            logger.debug(f"Successfully fetched account {account_number}")
             return response.json()
-        except requests.exceptions.SSLError as e:
-            print(f"SSL certificate verification failed for {url}")
-            print(f"Reason: {str(e)}")
-            print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-            raise
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while fetching account {account_number}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API for account {account_number}",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"API request failed for account {account_number}: {str(e)}")
 
     def list_attachments(self, case_number):
         """
@@ -142,19 +212,33 @@ class RedHatAPIClient:
             list: Attachment metadata
 
         Raises:
-            requests.HTTPError: If API request fails
-            requests.exceptions.SSLError: If SSL verification fails
+            HTTPAPIError: If API request returns HTTP error
+            APITimeoutError: If request times out
+            APIConnectionError: If connection fails
+            APIError: For other request failures
         """
         url = f"{self.BASE_URL}/cases/{case_number}/attachments/"
+        logger.debug(f"Listing attachments for case {case_number} from {url}")
+
         try:
-            response = requests.get(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
+            response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
             response.raise_for_status()
+            logger.debug(f"Successfully listed attachments for case {case_number}")
             return response.json()
-        except requests.exceptions.SSLError as e:
-            print(f"SSL certificate verification failed for {url}")
-            print(f"Reason: {str(e)}")
-            print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-            raise
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while listing attachments for case {case_number}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API for case {case_number} attachments",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"API request failed for case {case_number} attachments: {str(e)}")
 
     def download_file(self, url, local_filename, force=False):
         """
@@ -166,19 +250,32 @@ class RedHatAPIClient:
             force: If True, skip large file warnings and proceed with download
 
         Raises:
-            requests.HTTPError: If download fails
-            requests.exceptions.SSLError: If SSL verification fails
+            HTTPAPIError: If download fails with HTTP error
+            APITimeoutError: If download times out
+            APIConnectionError: If connection fails
+            APIError: For other download failures
             RuntimeError: If insufficient disk space for download
         """
+        logger.debug(f"Downloading file from {url} to {local_filename}")
+
         # Get file size from HEAD request
         try:
-            head_response = requests.head(url, headers=self.headers, verify=self.verify_ssl, timeout=30)
+            head_response = self.session.head(url, verify=self.verify_ssl, timeout=self.timeout)
             head_response.raise_for_status()
-        except requests.exceptions.SSLError as e:
-            print(f"SSL certificate verification failed for {url}")
-            print(f"Reason: {str(e)}")
-            print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-            raise
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while checking file size for {url}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API for file download",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"API request failed for file download: {str(e)}")
 
         file_size = int(head_response.headers.get('content-length', 0))
 
@@ -193,14 +290,36 @@ class RedHatAPIClient:
 
         # Proceed with download
         try:
-            with requests.get(url, headers=self.headers, verify=self.verify_ssl, stream=True, timeout=30) as response:
+            with self.session.get(url, verify=self.verify_ssl, stream=True, timeout=self.timeout) as response:
                 response.raise_for_status()
                 with open(local_filename, 'wb') as file:
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
+            logger.debug(f"Successfully downloaded file to {local_filename}")
             print(f"File downloaded successfully: {local_filename}")
-        except requests.exceptions.SSLError as e:
-            print(f"SSL certificate verification failed for {url}")
-            print(f"Reason: {str(e)}")
-            print(f"To bypass verification (not recommended): Set REQUESTS_CA_BUNDLE environment variable")
-            raise
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while downloading file from {url}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API during file download",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"Download failed: {str(e)}")
+
+    def close(self):
+        """Close session and cleanup resources."""
+        self.session.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
