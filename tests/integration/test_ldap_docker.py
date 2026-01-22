@@ -2,6 +2,9 @@
 
 These tests require Docker to be installed and running.
 
+Integration tests are optional - they're marked with @pytest.mark.integration
+and can be skipped in environments without Docker.
+
 Manual test run with Docker:
 1. docker-compose -f docker-compose.test.yml up -d
 2. pytest tests/integration/test_ldap_docker.py -v
@@ -9,6 +12,17 @@ Manual test run with Docker:
 
 To run only integration tests: pytest -m integration
 To run all tests except integration: pytest -m "not integration"
+
+CI Usage:
+- These tests are useful for CI environments with Docker support
+- Tests skip gracefully if Docker is unavailable (pytest.skip)
+- Docker fixture automatically cleans up containers after tests
+
+Why we mock the server URL:
+- Source code has hardcoded ldap.corp.redhat.com (production LDAP)
+- Integration tests redirect to local Docker LDAP server (localhost:10389)
+- This validates parsing logic with real LDAP output format without
+  requiring production LDAP access
 """
 
 import pytest
