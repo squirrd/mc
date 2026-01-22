@@ -4,6 +4,7 @@ import os
 import logging
 from mc.utils.auth import get_access_token
 from mc.utils.validation import validate_case_number
+from mc.utils.cache import get_case_metadata, get_cached_age_minutes
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.controller.workspace import WorkspaceManager
 from mc.exceptions import HTTPAPIError, APIError, ValidationError
@@ -34,9 +35,12 @@ def attach(case_number, base_dir, offline_token):
         access_token = get_access_token(offline_token)
         api_client = RedHatAPIClient(access_token)
 
-        # Fetch case and account details
-        case_details = api_client.fetch_case_details(case_number)
-        account_details = api_client.fetch_account_details(case_details['accountNumberRef'])
+        # Fetch case and account details from cache or API
+        case_details, account_details, was_cached = get_case_metadata(case_number, api_client)
+        if was_cached:
+            age_minutes = get_cached_age_minutes(case_number)
+            # print OK - user-facing cache indicator
+            print(f"Using cached data (cached {age_minutes}m ago)")  # print OK
 
         # Create workspace manager
         workspace = WorkspaceManager(
@@ -115,9 +119,12 @@ def check(case_number, base_dir, offline_token, fix=False):
         access_token = get_access_token(offline_token)
         api_client = RedHatAPIClient(access_token)
 
-        # Fetch case and account details
-        case_details = api_client.fetch_case_details(case_number)
-        account_details = api_client.fetch_account_details(case_details['accountNumberRef'])
+        # Fetch case and account details from cache or API
+        case_details, account_details, was_cached = get_case_metadata(case_number, api_client)
+        if was_cached:
+            age_minutes = get_cached_age_minutes(case_number)
+            # print OK - user-facing cache indicator
+            print(f"Using cached data (cached {age_minutes}m ago)")  # print OK
 
         # Create workspace manager
         workspace = WorkspaceManager(
@@ -175,9 +182,12 @@ def create(case_number, base_dir, offline_token, download=False, no_check=False)
         access_token = get_access_token(offline_token)
         api_client = RedHatAPIClient(access_token)
 
-        # Fetch case and account details
-        case_details = api_client.fetch_case_details(case_number)
-        account_details = api_client.fetch_account_details(case_details['accountNumberRef'])
+        # Fetch case and account details from cache or API
+        case_details, account_details, was_cached = get_case_metadata(case_number, api_client)
+        if was_cached:
+            age_minutes = get_cached_age_minutes(case_number)
+            # print OK - user-facing cache indicator
+            print(f"Using cached data (cached {age_minutes}m ago)")  # print OK
 
         # Create workspace manager
         workspace = WorkspaceManager(
@@ -234,8 +244,12 @@ def case_comments(case_number, offline_token):
         access_token = get_access_token(offline_token)
         api_client = RedHatAPIClient(access_token)
 
-        # Fetch case details
-        case_details = api_client.fetch_case_details(case_number)
+        # Fetch case details from cache or API (ignore account_details)
+        case_details, _, was_cached = get_case_metadata(case_number, api_client)
+        if was_cached:
+            age_minutes = get_cached_age_minutes(case_number)
+            # print OK - user-facing cache indicator
+            print(f"Using cached data (cached {age_minutes}m ago)")  # print OK
 
         logger.debug("Fetching case comments for case %s", case_number)
         logger.info("Case comments:\n%s", json.dumps(case_details['comments'], indent=2))
