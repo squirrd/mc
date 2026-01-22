@@ -42,7 +42,7 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 - [ ] **PERF-01**: Implement parallel attachment downloads (4+ threads with ThreadPoolExecutor)
 - [ ] **PERF-02**: Add file-based caching for case metadata with TTL
-- [ ] **PERF-03**: Cache access tokens with expiration tracking
+- [x] **PERF-03**: Cache access tokens with expiration tracking (completed in Phase 4 as SEC-01)
 
 ### Code Quality
 
@@ -60,7 +60,7 @@ Requirements for production-ready codebase. Each maps to roadmap phases.
 
 ### Dependencies
 
-- [ ] **DEP-01**: Update minimum Python version to 3.10+
+- [ ] **DEP-01**: Update minimum Python version to 3.11+ (rationale: native union syntax without __future__ imports, 10-60% performance improvement over 3.10, better error messages)
 - [ ] **DEP-02**: Add type hints to all modules
 - [ ] **DEP-03**: Configure mypy strict mode and resolve issues
 
@@ -127,7 +127,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-03 | Phase 6 | Pending |
 | PERF-01 | Phase 7 | Pending |
 | PERF-02 | Phase 7 | Pending |
-| PERF-03 | Phase 7 | Pending |
+| PERF-03 | Phase 4 | Complete |
 | DEP-01 | Phase 8 | Pending |
 | DEP-02 | Phase 8 | Pending |
 | DEP-03 | Phase 8 | Pending |
@@ -139,4 +139,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-20 after roadmap creation*
+*Last updated: 2026-01-22 after Phase 8 planning (updated DEP-01 to specify 3.11+)*
