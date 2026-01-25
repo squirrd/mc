@@ -46,10 +46,9 @@ Requirements for containerization milestone. Each maps to roadmap phases.
 
 - [ ] **IMG-01**: Build RHEL 10 base container image
 - [ ] **IMG-02**: Install essential bash tools in image (openssl, curl, jq, vim, etc.)
-- [ ] **IMG-03**: Install OpenShift tools (oc, ocm, backplane)
 - [ ] **IMG-04**: Install mc CLI in container (agent mode)
 - [ ] **IMG-05**: Mount case workspace at /case in container
-- [ ] **IMG-06**: Mount shared config at /config in container
+- [ ] **IMG-06**: Container has access to mc CLI configuration
 - [ ] **IMG-07**: Container entrypoint initializes environment and drops to shell
 
 ### Backwards Compatibility
@@ -92,8 +91,11 @@ Deferred to future milestones.
 - **MAINT-02**: Auto-cleanup stopped containers after N days
 - **MAINT-03**: Compact case data (remove duplicates)
 
-### Extended Tools
+### Container Tools
 
+Each tool becomes its own milestone (v2.1, v2.2, etc.) to handle tool-specific configuration mounting:
+
+- **IMG-03**: Install OpenShift tools (oc, ocm, backplane) with tool-specific config mounting
 - **TOOLS-01**: AWS CLI and rh-aws-saml-login
 - **TOOLS-02**: ROSA CLI
 - **TOOLS-03**: claude code and AI tools
@@ -118,45 +120,51 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| INFRA-04 | TBD | Pending |
-| INFRA-05 | TBD | Pending |
-| CONT-01 | TBD | Pending |
-| CONT-02 | TBD | Pending |
-| CONT-03 | TBD | Pending |
-| CONT-04 | TBD | Pending |
-| CONT-05 | TBD | Pending |
-| CONT-06 | TBD | Pending |
-| CONT-07 | TBD | Pending |
-| CONT-08 | TBD | Pending |
-| SF-01 | TBD | Pending |
-| SF-02 | TBD | Pending |
-| SF-03 | TBD | Pending |
-| SF-04 | TBD | Pending |
-| SF-05 | TBD | Pending |
-| TERM-01 | TBD | Pending |
-| TERM-02 | TBD | Pending |
-| TERM-03 | TBD | Pending |
-| TERM-04 | TBD | Pending |
-| TERM-05 | TBD | Pending |
-| IMG-01 | TBD | Pending |
-| IMG-02 | TBD | Pending |
-| IMG-03 | TBD | Pending |
-| IMG-04 | TBD | Pending |
-| IMG-05 | TBD | Pending |
-| IMG-06 | TBD | Pending |
-| IMG-07 | TBD | Pending |
-| COMPAT-01 | TBD | Pending |
-| COMPAT-02 | TBD | Pending |
-| COMPAT-03 | TBD | Pending |
+| INFRA-01 | Phase 9 | Pending |
+| INFRA-02 | Phase 11 | Pending |
+| INFRA-03 | Phase 9 | Pending |
+| INFRA-04 | Phase 9 | Pending |
+| INFRA-05 | Phase 9 | Pending |
+| CONT-01 | Phase 11 | Pending |
+| CONT-02 | Phase 11 | Pending |
+| CONT-03 | Phase 11 | Pending |
+| CONT-04 | Phase 11 | Pending |
+| CONT-05 | Phase 11 | Pending |
+| CONT-06 | Phase 11 | Pending |
+| CONT-07 | Phase 11 | Pending |
+| CONT-08 | Phase 11 | Pending |
+| SF-01 | Phase 10 | Pending |
+| SF-02 | Phase 10 | Pending |
+| SF-03 | Phase 10 | Pending |
+| SF-04 | Phase 10 | Pending |
+| SF-05 | Phase 10 | Pending |
+| TERM-01 | Phase 12 | Pending |
+| TERM-02 | Phase 12 | Pending |
+| TERM-03 | Phase 12 | Pending |
+| TERM-04 | Phase 12 | Pending |
+| TERM-05 | Phase 12 | Pending |
+| IMG-01 | Phase 13 | Pending |
+| IMG-02 | Phase 13 | Pending |
+| IMG-04 | Phase 13 | Pending |
+| IMG-05 | Phase 13 | Pending |
+| IMG-06 | Phase 13 | Pending |
+| IMG-07 | Phase 13 | Pending |
+| COMPAT-01 | Phase 13 | Pending |
+| COMPAT-02 | Phase 13 | Pending |
+| COMPAT-03 | Phase 13 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 33 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 33 ⚠️
+- v2.0 requirements: 32 total (IMG-03 deferred to v2.1+)
+- Mapped to phases: 32 (100% coverage)
+- Unmapped: 0
+
+**Phase breakdown:**
+- Phase 9: 4 requirements (INFRA-01, INFRA-03, INFRA-04, INFRA-05)
+- Phase 10: 5 requirements (SF-01, SF-02, SF-03, SF-04, SF-05)
+- Phase 11: 9 requirements (INFRA-02, CONT-01 through CONT-08)
+- Phase 12: 5 requirements (TERM-01 through TERM-05)
+- Phase 13: 9 requirements (IMG-01, IMG-02, IMG-04 through IMG-07, COMPAT-01 through COMPAT-03)
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after initial definition*
+*Last updated: 2026-01-26 (scope reduced: OpenShift tools deferred to v2.1+)*
