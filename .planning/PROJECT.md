@@ -8,6 +8,18 @@ A production-ready Python CLI tool for Red Hat support case management with comp
 
 Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality.
 
+## Current Milestone: v2.0 Containerization
+
+**Goal:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
+
+**Target capabilities:**
+- Per-case containerized environments eliminating credential/config collisions
+- Automatic Salesforce integration for case metadata resolution
+- Container lifecycle management (create, list, stop, exec)
+- New terminal window attachment for seamless multi-case workflow
+- Container image with essential tools (mc, oc, ocm, backplane, RHEL 10 base)
+- Mounted case workspace and shared config directories
+
 ## Requirements
 
 ### Validated
@@ -138,4 +150,4 @@ No active requirements. Ready for next milestone definition via `/gsd:new-milest
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-01-22 after v1.0 milestone*
+*Last updated: 2026-01-26 after starting v2.0 milestone*

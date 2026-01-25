@@ -2,18 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-22)
+See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** v1.0 milestone shipped - ready for next milestone planning
+**Current focus:** v2.0 Containerization - per-case isolated workspaces
 
 ## Current Position
 
-Milestone: v1.0 Hardening (COMPLETE)
-Status: Shipped 2026-01-22
-Last activity: 2026-01-22 — v1.0 milestone completion and archival
+Milestone: v2.0 Containerization
+Status: Defining requirements
+Last activity: 2026-01-26 — Milestone v2.0 started
 
-Progress: [████████████] 100% (21/21 plans shipped)
+Progress: [░░░░░░░░░░░░] 0% (not yet planned)
 
 ## Performance Metrics
 
