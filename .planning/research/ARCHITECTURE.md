@@ -1,706 +1,970 @@
-# Testing Architecture for Layered Python CLI
+# Architecture Research: Container Orchestrator CLI
 
-**Domain:** Python CLI Testing Infrastructure
-**Researched:** 2026-01-20
+**Domain:** Container orchestration CLI tool (host controller + container agent pattern)
+**Researched:** 2026-01-26
 **Confidence:** HIGH
 
-## Testing Architecture Overview
+## Standard Architecture
 
 ### System Overview
 
+Container orchestrator CLIs follow a **host-controller + container-agent** pattern, where:
+- **Host CLI** manages container lifecycle (create, list, stop, exec)
+- **Container agent** runs inside containers (optional, for advanced features)
+- **State persistence** tracks running containers and metadata
+- **Integration layer** interfaces with container runtime (Podman, Docker)
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Test Execution Layer                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ pytest   │  │  tox     │  │   CI     │  │  Local   │    │
-│  │ CLI      │  │  Runner  │  │ Pipeline │  │   Run    │    │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘    │
-│       └─────────────┴─────────────┴──────────────┘          │
-├─────────────────────────────────────────────────────────────┤
-│                    Test Organization Layer                   │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │    Unit     │  │ Integration │  │     E2E     │         │
-│  │    Tests    │  │    Tests    │  │    Tests    │         │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
-│         │                 │                 │                │
-├─────────┴─────────────────┴─────────────────┴────────────────┤
-│                  Test Support Infrastructure                 │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
-│  │ Fixtures│  │  Mocks  │  │ Helpers │  │Factories│        │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘        │
-└─────────────────────────────────────────────────────────────┘
-
-        Tests mirror application architecture
-
-┌─────────────────────────────────────────────────────────────┐
-│                   Application Under Test                     │
-├─────────────────────────────────────────────────────────────┤
-│  CLI Layer        → Unit tests + CLI invocation tests       │
-│  Commands Layer   → Unit tests with mocked controller       │
-│  Controller Layer → Unit tests with mocked integrations     │
-│  Integrations     → Unit tests with mocked external APIs    │
-│  Utilities        → Pure unit tests (no mocks needed)       │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                    Host CLI Layer (mc)                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │  create  │  │   list   │  │   stop   │  │   exec   │        │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
+│       └──────────────┴──────────────┴─────────────┘             │
+├────────────────────────────────────────────────────────────────┤
+│                 Controller Layer                                │
+│  ┌──────────────────┐  ┌──────────────────┐                    │
+│  │ Container        │  │ State            │                    │
+│  │ Manager          │  │ Manager          │                    │
+│  └────────┬─────────┘  └────────┬─────────┘                    │
+│           │                      │                              │
+├───────────┴──────────────────────┴──────────────────────────────┤
+│                 Integration Layer                               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │ Podman   │  │ Salesforce│ │ Terminal │  │ Image    │        │
+│  │ API      │  │ Client    │  │ Launcher │  │ Builder  │        │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
+│       │             │             │             │               │
+├───────┴─────────────┴─────────────┴─────────────┴───────────────┤
+│                 State Persistence Layer                         │
+│  ┌──────────────────────────────────────────────────────┐       │
+│  │  SQLite DB (container metadata)                      │       │
+│  │  - Running containers                                │       │
+│  │  - Case → Container mapping                          │       │
+│  │  - Created timestamps                                │       │
+│  │  - Mount points                                      │       │
+│  └──────────────────────────────────────────────────────┘       │
+└────────────────────────────────────────────────────────────────┘
+        │                    │                   │
+        ↓                    ↓                   ↓
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  Podman     │    │  Salesforce │    │  Terminal   │
+│  Runtime    │    │  API        │    │  Emulator   │
+└─────────────┘    └─────────────┘    └─────────────┘
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility | Typical Implementation |
 |-----------|----------------|------------------------|
-| **Unit Tests** | Test individual functions/classes in isolation | pytest with mocks for dependencies |
-| **Integration Tests** | Test component interactions without external services | pytest with real objects, mocked external APIs |
-| **E2E Tests** | Test complete workflows through CLI | Bash scripts or subprocess calls to CLI |
-| **Fixtures** | Provide reusable test data and setup | pytest fixtures with @pytest.fixture |
-| **Mocks** | Simulate external dependencies | pytest-mock, unittest.mock, responses library |
-| **Factories** | Generate test data dynamically | Factory pattern or factory_boy |
-| **Test Helpers** | Shared assertion and setup utilities | Python modules in tests/helpers/ |
+| Host CLI | User-facing commands, argument parsing, workflow orchestration | Click/Typer framework or argparse |
+| Container Manager | Container lifecycle (create, start, stop, exec, remove) | Podman Python library (podman-py) |
+| State Manager | Track container state, case→container mapping, metadata | SQLite database with simple schema |
+| Salesforce Client | Fetch case metadata, cache API responses | requests library with file-based cache |
+| Terminal Launcher | Open new terminal windows with container exec | Platform-specific commands (osascript for iTerm, gnome-terminal) |
+| Image Builder | Build and publish container images | Podman build API or subprocess calls |
 
-## Recommended Test Structure
+## Recommended MC v2.0 Architecture
 
-```
-tests/
-├── __init__.py
-├── conftest.py                    # Shared fixtures and pytest configuration
-│
-├── unit/                          # Unit tests (mirror src/ structure)
-│   ├── __init__.py
-│   ├── conftest.py                # Unit-specific fixtures
-│   ├── cli/
-│   │   ├── __init__.py
-│   │   ├── test_main.py           # Tests for CLI entry point
-│   │   └── commands/
-│   │       ├── __init__.py
-│   │       ├── test_case.py       # Tests for case commands
-│   │       └── test_other.py      # Tests for other commands
-│   ├── controller/
-│   │   ├── __init__.py
-│   │   └── test_workspace.py      # Tests for WorkspaceManager
-│   ├── integrations/
-│   │   ├── __init__.py
-│   │   ├── test_redhat_api.py     # Tests for RedHatAPIClient
-│   │   └── test_ldap.py           # Tests for LDAP functions
-│   └── utils/
-│       ├── __init__.py
-│       ├── test_auth.py           # Tests for authentication
-│       ├── test_formatters.py     # Tests for formatters
-│       └── test_file_ops.py       # Tests for file operations
-│
-├── integration/                   # Integration tests
-│   ├── __init__.py
-│   ├── conftest.py                # Integration-specific fixtures
-│   ├── test_workspace_lifecycle.py   # Test workspace creation flow
-│   ├── test_case_commands.py         # Test command workflows
-│   └── test_api_integration.py       # Test API client integration
-│
-├── e2e/                           # End-to-end tests
-│   ├── __init__.py
-│   ├── test_create.sh             # Bash E2E test for create command
-│   ├── test_check.sh              # Bash E2E test for check command
-│   ├── test_go.sh                 # Bash E2E test for go command
-│   └── run_all_tests.sh           # E2E test runner
-│
-├── fixtures/                      # Test data and fixtures
-│   ├── __init__.py
-│   ├── api_responses.py           # Mock API response data
-│   ├── sample_cases.py            # Sample case data
-│   └── sample_accounts.py         # Sample account data
-│
-└── helpers/                       # Test utilities
-    ├── __init__.py
-    ├── assertions.py              # Custom assertions
-    ├── builders.py                # Test data builders
-    └── mock_helpers.py            # Mock setup utilities
+### Architectural Decision: Shared Codebase vs Separate Components
+
+**Recommendation:** **Shared codebase with runtime mode detection**
+
+```python
+# src/mc/cli/main.py
+import os
+
+def main():
+    runtime_mode = os.getenv("MC_RUNTIME_MODE", "host")
+
+    if runtime_mode == "container":
+        # Container mode - limited commands, no container orchestration
+        from mc.cli.commands.agent import agent_main
+        agent_main()
+    else:
+        # Host mode - full CLI including container orchestration
+        from mc.cli.commands.host import host_main
+        host_main()
 ```
 
-### Structure Rationale
+**Why shared codebase:**
+- Reuse all existing v1.0 code (auth, API clients, workspace manager)
+- Single version number, single deployment
+- Container inherits all bug fixes and features automatically
+- Simpler testing (one codebase, two modes)
 
-- **Mirror src/ structure in unit/**: Makes it easy to find tests for specific code. `src/mc/controller/workspace.py` → `tests/unit/controller/test_workspace.py`
-- **conftest.py at multiple levels**: Root conftest.py for shared fixtures, subdirectory conftest.py for layer-specific fixtures
-- **Separate integration/ from unit/**: Integration tests have different fixture needs and run slower
-- **Keep e2e/ for bash scripts**: Existing bash tests are valid E2E tests, maintain separation
-- **Centralized fixtures/**: Reusable test data accessible from any test
-- **Explicit helpers/**: Avoid scattered utility functions, centralize test helpers
+**Why not separate binaries:**
+- Code duplication for shared logic (auth, API, workspace)
+- Version skew between host and container
+- More complex release process
+
+### MC v2.0 Component Separation
+
+```
+src/mc/
+├── cli/
+│   ├── main.py              # Entry point with mode detection
+│   ├── commands/
+│   │   ├── host.py          # Host-mode commands (NEW)
+│   │   ├── agent.py         # Container-mode commands (NEW)
+│   │   ├── case.py          # Existing commands (MODIFY for container awareness)
+│   │   └── other.py         # Existing utility commands (KEEP)
+├── controller/
+│   ├── workspace.py         # Existing workspace manager (KEEP)
+│   ├── container.py         # Container lifecycle manager (NEW)
+│   └── state.py             # State persistence manager (NEW)
+├── integrations/
+│   ├── redhat_api.py        # Existing API client (KEEP)
+│   ├── ldap.py              # Existing LDAP (KEEP)
+│   ├── salesforce.py        # Salesforce API client (NEW)
+│   ├── podman.py            # Podman API wrapper (NEW)
+│   └── terminal.py          # Terminal launcher (NEW)
+├── config/
+│   ├── manager.py           # Existing config (EXTEND for Salesforce)
+│   └── models.py            # Existing models (EXTEND)
+└── [existing utils, etc.]
+```
+
+### New vs Modified Components
+
+**NEW Components:**
+
+1. **Container Manager** (`src/mc/controller/container.py`)
+   - Create containers with case workspace mounts
+   - List running containers
+   - Stop/remove containers
+   - Execute commands in containers
+
+2. **State Manager** (`src/mc/controller/state.py`)
+   - SQLite database for container metadata
+   - Case → Container ID mapping
+   - Container creation timestamps
+   - Mount point tracking
+
+3. **Salesforce Integration** (`src/mc/integrations/salesforce.py`)
+   - Fetch case metadata (subject, owner, status)
+   - Cache responses (30-minute TTL like existing cache)
+   - Handle authentication (OAuth or session ID)
+
+4. **Podman Integration** (`src/mc/integrations/podman.py`)
+   - Wrapper around podman-py library
+   - Handle connection (rootless vs rootful)
+   - Image management (pull, build, tag, push)
+   - Container operations with proper error handling
+
+5. **Terminal Launcher** (`src/mc/integrations/terminal.py`)
+   - Platform detection (macOS, Linux)
+   - iTerm2 integration (macOS)
+   - GNOME Terminal integration (Linux)
+   - Fallback to xterm/default terminal
+   - Execute `podman exec -it <container> /bin/bash`
+
+**MODIFIED Components:**
+
+1. **CLI Commands** (`src/mc/cli/commands/case.py`)
+   - Add `--container` flag to existing commands
+   - When in container, auto-detect and skip container creation
+   - Existing commands work unchanged in non-container mode
+
+2. **Config Manager** (`src/mc/config/manager.py`)
+   - Add Salesforce credentials (username, password, security token)
+   - Add container image configuration (registry, tag)
+   - Add terminal emulator preference
+
+3. **Workspace Manager** (`src/mc/controller/workspace.py`)
+   - Add method to get container mount points
+   - Support container-aware path resolution
+
+**UNCHANGED Components:**
+- All utils (auth, cache, downloads, file_ops, formatters, logging, validation)
+- All existing integrations (redhat_api, ldap)
+- Test infrastructure
+- Exception hierarchy
 
 ## Architectural Patterns
 
-### Pattern 1: Test Pyramid Structure
+### Pattern 1: State Persistence with SQLite
 
-**What:** Organize tests in a pyramid - many unit tests, fewer integration tests, minimal E2E tests
+**What:** Use SQLite database to track container state and metadata
 
-**When to use:** All projects (this is the industry standard)
-
-**Trade-offs:**
-- **Pros:** Fast feedback, isolated failures, maintainable test suite
-- **Cons:** Requires discipline to write good unit tests with mocks
-
-**Recommended distribution for this project:**
-```
-Unit Tests:        70% (fast, isolated, test single functions)
-Integration Tests: 25% (medium speed, test component interactions)
-E2E Tests:         5%  (slow, test complete user workflows)
-```
-
-### Pattern 2: Dependency Injection for Testability
-
-**What:** Pass dependencies as parameters instead of creating them inside functions
-
-**When to use:** When testing functions that depend on external services (API clients, file systems)
+**When to use:** When you need queryable persistent state for container orchestration
 
 **Trade-offs:**
-- **Pros:** Easy to inject mocks, testable without external dependencies
-- **Cons:** Requires refactoring existing code that creates dependencies internally
+- ✅ Lightweight, no separate database process
+- ✅ ACID transactions for consistency
+- ✅ Industry standard (Podman uses SQLite as of v4.8+)
+- ❌ Single-writer limitation (not a problem for CLI use)
 
 **Example:**
 ```python
-# Before (hard to test)
-def attach(case_number, base_dir):
-    access_token = get_access_token()  # Hard to mock
-    api_client = RedHatAPIClient(access_token)  # Created internally
-    case_details = api_client.fetch_case_details(case_number)
-    # ...
+# src/mc/controller/state.py
+import sqlite3
+from pathlib import Path
+from typing import Optional
 
-# After (easy to test)
-def attach(case_number, base_dir, api_client=None):
-    if api_client is None:
-        access_token = get_access_token()
-        api_client = RedHatAPIClient(access_token)
-    case_details = api_client.fetch_case_details(case_number)
-    # ...
+class StateManager:
+    """Manages container state persistence."""
 
-# Test
-def test_attach():
-    mock_client = Mock()
-    mock_client.fetch_case_details.return_value = {'accountNumberRef': '123'}
-    attach('12345', '/tmp', api_client=mock_client)
-    assert mock_client.fetch_case_details.called
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self):
+        """Initialize database schema."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS containers (
+                case_number TEXT PRIMARY KEY,
+                container_id TEXT NOT NULL,
+                container_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                status TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+    def register_container(self, case_number: str, container_id: str,
+                          container_name: str, workspace_path: str):
+        """Register a new container."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("""
+            INSERT OR REPLACE INTO containers
+            (case_number, container_id, container_name, created_at, workspace_path, status)
+            VALUES (?, ?, ?, datetime('now'), ?, 'running')
+        """, (case_number, container_id, container_name, workspace_path))
+        conn.commit()
+        conn.close()
+
+    def get_container(self, case_number: str) -> Optional[dict]:
+        """Get container by case number."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            "SELECT * FROM containers WHERE case_number = ?",
+            (case_number,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
 ```
 
-### Pattern 3: Fixture-Based Mock Setup
+### Pattern 2: Podman API Abstraction
 
-**What:** Use pytest fixtures to provide pre-configured mocks and test data
+**What:** Wrap podman-py library with domain-specific interface
 
-**When to use:** When multiple tests need the same mock setup
+**When to use:** When integrating with container runtime, isolate external dependency
 
 **Trade-offs:**
-- **Pros:** DRY principle, consistent test setup, easy to maintain
-- **Cons:** Can hide test dependencies if overused (fixtures should be obvious)
+- ✅ Easier to test (mock the wrapper, not podman-py)
+- ✅ Cleaner error handling (convert podman exceptions to MC exceptions)
+- ✅ Future flexibility (could swap Docker for Podman)
+- ❌ Additional layer of abstraction
 
 **Example:**
 ```python
-# In conftest.py
-@pytest.fixture
-def mock_api_client():
-    """Provide a mock RedHat API client with common responses."""
-    client = Mock(spec=RedHatAPIClient)
-    client.fetch_case_details.return_value = {
-        'accountNumberRef': '12345',
-        'summary': 'Test case summary',
-        'comments': []
-    }
-    client.fetch_account_details.return_value = {
-        'name': 'Test Account'
-    }
-    return client
+# src/mc/integrations/podman.py
+import logging
+from typing import Optional
+import podman
 
-# In test file
-def test_create_command(mock_api_client, tmp_path):
-    create('01234567', str(tmp_path), api_client=mock_api_client)
-    assert mock_api_client.fetch_case_details.called
+from mc.exceptions import ContainerError
+
+logger = logging.getLogger(__name__)
+
+class PodmanClient:
+    """Wrapper for Podman operations."""
+
+    def __init__(self):
+        try:
+            self.client = podman.PodmanClient()
+        except Exception as e:
+            raise ContainerError(
+                "Failed to connect to Podman",
+                f"Ensure Podman is installed and running: {e}"
+            )
+
+    def create_container(self, image: str, name: str,
+                        volumes: dict[str, dict], **kwargs) -> str:
+        """Create a container and return its ID."""
+        try:
+            container = self.client.containers.create(
+                image=image,
+                name=name,
+                volumes=volumes,
+                detach=True,
+                tty=True,
+                stdin_open=True,
+                **kwargs
+            )
+            container.start()
+            logger.info("Created container: %s (%s)", name, container.id[:12])
+            return container.id
+        except podman.errors.ImageNotFound:
+            raise ContainerError(
+                f"Container image not found: {image}",
+                "Try: podman pull <image>"
+            )
+        except Exception as e:
+            raise ContainerError(f"Failed to create container: {e}")
+
+    def list_containers(self, all_containers: bool = False) -> list[dict]:
+        """List containers."""
+        try:
+            containers = self.client.containers.list(all=all_containers)
+            return [
+                {
+                    "id": c.id[:12],
+                    "name": c.name,
+                    "status": c.status,
+                    "image": c.image.tags[0] if c.image.tags else c.image.id[:12]
+                }
+                for c in containers
+            ]
+        except Exception as e:
+            raise ContainerError(f"Failed to list containers: {e}")
 ```
 
-### Pattern 4: Response Mocking for HTTP Clients
+### Pattern 3: Salesforce API Caching
 
-**What:** Use `responses` library to mock HTTP requests at the requests library level
+**What:** Cache Salesforce API responses with TTL, following existing cache pattern
 
-**When to use:** When testing code that makes HTTP requests directly
+**When to use:** External API with rate limits (same pattern as existing Red Hat API cache)
 
 **Trade-offs:**
-- **Pros:** Tests real HTTP request logic, no need to refactor code
-- **Cons:** More brittle than mocking at API client level, tests implementation details
+- ✅ Avoids rate limits (Salesforce: 100,000 daily API calls for Enterprise)
+- ✅ Faster response time for repeated queries
+- ✅ Consistent with existing MC cache strategy
+- ❌ Stale data within TTL window (acceptable for case metadata)
 
 **Example:**
 ```python
-import responses
+# src/mc/integrations/salesforce.py
+import logging
+from mc.utils.cache import FileCache
 
-@responses.activate
-def test_fetch_case_details():
-    responses.add(
-        responses.GET,
-        'https://api.access.redhat.com/support/v1/cases/01234567',
-        json={'accountNumberRef': '12345', 'summary': 'Test'},
-        status=200
-    )
+logger = logging.getLogger(__name__)
 
-    client = RedHatAPIClient('fake-token')
-    result = client.fetch_case_details('01234567')
-    assert result['summary'] == 'Test'
+class SalesforceClient:
+    """Salesforce API client with caching."""
+
+    def __init__(self, cache_dir: Path, cache_ttl: int = 1800):
+        self.cache = FileCache(cache_dir / "salesforce", ttl=cache_ttl)
+        # Initialize Salesforce connection (simple_salesforce or requests)
+
+    def get_case_metadata(self, case_number: str) -> dict:
+        """Get case metadata with caching."""
+        cache_key = f"case_{case_number}"
+
+        # Try cache first
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.debug("Using cached Salesforce data for case %s", case_number)
+            return cached
+
+        # Fetch from API
+        logger.info("Fetching Salesforce metadata for case %s", case_number)
+        try:
+            # Query Salesforce API
+            metadata = self._query_salesforce(case_number)
+
+            # Cache the response
+            self.cache.set(cache_key, metadata)
+            return metadata
+        except Exception as e:
+            logger.error("Salesforce API error: %s", e)
+            raise
 ```
 
-### Pattern 5: Subprocess Mocking for External Commands
+### Pattern 4: Terminal Launcher Abstraction
 
-**What:** Mock subprocess.run for code that calls external commands (like ldapsearch)
+**What:** Platform-specific terminal launching with fallback chain
 
-**When to use:** When testing code that uses subprocess to call system commands
+**When to use:** Cross-platform CLI that needs to open new terminal windows
 
 **Trade-offs:**
-- **Pros:** Test without requiring external tools installed
-- **Cons:** Doesn't test actual command integration (need integration test for that)
+- ✅ Best experience on each platform (iTerm2 on macOS, GNOME Terminal on Linux)
+- ✅ Graceful degradation to fallback terminals
+- ✅ User-configurable preference
+- ❌ Platform-specific code branches
 
 **Example:**
 ```python
-def test_ldap_search(mocker):
-    mock_run = mocker.patch('subprocess.run')
-    mock_run.return_value = Mock(
-        stdout='cn: John Doe\nuid: jdoe\n',
-        stderr='',
-        returncode=0
-    )
+# src/mc/integrations/terminal.py
+import platform
+import subprocess
+import shlex
+from pathlib import Path
+from mc.exceptions import TerminalError
 
-    success, output = ldap_search('jdoe')
-    assert success is True
-    assert 'John Doe' in output
+class TerminalLauncher:
+    """Cross-platform terminal launcher."""
+
+    def __init__(self, preferred: str | None = None):
+        self.platform = platform.system()
+        self.preferred = preferred
+
+    def launch(self, container_id: str, title: str):
+        """Launch new terminal with container exec."""
+        cmd = f"podman exec -it {container_id} /bin/bash"
+
+        if self.platform == "Darwin":  # macOS
+            self._launch_macos(cmd, title)
+        elif self.platform == "Linux":
+            self._launch_linux(cmd, title)
+        else:
+            raise TerminalError(f"Unsupported platform: {self.platform}")
+
+    def _launch_macos(self, cmd: str, title: str):
+        """Launch terminal on macOS."""
+        # Try iTerm2 first (if preferred or detected)
+        if self._has_iterm2():
+            script = f'''
+                tell application "iTerm"
+                    create window with default profile
+                    tell current session of current window
+                        write text "{cmd}"
+                        set name to "{title}"
+                    end tell
+                end tell
+            '''
+            subprocess.run(["osascript", "-e", script], check=True)
+        else:
+            # Fallback to Terminal.app
+            script = f'''
+                tell application "Terminal"
+                    do script "{cmd}"
+                    set custom title of front window to "{title}"
+                end tell
+            '''
+            subprocess.run(["osascript", "-e", script], check=True)
+
+    def _launch_linux(self, cmd: str, title: str):
+        """Launch terminal on Linux."""
+        # Try preferred terminal or detect available
+        terminals = [
+            ("gnome-terminal", ["gnome-terminal", "--", "bash", "-c", cmd]),
+            ("konsole", ["konsole", "-e", cmd]),
+            ("xterm", ["xterm", "-e", cmd])
+        ]
+
+        for term_name, term_cmd in terminals:
+            if self._has_command(term_name):
+                subprocess.Popen(term_cmd)
+                return
+
+        raise TerminalError("No supported terminal emulator found")
+
+    def _has_iterm2(self) -> bool:
+        """Check if iTerm2 is installed."""
+        return Path("/Applications/iTerm.app").exists()
+
+    def _has_command(self, cmd: str) -> bool:
+        """Check if command exists in PATH."""
+        return subprocess.run(
+            ["which", cmd],
+            capture_output=True
+        ).returncode == 0
 ```
 
-## Data Flow for Testing
+### Pattern 5: Runtime Mode Detection
 
-### Unit Test Flow
+**What:** Single codebase with host/container mode detection via environment variable
 
-```
-Test Function
-    ↓
-Create Mocks (fixtures or manual)
-    ↓
-Call Function Under Test
-    ↓
-Assert Mock Calls
-    ↓
-Assert Return Values
-```
+**When to use:** When host and container need different command sets but share core logic
 
-### Integration Test Flow
+**Trade-offs:**
+- ✅ No code duplication
+- ✅ Automatic feature parity
+- ✅ Simpler deployment (one binary)
+- ❌ Slightly more complex CLI routing
 
-```
-Test Function
-    ↓
-Setup Real Components (WorkspaceManager, etc.)
-    ↓
-Mock External Boundaries (HTTP, subprocess)
-    ↓
-Call High-Level Function
-    ↓
-Assert File System State
-    ↓
-Assert Mock Call Counts
-```
-
-### E2E Test Flow (Bash)
-
-```
-Bash Script
-    ↓
-Set Environment Variables
-    ↓
-Create Test Fixtures (files, dirs)
-    ↓
-Call CLI Binary
-    ↓
-Capture Output
-    ↓
-Assert Output Contains Expected
-    ↓
-Assert File System Changes
-    ↓
-Cleanup
-```
-
-### Key Testing Data Flows
-
-1. **Mock Response Flow:** Test defines mock data → Fixture provides mock → Function calls mock → Test asserts behavior
-2. **Fixture Data Flow:** fixtures/ module defines data → conftest.py loads as fixture → Test receives fixture → Test uses data
-3. **Assertion Flow:** Test runs code → Test captures result → Helper function validates result → Test passes/fails
-
-## Mock Boundaries and Strategies
-
-### What to Mock at Each Layer
-
-| Application Layer | What to Mock | How to Mock | Why |
-|-------------------|--------------|-------------|-----|
-| **CLI (main.py)** | Command functions, environment, argparse | `mocker.patch` on command functions | Isolate CLI routing logic |
-| **Commands** | Controller classes, API clients | `mocker.patch` or fixture injection | Test command logic without I/O |
-| **Controller** | File operations, API clients | `mocker.patch` on utils, inject clients | Test business logic without side effects |
-| **Integrations** | HTTP requests, subprocess | `responses` library, `mocker.patch('subprocess.run')` | Test integration logic without external dependencies |
-| **Utils** | Usually nothing (pure functions) | Minimal mocking | Utils should be simple and testable as-is |
-
-### External Service Mocking Strategy
-
-#### Red Hat API Mocking
-
-**Approach:** Mock at the `requests` level using `responses` library for integration tests, mock `RedHatAPIClient` for unit tests
-
+**Example:**
 ```python
-# Integration test - mock HTTP
-@responses.activate
-def test_api_client_integration():
-    responses.add(...)
-    client = RedHatAPIClient('token')
-    result = client.fetch_case_details('01234567')
+# src/mc/cli/main.py
+import os
+import sys
 
-# Unit test - mock client
-def test_command_with_api(mocker):
-    mock_client = mocker.Mock(spec=RedHatAPIClient)
-    mock_client.fetch_case_details.return_value = {...}
-    attach('01234567', '/tmp', api_client=mock_client)
+def detect_runtime_mode() -> str:
+    """Detect if running in host or container mode."""
+    # Check environment variable (set in container image)
+    if os.getenv("MC_RUNTIME_MODE") == "container":
+        return "container"
+
+    # Check if running inside container (multiple heuristics)
+    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
+        return "container"
+
+    return "host"
+
+def main():
+    mode = detect_runtime_mode()
+
+    if mode == "container":
+        # Container mode - no container orchestration commands
+        from mc.cli.commands.agent import build_agent_parser
+        parser = build_agent_parser()
+    else:
+        # Host mode - full command set
+        from mc.cli.commands.host import build_host_parser
+        parser = build_host_parser()
+
+    args = parser.parse_args()
+    args.func(args)
+
+if __name__ == "__main__":
+    main()
 ```
 
-#### LDAP Mocking
+## Data Flow
 
-**Approach:** Mock `subprocess.run` to simulate ldapsearch responses
-
-```python
-def test_ldap_search(mocker):
-    mock_run = mocker.patch('mc.integrations.ldap.subprocess.run')
-    mock_run.return_value = Mock(
-        stdout=SAMPLE_LDAP_OUTPUT,
-        stderr='',
-        returncode=0
-    )
-    success, output = ldap_search('jdoe')
-```
-
-#### File System Mocking
-
-**Approach:** Use `tmp_path` fixture (pytest built-in) for real temp files, or mock `os` functions for unit tests
-
-```python
-# Integration test - real files in temp dir
-def test_workspace_creation(tmp_path):
-    workspace = WorkspaceManager(str(tmp_path), '01234567', 'Acme', 'Summary')
-    workspace.create_files()
-    assert (tmp_path / 'Acme' / '01234567-Summary').exists()
-
-# Unit test - mock file operations
-def test_create_file(mocker):
-    mock_open = mocker.patch('builtins.open', mocker.mock_open())
-    create_file('/fake/path')
-    mock_open.assert_called_once_with('/fake/path', 'w')
-```
-
-## Test Infrastructure Build Order
-
-### Phase 1: Foundation (Build First)
-
-**Components:**
-1. `tests/conftest.py` - Root pytest configuration
-2. `tests/fixtures/api_responses.py` - Mock API data
-3. `tests/helpers/mock_helpers.py` - Mock setup utilities
-4. `pytest.ini` or `pyproject.toml` - pytest configuration
-
-**Why first:** These are dependencies for all other tests
-
-**Estimated effort:** 2-4 hours
-
-### Phase 2: Utility Tests (Build Second)
-
-**Components:**
-1. `tests/unit/utils/test_formatters.py`
-2. `tests/unit/utils/test_file_ops.py`
-3. `tests/unit/utils/test_auth.py`
-
-**Why second:** Utils have no dependencies, easiest to test, build confidence
-
-**Estimated effort:** 4-6 hours
-
-### Phase 3: Integration Layer Tests (Build Third)
-
-**Components:**
-1. `tests/unit/integrations/test_redhat_api.py`
-2. `tests/unit/integrations/test_ldap.py`
-
-**Why third:** These have external dependencies that need mocking patterns established
-
-**Estimated effort:** 6-8 hours
-
-### Phase 4: Controller Tests (Build Fourth)
-
-**Components:**
-1. `tests/unit/controller/test_workspace.py`
-
-**Why fourth:** Controller depends on utils and integrations, test those first
-
-**Estimated effort:** 4-6 hours
-
-### Phase 5: Command Tests (Build Fifth)
-
-**Components:**
-1. `tests/unit/cli/commands/test_case.py`
-2. `tests/unit/cli/commands/test_other.py`
-
-**Why fifth:** Commands orchestrate controller and integrations, test dependencies first
-
-**Estimated effort:** 8-10 hours
-
-### Phase 6: CLI Tests (Build Sixth)
-
-**Components:**
-1. `tests/unit/cli/test_main.py`
-
-**Why sixth:** CLI depends on all commands being tested
-
-**Estimated effort:** 4-6 hours
-
-### Phase 7: Integration Tests (Build Seventh)
-
-**Components:**
-1. `tests/integration/test_workspace_lifecycle.py`
-2. `tests/integration/test_case_commands.py`
-
-**Why seventh:** Integration tests require all components working together
-
-**Estimated effort:** 8-12 hours
-
-### Phase 8: E2E Refactoring (Build Last)
-
-**Components:**
-1. Move existing bash tests to `tests/e2e/`
-2. Ensure they work with mocked external services
-3. Add any missing E2E scenarios
-
-**Why last:** E2E tests validate everything works end-to-end after unit/integration tests pass
-
-**Estimated effort:** 4-6 hours
-
-### Dependency Graph
+### Container Creation Flow
 
 ```
-Phase 1 (Foundation)
+User: mc create 12345678 --container
     ↓
-Phase 2 (Utils Tests) ← No dependencies on other components
+CLI Parser (src/mc/cli/commands/host.py)
     ↓
-Phase 3 (Integration Tests) ← Depends on mock helpers from Phase 1
-    ↓
-Phase 4 (Controller Tests) ← Depends on utils (Phase 2) and integration mocks (Phase 3)
-    ↓
-Phase 5 (Command Tests) ← Depends on controller (Phase 4)
-    ↓
-Phase 6 (CLI Tests) ← Depends on commands (Phase 5)
-    ↓
-Phase 7 (Integration Tests) ← Depends on all components
-    ↓
-Phase 8 (E2E) ← Validates everything
+Container Manager (src/mc/controller/container.py)
+    ├─→ Check State Manager: Does container exist for case 12345678?
+    │   └─→ Yes: Return existing container ID, skip creation
+    │   └─→ No: Continue to creation
+    ├─→ Salesforce Client: Fetch case metadata (subject, owner)
+    │   └─→ Cache response (30 min TTL)
+    ├─→ Red Hat API Client: Fetch case details (reuse v1.0 code)
+    ├─→ Workspace Manager: Ensure workspace exists
+    │   └─→ Create if needed (reuse v1.0 code)
+    ├─→ Podman Client: Create container
+    │   ├─→ Image: mc:latest (from local or pull from registry)
+    │   ├─→ Name: mc-case-12345678
+    │   ├─→ Mounts:
+    │   │   - /home/user/cases/Account/12345678-Summary:/case (workspace)
+    │   │   - /home/user/.config/mc:/root/.config/mc:ro (config)
+    │   ├─→ Start container
+    │   └─→ Return container ID
+    ├─→ State Manager: Register container
+    │   └─→ SQLite: INSERT (case_number, container_id, workspace_path, timestamp)
+    └─→ Terminal Launcher: Open new terminal window
+        └─→ Execute: podman exec -it mc-case-12345678 /bin/bash
 ```
 
-## Anti-Patterns
+### State Management Flow
 
-### Anti-Pattern 1: Testing Implementation Details
-
-**What people do:** Test internal private methods or implementation details instead of public behavior
-
-```python
-# Bad - testing private method
-def test_generate_file_dir_list(workspace):
-    result = workspace._generate_file_dir_list()
-    assert len(result) == 9
-
-# Good - testing public behavior
-def test_workspace_creates_expected_structure(workspace, tmp_path):
-    workspace.create_files()
-    assert (tmp_path / 'Account' / '01234567-Summary' / 'files').exists()
+```
+State Manager (SQLite Database)
+    ↓
+┌─────────────────────────────────────────────┐
+│ containers table                            │
+├─────────────────────────────────────────────┤
+│ case_number  | container_id  | created_at  │
+│ workspace    | status        |             │
+├─────────────────────────────────────────────┤
+│ 12345678     | abc123def456  | 2026-01-26  │
+│ /home/.../ws | running       | 10:30:00    │
+└─────────────────────────────────────────────┘
+    ↑
+    │ (queries)
+    │
+Container Manager
+    ├─→ register_container(case, id, workspace)
+    ├─→ get_container(case_number) → container_id
+    ├─→ list_containers() → [{case, id, status}, ...]
+    └─→ remove_container(case_number)
 ```
 
-**Why it's wrong:** Tests break when refactoring, even if behavior is unchanged
+### Key Data Flows
 
-**Do this instead:** Test public APIs and observable behavior (files created, return values, side effects)
-
-### Anti-Pattern 2: Overly Complex Fixtures
-
-**What people do:** Create deeply nested fixtures with lots of dependencies
-
-```python
-# Bad - too complex
-@pytest.fixture
-def fully_configured_system(mock_api, mock_ldap, mock_fs, config, workspace, ...):
-    # 50 lines of setup
-    ...
-
-# Good - compose simple fixtures
-@pytest.fixture
-def mock_api():
-    return Mock(spec=RedHatAPIClient)
-
-def test_something(mock_api, tmp_path):
-    # Test-specific setup is visible
-    workspace = WorkspaceManager(str(tmp_path), ...)
-```
-
-**Why it's wrong:** Hard to understand what test actually needs, hard to debug failures
-
-**Do this instead:** Keep fixtures simple and focused, compose them in tests where dependencies are visible
-
-### Anti-Pattern 3: Not Isolating Tests
-
-**What people do:** Share state between tests (global variables, persistent files)
-
-```python
-# Bad - shared state
-shared_workspace = None
-
-def test_create():
-    global shared_workspace
-    shared_workspace = WorkspaceManager(...)
-
-def test_check():
-    # Depends on test_create running first
-    status = shared_workspace.check()
-
-# Good - isolated
-def test_create(tmp_path):
-    workspace = WorkspaceManager(str(tmp_path), ...)
-    workspace.create_files()
-    # ...
-
-def test_check(tmp_path):
-    workspace = WorkspaceManager(str(tmp_path), ...)
-    workspace.create_files()
-    status = workspace.check()
-```
-
-**Why it's wrong:** Tests fail unpredictably, can't run in parallel, hard to debug
-
-**Do this instead:** Each test should set up its own state, use fixtures for common setup
-
-### Anti-Pattern 4: Mocking Too Much
-
-**What people do:** Mock everything, including standard library functions that don't need mocking
-
-```python
-# Bad - unnecessary mocking
-def test_format_string(mocker):
-    mocker.patch('str.lower')
-    mocker.patch('str.replace')
-    result = shorten_and_format('Test String')
-
-# Good - test real behavior
-def test_format_string():
-    result = shorten_and_format('Test String')
-    assert result == 'test-string'
-```
-
-**Why it's wrong:** Tests don't validate real behavior, brittle tests
-
-**Do this instead:** Only mock I/O boundaries (HTTP, file system, subprocess), test real logic
-
-### Anti-Pattern 5: No Assertion Messages
-
-**What people do:** Write assertions without context
-
-```python
-# Bad - no context
-def test_workspace_check():
-    status = workspace.check()
-    assert status == "OK"
-
-# Good - helpful message
-def test_workspace_check():
-    status = workspace.check()
-    assert status == "OK", f"Expected workspace to be OK but got {status}"
-```
-
-**Why it's wrong:** Test failures are hard to diagnose
-
-**Do this instead:** Add assertion messages, especially for complex conditions
+1. **Container creation:** CLI → Container Manager → Podman API → State Manager → Terminal Launcher
+2. **Case workspace access:** CLI → State Manager (lookup) → Container Manager (exec) → Terminal Launcher
+3. **Salesforce metadata:** Container Manager → Salesforce Client → Cache → API
+4. **Container listing:** CLI → State Manager → Podman Client (validate) → Display
 
 ## Integration Points
 
 ### External Services
 
-| Service | Integration Pattern | Mock Strategy | Notes |
-|---------|---------------------|---------------|-------|
-| Red Hat API | HTTP requests via `requests` library | `responses` library for HTTP mocking | Mock at HTTP layer for integration tests, mock client for unit tests |
-| LDAP | subprocess call to `ldapsearch` | `mocker.patch('subprocess.run')` | Provide sample LDAP output in fixtures |
-| File System | Direct `os` and `pathlib` calls | `tmp_path` fixture for real files, mock for unit tests | Prefer real temp files over mocking when possible |
-| Environment | `os.environ` reads | `mocker.patch.dict('os.environ')` | Set test environment variables in fixtures |
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Podman | Python library (podman-py) | RESTful API over Unix socket, rootless preferred |
+| Salesforce | REST API with simple_salesforce or requests | OAuth or username/password/token auth, rate limits apply |
+| Red Hat API | Existing integration (keep unchanged) | OAuth with offline token |
+| LDAP | Existing integration (keep unchanged) | Subprocess call to ldapsearch |
+| Terminal Emulator | Subprocess with platform detection | osascript (macOS), direct exec (Linux) |
 
 ### Internal Boundaries
 
-| Boundary | Communication | Testing Strategy |
-|----------|---------------|------------------|
-| CLI ↔ Commands | Direct function calls | Mock commands, test CLI routing and argument parsing |
-| Commands ↔ Controller | Direct instantiation and method calls | Inject mocked controller, test command orchestration |
-| Controller ↔ Integrations | Instantiate API clients | Inject mocked clients, test controller logic |
-| Integrations ↔ External | HTTP, subprocess | Mock at boundary (responses, subprocess.run) |
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| CLI ↔ Container Manager | Direct function calls | Container Manager is domain controller |
+| Container Manager ↔ State Manager | Direct function calls (SQLite queries) | State Manager owns DB connection |
+| Container Manager ↔ Podman Client | Direct function calls (wrapper API) | Podman Client converts exceptions |
+| Container Manager ↔ Salesforce Client | Direct function calls (cached) | Salesforce Client handles caching transparently |
+| Host Mode ↔ Agent Mode | Environment variable detection | No direct communication, mode determined at startup |
 
 ## Scaling Considerations
 
-| Test Suite Size | Approach |
-|-----------------|----------|
-| 0-50 tests | Run all tests locally, simple pytest configuration |
-| 50-200 tests | Separate fast unit tests from slow integration tests, use pytest markers |
-| 200+ tests | Parallel execution (pytest-xdist), CI optimization, test selection by changed files |
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-10 cases | Current design works perfectly, SQLite handles <1000 containers easily |
+| 10-100 cases | No changes needed, consider container cleanup policy (auto-remove stopped containers after 7 days) |
+| 100+ cases | Consider container pruning automation, disk space monitoring for workspace mounts |
 
-### Test Execution Optimization
+### Scaling Priorities
 
-**Small suite (current state):**
-```bash
-pytest  # Run all tests
+1. **First bottleneck:** Disk space for container images and workspaces
+   - **Fix:** Implement `mc prune` command to remove stopped containers and unused images
+   - **Detection:** Monitor disk usage, warn when <10GB free
+
+2. **Second bottleneck:** SQLite database size (unlikely for <10,000 containers)
+   - **Fix:** Add cleanup task to archive old container records
+   - **Detection:** Database file size >100MB
+
+3. **Not a bottleneck:** Podman performance, Salesforce API rate limits, terminal launching
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Running Podman Inside Container
+
+**What people do:** Try to run `podman` commands from inside the MC container (nested containers)
+
+**Why it's wrong:**
+- Requires privileged container or complex socket mounting
+- Security risk (container escape potential)
+- Unnecessary complexity (host should manage containers)
+
+**Do this instead:**
+- Host CLI manages all container lifecycle
+- Container CLI only runs case-management commands (no container orchestration)
+- Use runtime mode detection to prevent container commands in container mode
+
+### Anti-Pattern 2: Using Container ID as Primary Key
+
+**What people do:** Store only container ID in state, query Podman API for case number
+
+**Why it's wrong:**
+- Container might be removed outside MC (manual `podman rm`)
+- Requires API call for every state lookup (slow)
+- Loses metadata when container is gone
+
+**Do this instead:**
+- Use case number as primary key in state database
+- Store container ID as attribute
+- Validate container still exists when accessed
+- Gracefully handle missing containers (offer to recreate)
+
+### Anti-Pattern 3: Building Container Image on Every Create
+
+**What people do:** Run `podman build` when creating each case container
+
+**Why it's wrong:**
+- Extremely slow (image build takes minutes)
+- Defeats purpose of container caching
+- Wastes disk space with multiple identical images
+
+**Do this instead:**
+- Build image once, tag as `mc:latest`
+- Reuse same image for all case containers
+- Provide separate `mc build-image` command for updates
+- Use `podman pull` to get updates from registry
+
+### Anti-Pattern 4: Storing Credentials in Container
+
+**What people do:** Copy credentials into container filesystem
+
+**Why it's wrong:**
+- Security risk (credentials persist in image layers)
+- Credentials become stale (offline token expires)
+- Need to rebuild container when credentials change
+
+**Do this instead:**
+- Mount config directory read-only into container
+- Container reads credentials from mount point
+- Credentials managed on host, automatically available in container
+- Single source of truth for configuration
+
+### Anti-Pattern 5: Using BoltDB for State
+
+**What people do:** Choose BoltDB because Podman historically used it
+
+**Why it's wrong:**
+- Podman deprecated BoltDB in v4.8, removing in v6.0 (mid-2026)
+- SQLite is now industry standard for container state
+- BoltDB is archived, no active development
+- Migration path is painful
+
+**Do this instead:**
+- Use SQLite from the start (matches Podman v4.8+)
+- Simple schema with standard SQL
+- Excellent Python support (sqlite3 in stdlib)
+- Well-tested, actively maintained
+
+## Project Structure
+
+Based on patterns from kind, devcontainer CLI, and Podman architecture:
+
+```
+src/mc/
+├── cli/
+│   ├── main.py              # Mode detection, entry point
+│   ├── commands/
+│   │   ├── host.py          # Host-mode CLI (container create/list/stop/exec)
+│   │   ├── agent.py         # Container-mode CLI (limited commands)
+│   │   ├── case.py          # Existing case commands (MODIFY for container awareness)
+│   │   └── other.py         # Existing utility commands (KEEP)
+├── controller/
+│   ├── workspace.py         # Existing (EXTEND for container mounts)
+│   ├── container.py         # NEW: Container lifecycle orchestration
+│   └── state.py             # NEW: SQLite state management
+├── integrations/
+│   ├── redhat_api.py        # Existing (KEEP)
+│   ├── ldap.py              # Existing (KEEP)
+│   ├── salesforce.py        # NEW: Salesforce API with caching
+│   ├── podman.py            # NEW: Podman API wrapper
+│   └── terminal.py          # NEW: Cross-platform terminal launcher
+├── config/
+│   ├── manager.py           # Existing (EXTEND for Salesforce, container config)
+│   └── models.py            # Existing (EXTEND)
+├── utils/                   # All existing utils (KEEP UNCHANGED)
+│   ├── auth.py
+│   ├── cache.py
+│   ├── downloads.py
+│   ├── file_ops.py
+│   ├── formatters.py
+│   ├── logging.py
+│   └── validation.py
+└── exceptions.py            # Existing (EXTEND for container errors)
+
+container/
+├── Containerfile            # Image definition (RHEL 10, mc, oc, ocm, backplane)
+├── build.sh                 # Image build script
+└── entrypoint.sh            # Container entrypoint (sets MC_RUNTIME_MODE=container)
+
+tests/
+├── unit/
+│   ├── test_container_manager.py    # NEW
+│   ├── test_state_manager.py        # NEW
+│   ├── test_podman_client.py        # NEW
+│   ├── test_salesforce_client.py    # NEW
+│   └── test_terminal_launcher.py    # NEW
+└── integration/
+    ├── test_container_lifecycle.py  # NEW (uses testcontainers)
+    └── test_end_to_end.py           # NEW
 ```
 
-**Medium suite (after adding tests):**
-```bash
-pytest tests/unit -v              # Fast unit tests only
-pytest tests/integration -v       # Slower integration tests
-pytest -m "not slow" -v           # Skip slow tests for quick feedback
+### Structure Rationale
+
+- **cli/commands/host.py vs agent.py:** Separate command sets by runtime mode, clear separation
+- **controller/container.py:** Central orchestrator for container operations, follows existing controller pattern
+- **controller/state.py:** Isolated state management, easy to test, single responsibility
+- **integrations/[service].py:** One integration per file, follows existing pattern
+- **Shared utils:** All existing utils work in both modes, no duplication
+- **Container directory:** Separate from source, clear boundary for image build artifacts
+
+## Testing Strategy
+
+### Unit Testing with Mocking
+
+Following existing pytest patterns from v1.0:
+
+```python
+# tests/unit/test_container_manager.py
+import pytest
+from unittest.mock import Mock, patch
+from mc.controller.container import ContainerManager
+
+@pytest.fixture
+def mock_podman_client():
+    """Mock Podman client."""
+    with patch("mc.controller.container.PodmanClient") as mock:
+        yield mock.return_value
+
+@pytest.fixture
+def mock_state_manager():
+    """Mock state manager."""
+    with patch("mc.controller.container.StateManager") as mock:
+        yield mock.return_value
+
+def test_create_container_new_case(mock_podman_client, mock_state_manager):
+    """Test creating container for new case."""
+    # Setup
+    mock_state_manager.get_container.return_value = None
+    mock_podman_client.create_container.return_value = "abc123"
+
+    manager = ContainerManager(
+        podman_client=mock_podman_client,
+        state_manager=mock_state_manager
+    )
+
+    # Execute
+    container_id = manager.create_container(
+        case_number="12345678",
+        workspace_path="/path/to/workspace"
+    )
+
+    # Verify
+    assert container_id == "abc123"
+    mock_podman_client.create_container.assert_called_once()
+    mock_state_manager.register_container.assert_called_once()
 ```
 
-**Large suite (future):**
-```bash
-pytest -n auto tests/unit         # Parallel execution for unit tests
-pytest --lf                        # Run last failed tests
-pytest --sw                        # Stop at first failure (stepwise)
+### Integration Testing with Testcontainers
+
+For end-to-end testing with real Podman:
+
+```python
+# tests/integration/test_container_lifecycle.py
+import pytest
+from testcontainers.core.container import DockerContainer
+
+@pytest.fixture(scope="module")
+def podman_service():
+    """Start Podman service in container for testing."""
+    # Use testcontainers to run Podman-in-Docker for testing
+    # This ensures tests don't pollute local Podman state
+    pass
+
+def test_full_container_lifecycle(tmp_path, podman_service):
+    """Test complete container lifecycle: create, exec, stop, remove."""
+    # Real integration test with actual Podman calls
+    pass
 ```
 
-### CI/CD Considerations
+## Build Order (Dependency-Driven)
 
-**Test stages for CI pipeline:**
-1. **Lint and type check** (fastest feedback)
-2. **Unit tests** (fast, run on every commit)
-3. **Integration tests** (medium, run on every commit)
-4. **E2E tests** (slow, run on PR or scheduled)
+Based on component dependencies and risk:
 
-**Example GitHub Actions workflow:**
-```yaml
-test:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Unit Tests
-      run: pytest tests/unit -v --cov
-    - name: Integration Tests
-      run: pytest tests/integration -v
-    - name: E2E Tests
-      run: bash tests/e2e/run_all_tests.sh
+### Phase 1: State Management Foundation
+**Why first:** No external dependencies, easy to test, foundational
+
+1. State Manager (SQLite database)
+2. Unit tests for State Manager
+3. Manual testing with sqlite3 CLI
+
+### Phase 2: Podman Integration
+**Why second:** Core functionality, needed for everything else
+
+1. Podman Client wrapper (podman-py)
+2. Unit tests with mocked podman-py
+3. Integration tests with real Podman (testcontainers)
+
+### Phase 3: Container Orchestration
+**Why third:** Combines State + Podman, core business logic
+
+1. Container Manager (create, list, stop, exec)
+2. Unit tests with mocked dependencies
+3. Integration tests with real containers
+
+### Phase 4: Salesforce Integration
+**Why fourth:** Independent feature, can be added without blocking others
+
+1. Salesforce Client (with caching)
+2. Unit tests with mocked requests
+3. Integration tests with Salesforce sandbox (optional)
+
+### Phase 5: Terminal Launcher
+**Why fifth:** Presentation layer, depends on Container Manager
+
+1. Terminal Launcher (platform-specific)
+2. Unit tests with mocked subprocess
+3. Manual testing on macOS and Linux
+
+### Phase 6: CLI Integration
+**Why sixth:** Ties everything together, user-facing
+
+1. Host mode CLI commands (create, list, stop, exec)
+2. Runtime mode detection
+3. Update existing commands for container awareness
+4. End-to-end tests
+
+### Phase 7: Container Image
+**Why seventh:** Depends on working host CLI to test
+
+1. Containerfile (RHEL 10 base + tools)
+2. Build script
+3. Agent mode CLI commands
+4. Container entrypoint
+5. Build and test image
+
+### Phase 8: Polish & Documentation
+**Why last:** Refinement after core functionality works
+
+1. Config wizard updates (Salesforce credentials)
+2. Error messages and help text
+3. Documentation updates
+4. Performance tuning
+
+## Backwards Compatibility Strategy
+
+**Critical:** All existing v1.0 commands must work exactly as before.
+
+### Compatibility Guarantees
+
+1. **Existing commands unchanged:** `mc create`, `mc attach`, `mc check`, `mc ls`, `mc go` work identically
+2. **No required config changes:** Containerization is opt-in via `--container` flag
+3. **Workspace structure unchanged:** Files and directories remain the same
+4. **Config file compatible:** Existing ~/.config/mc/config.toml works unchanged
+
+### Migration Path
+
+```
+User journey:
+
+v1.0 User (no containers):
+  mc create 12345678              # Works exactly as before
+  mc attach 12345678              # Works exactly as before
+
+v2.0 User (with containers):
+  mc create 12345678 --container  # New: Creates container + workspace
+  mc attach 12345678              # Auto-detects container, works in container
+  mc exec 12345678                # New: Opens terminal in existing container
+  mc list                         # New: Shows running containers
+```
+
+### Feature Flags
+
+Consider environment variable for gradual rollout:
+
+```bash
+# Disable containerization entirely (v1.0 behavior)
+export MC_DISABLE_CONTAINERS=1
+
+# Enable containerization (v2.0 behavior)
+export MC_ENABLE_CONTAINERS=1  # or unset MC_DISABLE_CONTAINERS
 ```
 
 ## Sources
 
-**High Confidence Sources:**
-- pytest official documentation (https://docs.pytest.org/) - Test framework patterns
-- Python testing best practices from Real Python and official Python docs
-- Established patterns from popular Python CLI projects (click, typer)
-- Direct code inspection of existing project structure
+**Container orchestrator architectures:**
+- [kind - Kubernetes IN Docker](https://kind.sigs.k8s.io/)
+- [kind Initial Design](https://kind.sigs.k8s.io/docs/design/initial/)
+- [DevPod Architecture](https://devpod.sh/docs/how-it-works/overview)
+- [Dev Container CLI](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli)
 
-**Patterns based on:**
-- Industry standard test pyramid (Martin Fowler)
-- pytest fixture patterns (pytest documentation)
-- Mock strategies from unittest.mock documentation
-- File structure conventions from Python Packaging Authority
+**Podman architecture and state management:**
+- [Podman GitHub](https://github.com/containers/podman)
+- [Podman Python Library](https://github.com/containers/podman-py)
+- [Container Lifecycle Management - Podman](https://deepwiki.com/containers/podman/3.2-container-lifecycle-management)
+- [Deep Dive: Why Podman and containerd 2.0 are Replacing Docker in 2026](https://dev.to/dataformathub/deep-dive-why-podman-and-containerd-20-are-replacing-docker-in-2026-32ak)
+- [Podman 5.7 & BoltDB to SQLite migration](https://discussion.fedoraproject.org/t/podman-5-7-boltdb-to-sqlite-migration/171172)
 
-**Confidence Notes:**
-- **HIGH confidence** on pytest patterns, fixture usage, mock strategies (well-established)
-- **HIGH confidence** on test structure (mirrors source code structure is proven pattern)
-- **HIGH confidence** on build order (dependencies are clear from code inspection)
-- **MEDIUM confidence** on specific timing estimates (depends on developer experience)
+**Terminal integration:**
+- [Docker Desktop Support for iTerm2](https://www.docker.com/blog/desktop-support-for-iterm2-a-feature-request-from-the-docker-public-roadmap/)
+- [iTerm2 Shell Integration](https://iterm2.com/shell_integration.html)
+- [Best Linux Terminal Emulators: 2026 Comparison](https://www.glukhov.org/post/2026/01/terminal-emulators-for-linux-comparison/)
+
+**Salesforce API:**
+- [Salesforce API Rate Limiting Best Practices](https://developer.salesforce.com/docs/marketing/marketing-cloud/guide/rate-limiting-best-practices.html)
+- [Salesforce API Rate Limits](https://coefficient.io/salesforce-api/salesforce-api-rate-limits)
+
+**Container testing:**
+- [Testcontainers Python](https://github.com/testcontainers/testcontainers-python)
+- [Getting Started with Testcontainers for Python](https://testcontainers.com/guides/getting-started-with-testcontainers-for-python/)
+
+**Container image workflows:**
+- [How to Automate Docker Image Building with Pack CLI](https://www.freecodecamp.org/news/automating-docker-image-builds-and-publishing-with-pack-cli/)
+- [devcontainers CLI](https://github.com/devcontainers/cli)
 
 ---
-*Testing architecture research for: Python CLI Testing Infrastructure*
-*Researched: 2026-01-20*
+*Architecture research for: MC v2.0 Container Orchestration*
+*Researched: 2026-01-26*

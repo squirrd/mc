@@ -1,449 +1,253 @@
-# Feature Research: Production-Ready Python CLI Infrastructure
+# Feature Research
 
-**Domain:** Python CLI Tools - Infrastructure Features
-**Researched:** 2026-01-20
-**Confidence:** MEDIUM
-
-## Executive Summary
-
-Production-ready Python CLI tools require a comprehensive infrastructure layer beyond core functionality. Based on analysis of industry-standard CLI tools (AWS CLI, GitHub CLI, Heroku CLI) and Python CLI ecosystem patterns, infrastructure features fall into three categories:
-
-1. **Table Stakes**: Logging, error handling, configuration management, testing infrastructure
-2. **Differentiators**: Performance optimization, intelligent caching, progressive enhancement
-3. **Anti-Features**: Over-engineering, unnecessary abstractions, feature bloat
-
-The current `mc` CLI has core functionality but lacks critical infrastructure: structured logging, comprehensive error recovery, test coverage, performance optimization, and configuration flexibility.
+**Domain:** Container orchestration CLI for per-case workspace isolation
+**Researched:** 2026-01-26
+**Confidence:** HIGH
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these = tool feels incomplete or unprofessional.
+Features users assume exist. Missing these = product feels incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Structured Logging** | Users need visibility into what's happening, especially for failures | MEDIUM | Replace `print()` with proper logging framework; log levels (DEBUG, INFO, WARN, ERROR); log to file + console |
-| **Comprehensive Error Handling** | Graceful failures with actionable messages | MEDIUM | HTTP errors (401, 403, 404, 500+); network timeouts; file I/O errors; API validation errors |
-| **Retry Logic** | Network operations fail transiently; users expect automatic recovery | MEDIUM | Exponential backoff for API calls; configurable retry limits; distinguish transient vs permanent failures |
-| **Configuration Management** | Tools need flexibility beyond hardcoded values | LOW | Environment variables; config file support (optional); sensible defaults; clear precedence order |
-| **Progress Indicators** | Long-running operations need feedback | LOW | Progress bars for downloads; spinners for API calls; ETA for large files |
-| **Exit Codes** | Scripts/automation depend on proper exit codes | LOW | 0 = success; 1 = general error; 2 = usage error; specific codes for different failure modes |
-| **Help System** | Users need self-service documentation | LOW | `--help` for all commands (already exists with argparse); examples in help text; clear error messages with suggestions |
-| **Version Management** | Users need to know what version they're running | LOW | `--version` flag; single source of truth for version; included in logs/bug reports |
-| **Input Validation** | Prevent bad input early with clear feedback | LOW | Validate case numbers (format, length); validate paths before operations; fail fast with helpful messages |
-| **Test Infrastructure** | Production tools must be testable | HIGH | pytest framework; mocking for external services; test fixtures; CI integration; coverage reporting |
+| Create container | Core function - start a new isolated workspace | MEDIUM | Similar to `docker-compose up`, `kind create cluster`, `minikube start`. MC needs: create + start + attach terminal in one command |
+| List all containers | Visibility into what's running | LOW | Like `docker-compose ps --all`, `kind get clusters`, `minikube profile`. Must show: case number, status, uptime, resource usage |
+| Stop container | Graceful shutdown without destroying data | LOW | Standard in all tools (`docker-compose stop`, `minikube stop`). Preserves workspace/config for resume |
+| Start existing container | Resume stopped container | LOW | Pair with stop - users expect start/stop cycles. Like `docker-compose start` |
+| Delete container | Clean up when case closed | LOW | Remove container + cleanup resources. Like `docker-compose down`, `kind delete cluster`. Should warn before destructive action |
+| Execute command in container | Debug/inspect running environment | MEDIUM | Essential debugging tool (`docker-compose exec`, `kubectl exec`). MC needs: `mc case exec 12345 -- oc get nodes` |
+| View container logs | Troubleshoot what happened | MEDIUM | Like `docker-compose logs`, `minikube logs`. Show both MC orchestration logs and container stdout/stderr |
+| Check container status | Quick health check for specific case | LOW | Like `docker-compose ps`, `minikube status`. Show: running/stopped/error, uptime, resource limits |
+| Restart container | Recover from hung state | LOW | Combine stop + start. Common in all orchestration tools. Useful for config reloads |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set the tool apart. Not required, but significantly improve user experience.
+Features that set the product apart. Not required, but valuable.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Intelligent Caching** | Reduces API calls, improves performance, enables offline operation | MEDIUM | Cache case metadata with TTL; cache access tokens with expiration; cache LDAP lookups; invalidation strategies |
-| **Parallel Operations** | Dramatically speeds up multi-file operations | MEDIUM | Parallel attachment downloads (ThreadPoolExecutor); configurable concurrency; proper error aggregation |
-| **Performance Monitoring** | Shows users time savings, builds trust | LOW | Track and report operation timings; "Saved X seconds via cache" messages; `--timing` flag for detailed breakdown |
-| **Dry-Run Mode** | Users can preview changes without committing | LOW | `--dry-run` flag shows what would happen; validates inputs without side effects; useful for scripting |
-| **Debug Mode** | Power users need deep visibility | LOW | `--debug` flag enables verbose logging; shows API requests/responses; includes stack traces |
-| **Workspace Recovery** | Gracefully handle interrupted operations | MEDIUM | Resume interrupted downloads; repair corrupted workspaces; `--fix` flag for auto-repair (already exists) |
-| **Output Formatting** | Different consumers need different formats | LOW | JSON output for scripting (`--json`); table output for humans (default); quiet mode (`--quiet`) |
-| **Shell Completion** | Professional tools support tab completion | MEDIUM | Bash/Zsh/Fish completion scripts; complete case numbers from history/cache; complete command flags |
-| **Self-Update Mechanism** | Keeps tool current without manual intervention | MEDIUM | Check for updates on run (non-blocking); `mc update` command; version comparison; download + replace binary |
+| Auto-open terminal window | Seamless workflow - one command to workspace | HIGH | **Key differentiator.** `mc case 12345` → new iTerm2/Terminal window attached to container. Automates what users do manually with docker-compose |
+| Salesforce metadata auto-resolution | No manual case lookup - tool fetches case details | MEDIUM | Fetch case owner, severity, account from SF API. Auto-populate workspace metadata. Eliminates context switching |
+| Persistent container per case | Stateful workspaces survive restarts | LOW | Unlike throw-away dev containers, MC containers persist across sessions. Resume exactly where you left off |
+| Resource limits per container | Prevent runaway case from consuming host | MEDIUM | Set memory/CPU limits. Like Kubernetes resource requests. Protects multi-case workflow (5-10 concurrent) |
+| Container health monitoring | Proactive detection of stuck containers | MEDIUM | Monitor container metrics, warn if unresponsive. Like Kubernetes liveness probes. Prevent "zombie" containers |
+| Bulk operations | Manage multiple cases at once | MEDIUM | `mc case stop --all`, `mc case list --running`. Power user feature for end-of-day cleanup |
+| Case attachment to running container | Join existing session without interrupting | LOW | Multiple terminal windows to same case. Like `docker attach` or `screen -x`. Useful for monitoring while working |
+| Workspace mount status | Verify case files are accessible | LOW | Show mount points, check /workspace directory. Prevents "where's my data?" confusion |
+| Container image versioning | Pin/upgrade MC container image | MEDIUM | `mc case create --image mc:v2.1.0`. Allow testing new images, rollback if broken. Like kind --image flag |
+| Shell customization injection | Apply user's dotfiles to container | MEDIUM | Mount ~/.mc/dotfiles into container. Preserve aliases, PS1, vim config. Improves container UX |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems for CLI tools.
+Features that seem good but create problems.
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **GUI or TUI Interface** | "Makes it easier to use" | Adds massive complexity; defeats CLI purpose; hard to test; breaks automation | Improve help text and error messages; provide examples; better progress indicators |
-| **Plugin System** | "Makes it extensible" | Security risks; version compatibility nightmares; testing burden; maintenance overhead | Build features into core; use configuration for customization; accept that CLIs have focused scope |
-| **Real-time Notifications** | "Keep users informed" | Requires background daemon; polling overhead; platform-specific complexity | Use progress indicators; log to file; user can tail logs if needed |
-| **Interactive Prompts for Everything** | "Guides users through process" | Breaks scripting/automation; annoying for experienced users; hard to test | Use sensible defaults; require flags for dangerous operations; `--interactive` flag if needed |
-| **Custom DSL or Config Language** | "More powerful than JSON/YAML" | Learning curve; parsing complexity; error handling burden; tooling support | Use standard formats (YAML, TOML, JSON); leverage existing parsers and validators |
-| **Embedded Web Server** | "Provide web UI for complex operations" | Security nightmare; port conflicts; complexity explosion; process lifecycle issues | CLI tools should be CLI; if web UI needed, make it separate project |
-| **Database Storage** | "Better than files for state" | Deployment complexity; migration burden; file locks; corruption risk | Use simple file-based storage; JSON/YAML for config; filesystem for workspaces |
+| SSH into containers | "I need to inspect the environment" | Installing SSH servers in containers is anti-pattern (security risk, bloat, defeats containerization). SSH won't run if container stops | Use `mc case exec` for command execution, `mc case attach` for interactive shell. Same capability, no SSH daemon |
+| GUI/web dashboard | "Visual interface would be nice" | Scope creep. MC is CLI-first tool. Web UI adds complexity, security surface, deployment requirements | Keep CLI focused. If UI needed later, make separate project. Power users prefer CLI speed |
+| Plugin system | "Let users extend functionality" | Security nightmare. Version compatibility hell. CLI tools should have focused scope | Build features users actually need into core tool. Defer edge cases |
+| Real-time notifications | "Alert me when case container stops" | Not needed for CLI workflow. Adds polling/daemon complexity. Container orchestrators handle this differently | Users check `mc case list` or `mc case status`. Simple, reliable, no background processes |
+| Container networking between cases | "Share data between case containers" | Breaks isolation model. Cases should be independent. Adds networking complexity | If data sharing needed, use host filesystem or shared volume mounts. Keep containers isolated |
+| Treating containers like VMs | "Run multiple services per container" | Docker anti-pattern. Containers should run single process. Multiple processes complicate lifecycle, logging, debugging | One container = one purpose (case workspace). Use docker-compose if truly need multi-container orchestration |
+| Using 'latest' tag for images | "Always use newest version" | Breaks reproducibility. Image updates can introduce breaking changes without warning | Pin specific image versions in config. Allow override with --image flag. Explicit > implicit |
+| Running containers as root | "Easier to install packages" | Security risk. If container escapes, has root on host. Bad practice even in dev environments | Use non-root user in Dockerfile. Install necessary packages in image build, not at runtime |
 
 ## Feature Dependencies
 
 ```
-[Test Infrastructure]
-    └──enables──> [All Other Features]
-                     (Can't safely add features without tests)
+[Create Container]
+    ├──requires──> [Container Image] (built/pulled first)
+    └──requires──> [Case Workspace Directory] (mount point)
 
-[Structured Logging]
-    └──enhances──> [Error Handling]
-    └──enhances──> [Debug Mode]
-    └──enhances──> [Performance Monitoring]
+[Auto-open Terminal]
+    └──requires──> [Create Container] (terminal attaches to running container)
 
-[Configuration Management]
-    └──required-for──> [Caching]
-    └──required-for──> [Parallel Operations]
+[Salesforce Integration]
+    ├──enhances──> [Create Container] (auto-populate metadata)
+    └──enhances──> [List Containers] (show case owner, severity in list view)
 
-[Error Handling]
-    └──required-for──> [Retry Logic]
-    └──required-for──> [Workspace Recovery]
+[Execute Command]
+    └──requires──> [Running Container] (can't exec in stopped container)
 
-[Caching] ──conflicts-with──> [Always-Fresh Data Requirement]
-    (Need cache invalidation strategy)
+[View Logs]
+    ├──works-with──> [Stopped Container] (historical logs)
+    └──works-with──> [Running Container] (live tail)
 
-[Parallel Downloads] ──requires──> [Error Aggregation]
-    (Must handle multiple simultaneous failures)
+[Resource Limits]
+    └──requires──> [Create Container] (set at creation time)
+
+[Health Monitoring]
+    └──requires──> [Running Container] (monitor active containers)
+
+[Bulk Operations]
+    ├──wraps──> [Stop Container] (stop multiple)
+    ├──wraps──> [Start Container] (start multiple)
+    └──wraps──> [Delete Container] (delete multiple)
+
+[Container Image Versioning]
+    └──conflicts──> ['latest' tag usage] (pinning vs always-newest)
 ```
 
 ### Dependency Notes
 
-- **Test Infrastructure enables all other features**: Can't safely refactor or add features without test coverage. Must come first.
-- **Structured Logging enhances debugging**: Proper logging makes error handling, debug mode, and performance monitoring more useful. Foundation for observability.
-- **Configuration Management required for advanced features**: Caching, parallel operations, and retry logic all need configurable parameters. Build this before those features.
-- **Error Handling required for retry logic**: Can't retry intelligently without understanding error types (transient vs permanent, retryable vs not).
-- **Caching conflicts with always-fresh requirements**: Need cache invalidation strategy. TTL-based caching is safe for most CLI use cases.
-- **Parallel downloads require error aggregation**: When 10 files download in parallel, need to collect all errors and report coherently, not just fail on first error.
+- **Create requires workspace directory:** Cannot start container without mount point for /workspace. MC must verify case workspace exists (or create it) before container starts
+- **Terminal attachment requires running container:** Terminal automation (iTerm2/Terminal.app scripting) only works after container is running. Two-step: create/start, then attach
+- **Salesforce enhances but not blocks:** If SF API fails, container creation should still succeed. Metadata fetch is enhancement, not hard dependency
+- **Exec requires running container:** Cannot `docker exec` into stopped container. Must check status first, auto-start if stopped, or error clearly
+- **Resource limits set at creation:** Docker/containerd resource constraints apply at container start. Cannot change limits on running container (must recreate)
+- **Health monitoring vs status check:** Status is point-in-time (`docker inspect`), health monitoring is continuous (periodic checks). Monitoring builds on status
+- **Bulk operations wrap singles:** Implement atomic operations first (stop, start, delete), then bulk commands iterate. Avoid duplicating logic
 
-## MVP Definition (Current Hardening Milestone)
+## MVP Definition
 
-### Launch With (This Milestone)
+### Launch With (v2.0)
 
-Infrastructure features needed for production readiness. These address the "make codebase testable and maintainable" core value.
+Minimum viable product — what's needed to validate the per-case containerization concept.
 
-- [x] **Test Infrastructure** — pytest framework, mocking, fixtures, coverage reporting (Phase 1-2)
-  - Why essential: Foundation for all other work; can't safely refactor without tests
-  - Complexity: HIGH (touching all modules)
+- [x] **Create container** — Core value proposition. `mc case 12345` creates/starts container for case
+- [x] **List all containers** — Essential visibility. `mc case list` shows all case containers with status
+- [x] **Stop container** — Required lifecycle management. `mc case stop 12345` graceful shutdown
+- [x] **Delete container** — Cleanup when done. `mc case delete 12345` removes container
+- [x] **Execute command** — Debugging capability. `mc case exec 12345 -- <command>`
+- [x] **Auto-open terminal** — Key differentiator. Makes workflow seamless vs manual docker-compose
+- [x] **Container image with tools** — Pre-built image with mc, oc, ocm, backplane on RHEL 10 base
+- [x] **Workspace mounting** — Mount case workspace + shared config into container
+- [x] **Basic status check** — `mc case status 12345` shows running/stopped/error
 
-- [x] **Structured Logging** — Replace print() with logging framework (Phase 8: INFRA-01)
-  - Why essential: Observability, debugging, production troubleshooting
-  - Complexity: MEDIUM (systematic replacement across codebase)
+### Add After Validation (v2.1)
 
-- [x] **Comprehensive Error Handling** — HTTP errors, network failures, validation (Phase 7: QUAL-04)
-  - Why essential: Current tool crashes on common errors; frustrating user experience
-  - Complexity: MEDIUM (add error handling to each integration point)
+Features to add once core workflow is proven.
 
-- [x] **Retry Logic** — Transient API failure recovery (Phase 7: QUAL-05)
-  - Why essential: APIs fail transiently; users shouldn't have to manually retry
-  - Complexity: MEDIUM (requires error classification, backoff logic)
+- [ ] **Salesforce metadata integration** — Trigger: Users manually looking up case details. Auto-fetch case owner, severity, account
+- [ ] **View container logs** — Trigger: Users asking "what happened in container?" Need `mc case logs 12345`
+- [ ] **Restart container** — Trigger: Users doing stop + start manually. Add `mc case restart 12345`
+- [ ] **Resource limits** — Trigger: Container consuming excessive CPU/memory. Add configurable limits
+- [ ] **Start existing container** — Trigger: Users wanting to resume stopped container. Add `mc case start 12345`
 
-- [x] **Configuration Management** — Environment variables, sensible defaults (Phase 3: DEBT-01)
-  - Why essential: Hardcoded base directory is current blocker
-  - Complexity: LOW (already using env vars for token)
+### Future Consideration (v2.2+)
 
-- [x] **Input Validation** — Case number format, path validation (Phase 5: SEC-03)
-  - Why essential: Prevent errors early with clear messages
-  - Complexity: LOW (add validation functions)
+Features to defer until product-market fit is established.
 
-- [x] **Exit Codes** — Proper exit codes for scripting (Throughout)
-  - Why essential: Tool used in automation; scripts need to detect failures
-  - Complexity: LOW (replace exit(1) with specific codes)
-
-### Add After Core Hardening (Future Milestones)
-
-Features to add once testing and error handling are solid.
-
-- [ ] **Intelligent Caching** — Cache case metadata, tokens, LDAP (Phase 6: PERF-02, PERF-03)
-  - Trigger: After test infrastructure complete (need tests for cache invalidation logic)
-  - Complexity: MEDIUM
-
-- [ ] **Parallel Operations** — Parallel attachment downloads (Phase 6: PERF-01)
-  - Trigger: After error handling complete (need robust error aggregation)
-  - Complexity: MEDIUM
-
-- [ ] **Progress Indicators** — Download progress, API operation feedback (Phase 8: INFRA-03)
-  - Trigger: After basic functionality hardened (nice-to-have enhancement)
-  - Complexity: LOW
-
-- [ ] **Debug Mode** — Verbose logging, API request/response visibility
-  - Trigger: After structured logging implemented (builds on logging framework)
-  - Complexity: LOW
-
-- [ ] **Output Formatting** — JSON output for scripting, table formatting
-  - Trigger: User request or automation need
-  - Complexity: LOW
-
-- [ ] **Dry-Run Mode** — Preview operations without executing
-  - Trigger: User request for safety mechanism
-  - Complexity: LOW
-
-### Future Consideration (Post-Hardening)
-
-Features to defer until production-ready milestone is complete.
-
-- [ ] **Shell Completion** — Tab completion for commands and case numbers
-  - Why defer: Nice-to-have; requires platform-specific scripts; maintenance burden
-  - Trigger: User demand or contributor contribution
-
-- [ ] **Self-Update Mechanism** — Auto-update checking and installation
-  - Why defer: Adds complexity; not critical for internal tool
-  - Trigger: Tool distributed to wider audience
-
-- [ ] **Workspace Recovery** — Resume interrupted downloads, repair workspaces
-  - Why defer: Already have `--fix` flag; full recovery is complex
-  - Trigger: Users report interrupted download problems
-
-- [ ] **Performance Monitoring** — Operation timing, cache hit rates
-  - Why defer: Optimization can wait until after correctness
-  - Trigger: Performance complaints or optimization phase
+- [ ] **Health monitoring** — Why defer: Nice to have, not critical. Wait for user reports of "zombie" containers
+- [ ] **Bulk operations** — Why defer: Power user feature. Wait for users managing many cases. Build when pain point emerges
+- [ ] **Case attachment to running container** — Why defer: Advanced use case. Wait for "multiple terminals per case" requests
+- [ ] **Workspace mount status** — Why defer: Debugging feature. Add if users report mount issues
+- [ ] **Container image versioning** — Why defer: Version pinning adds complexity. Start with single "latest" image, add versioning when image updates cause breakage
+- [ ] **Shell customization injection** — Why defer: UX polish. Core workflow must work first
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority | Phase |
-|---------|------------|---------------------|----------|-------|
-| Test Infrastructure | HIGH | HIGH | P1 | 1-2 |
-| Error Handling | HIGH | MEDIUM | P1 | 7 |
-| Structured Logging | HIGH | MEDIUM | P1 | 8 |
-| Retry Logic | HIGH | MEDIUM | P1 | 7 |
-| Input Validation | MEDIUM | LOW | P1 | 5 |
-| Configuration Management | MEDIUM | LOW | P1 | 3 |
-| Exit Codes | MEDIUM | LOW | P1 | All |
-| Intelligent Caching | HIGH | MEDIUM | P2 | 6 |
-| Parallel Operations | HIGH | MEDIUM | P2 | 6 |
-| Progress Indicators | MEDIUM | LOW | P2 | 8 |
-| Debug Mode | MEDIUM | LOW | P2 | Post-hardening |
-| Dry-Run Mode | LOW | LOW | P2 | Post-hardening |
-| Output Formatting | MEDIUM | LOW | P2 | Post-hardening |
-| Shell Completion | LOW | MEDIUM | P3 | Future |
-| Self-Update | LOW | MEDIUM | P3 | Future |
-| Workspace Recovery | LOW | MEDIUM | P3 | Future |
-| Performance Monitoring | LOW | LOW | P3 | Future |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Create container | HIGH | MEDIUM | P1 |
+| Auto-open terminal | HIGH | HIGH | P1 |
+| List all containers | HIGH | LOW | P1 |
+| Stop container | HIGH | LOW | P1 |
+| Delete container | HIGH | LOW | P1 |
+| Execute command | HIGH | MEDIUM | P1 |
+| Container image with tools | HIGH | MEDIUM | P1 |
+| Workspace mounting | HIGH | LOW | P1 |
+| Basic status check | MEDIUM | LOW | P1 |
+| Salesforce metadata | MEDIUM | MEDIUM | P2 |
+| View logs | MEDIUM | MEDIUM | P2 |
+| Restart container | MEDIUM | LOW | P2 |
+| Resource limits | MEDIUM | MEDIUM | P2 |
+| Start existing container | MEDIUM | LOW | P2 |
+| Health monitoring | LOW | MEDIUM | P3 |
+| Bulk operations | LOW | MEDIUM | P3 |
+| Multiple terminal attachment | LOW | LOW | P3 |
+| Workspace mount status | LOW | LOW | P3 |
+| Image versioning | LOW | MEDIUM | P3 |
+| Shell customization | LOW | MEDIUM | P3 |
 
 **Priority key:**
-- P1: Must have for production readiness (this milestone)
-- P2: Should have, add when P1 complete
-- P3: Nice to have, future consideration
+- P1: Must have for v2.0 launch (core workflow)
+- P2: Should have for v2.1 (enhances core)
+- P3: Nice to have for v2.2+ (polish)
 
-## Infrastructure Patterns from Production CLI Tools
+## Competitor Feature Analysis
 
-Based on analysis of established Python CLI tools:
+| Feature | docker-compose | kind | minikube | MC Approach |
+|---------|---------------|------|----------|-------------|
+| Create/Start | `up` (combined) | `create cluster` | `start` | `mc case 12345` (combined create + start + terminal attach) |
+| List | `ps` (containers), `ls` (projects) | `get clusters` | `profile` (list profiles) | `mc case list` (all case containers with metadata) |
+| Stop | `stop` (preserves) | N/A (delete only) | `stop` (preserves VM) | `mc case stop 12345` (preserves workspace) |
+| Delete | `down` (destroys) | `delete cluster` | `delete` | `mc case delete 12345` (destroys container, keeps workspace) |
+| Execute | `exec <service> <cmd>` | N/A (use kubectl) | `ssh` + `kubectl exec` | `mc case exec 12345 -- <cmd>` |
+| Logs | `logs` (aggregates services) | `export logs` | `logs` | `mc case logs 12345` (container + orchestration logs) |
+| Status | `ps` (list with status) | N/A (list shows all as running) | `status` (detailed) | `mc case status 12345` (detailed single case) |
+| Terminal attach | `exec -it <service> sh` (manual) | N/A (kubectl after creation) | `ssh` (manual) | **Auto-opens new terminal window** (iTerm2/Terminal.app scripting) |
+| Metadata | Labels (manual) | Labels (manual) | Profiles (manual naming) | **Salesforce API integration** (auto-fetch case details) |
+| Multi-instance | Compose projects (multiple compose.yml) | Multiple clusters (--name flag) | Multiple profiles | **Per-case containers** (case number = container name) |
 
-### Logging Pattern (AWS CLI, GitHub CLI)
-```python
-# Structured logging with levels
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Console handler (INFO+)
-# File handler (DEBUG+)
-# Format: timestamp, level, module, message
-
-logger.info("Downloading case %s", case_number)
-logger.debug("API request: GET %s", url)
-logger.error("API call failed", exc_info=True)
-```
-
-### Error Handling Pattern (Heroku CLI, Docker CLI)
-```python
-# Specific exceptions for different failure modes
-class MCError(Exception):
-    """Base exception for MC CLI"""
-    exit_code = 1
-
-class APIError(MCError):
-    """API communication failure"""
-    exit_code = 2
-
-class AuthenticationError(MCError):
-    """Authentication failure"""
-    exit_code = 3
-
-class ValidationError(MCError):
-    """Input validation failure"""
-    exit_code = 4
-
-# User-friendly error messages
-try:
-    api_client.fetch_case_details(case_number)
-except requests.HTTPError as e:
-    if e.response.status_code == 401:
-        raise AuthenticationError(
-            "Authentication failed. Check RH_API_OFFLINE_TOKEN environment variable."
-        )
-    elif e.response.status_code == 404:
-        raise APIError(
-            f"Case {case_number} not found. Verify case number is correct."
-        )
-```
-
-### Retry Pattern (pip, npm, yarn)
-```python
-from tenacity import retry, stop_after_attempt, wait_exponential
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    reraise=True
-)
-def fetch_with_retry(url, headers):
-    response = requests.get(url, headers=headers)
-    if response.status_code >= 500:
-        # Server errors are retryable
-        response.raise_for_status()
-    return response
-```
-
-### Configuration Pattern (git, npm)
-```python
-# Precedence: CLI args > Env vars > Config file > Defaults
-
-import os
-from pathlib import Path
-
-def get_config_value(key, default=None):
-    # 1. Environment variable
-    env_var = os.environ.get(f'MC_{key.upper()}')
-    if env_var:
-        return env_var
-
-    # 2. Config file (if exists)
-    config_file = Path.home() / '.mcrc'
-    if config_file.exists():
-        # Parse TOML/YAML/JSON
-        config = load_config(config_file)
-        if key in config:
-            return config[key]
-
-    # 3. Default
-    return default
-
-base_dir = get_config_value('base_dir', default=str(Path.home() / 'Cases'))
-```
-
-### Caching Pattern (npm, pip)
-```python
-import json
-from pathlib import Path
-from datetime import datetime, timedelta
-
-class CacheManager:
-    def __init__(self, cache_dir, ttl_seconds=3600):
-        self.cache_dir = Path(cache_dir)
-        self.ttl = timedelta(seconds=ttl_seconds)
-
-    def get(self, key):
-        cache_file = self.cache_dir / f"{key}.json"
-        if not cache_file.exists():
-            return None
-
-        data = json.loads(cache_file.read_text())
-        cached_at = datetime.fromisoformat(data['cached_at'])
-
-        if datetime.now() - cached_at > self.ttl:
-            # Expired
-            cache_file.unlink()
-            return None
-
-        return data['value']
-
-    def set(self, key, value):
-        cache_file = self.cache_dir / f"{key}.json"
-        cache_file.parent.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(json.dumps({
-            'cached_at': datetime.now().isoformat(),
-            'value': value
-        }))
-```
-
-## Complexity Assessment
-
-| Feature Category | Effort Required | Risk Level | Testing Burden |
-|-----------------|-----------------|------------|----------------|
-| Test Infrastructure | 2-3 days | MEDIUM | HIGH (meta-problem: testing the tests) |
-| Structured Logging | 1-2 days | LOW | LOW (straightforward replacement) |
-| Error Handling | 2-3 days | MEDIUM | MEDIUM (need error scenarios) |
-| Retry Logic | 1 day | LOW | MEDIUM (need transient failure simulation) |
-| Configuration | 1 day | LOW | LOW (simple precedence logic) |
-| Input Validation | 1 day | LOW | LOW (regex and format checks) |
-| Caching | 2 days | MEDIUM | MEDIUM (invalidation edge cases) |
-| Parallel Operations | 2 days | MEDIUM | HIGH (concurrency bugs, race conditions) |
-| Progress Indicators | 1 day | LOW | LOW (mostly UI) |
-
-**Total estimated effort for P1 features**: 8-12 days
-**Total estimated effort for P2 features**: 5-6 days
-
-## Current State Analysis
-
-**What mc CLI has:**
-- ✅ Core functionality (case management, API integration, file downloads)
-- ✅ Basic argument parsing (argparse with subcommands)
-- ✅ Environment variable configuration (for API token)
-- ✅ Basic help system (from argparse)
-
-**What mc CLI is missing:**
-- ❌ Structured logging (uses print() throughout)
-- ❌ Comprehensive error handling (raises for status, no user-friendly messages)
-- ❌ Retry logic (no automatic recovery from transient failures)
-- ❌ Test infrastructure (pytest configured but no tests written)
-- ❌ Progress indicators (silent downloads for large files)
-- ❌ Input validation (no case number format validation)
-- ❌ Caching (fetches access token every run, no case metadata cache)
-- ❌ Parallel operations (sequential attachment downloads)
-- ❌ Proper exit codes (uses exit(1) for all failures)
-- ❌ Debug mode (no verbose logging option)
-
-## Recommendations for Roadmap
-
-**Phase ordering based on dependencies:**
-
-1. **Test Infrastructure First** (Phase 1-2)
-   - Everything else depends on this
-   - Can't safely refactor without tests
-   - High complexity, so tackle early
-
-2. **Configuration Management** (Phase 3)
-   - Low complexity, high impact
-   - Unblocks hardcoded values
-   - Foundation for other features
-
-3. **Error Handling + Validation** (Phase 5, 7)
-   - Foundation for retry logic
-   - Improves user experience immediately
-   - Medium complexity
-
-4. **Structured Logging** (Phase 8)
-   - Foundation for debug mode
-   - Enhances error handling
-   - Medium effort, systematic change
-
-5. **Retry Logic** (Phase 7)
-   - Depends on error handling
-   - High user value
-   - Medium complexity
-
-6. **Performance Features** (Phase 6)
-   - Caching, parallel operations
-   - Depends on error handling (for parallel error aggregation)
-   - Depends on configuration (for tuning parameters)
-   - High user value
-
-7. **UX Enhancements** (Phase 8)
-   - Progress indicators
-   - Depends on structured logging
-   - Low complexity, nice polish
+**Key Differentiators vs Competitors:**
+1. **Auto-terminal attachment** — docker-compose requires manual `exec -it`, MC opens new terminal automatically
+2. **Salesforce integration** — Competitors use manual labels/tags, MC auto-fetches case metadata from SF API
+3. **Per-case persistence** — kind/minikube are ephemeral dev clusters, MC containers persist across sessions like case workspaces
+4. **Support workflow optimization** — Competitors are general-purpose, MC is purpose-built for multi-case support engineering (5-10 concurrent cases)
 
 ## Sources
 
-**Confidence Level: MEDIUM**
+**Docker Compose:**
+- [Docker Compose CLI Reference](https://docs.docker.com/reference/cli/docker/compose/) - Official Docker documentation
+- [Docker Compose Lifecycle Hooks](https://docs.docker.com/compose/how-tos/lifecycle/) - Docker Docs
+- [Managing Container Lifecycles with Docker Compose](https://dev.to/idsulik/managing-container-lifecycles-with-docker-compose-lifecycle-hooks-mjg) - DEV Community
+- [Docker Compose Logs Guide](https://spacelift.io/blog/docker-compose-logs) - Spacelift
+- [PS, List, and Inspect Commands](https://deepwiki.com/docker/compose/4.6-ps-list-and-inspect-commands) - DeepWiki
 
-This research is based on:
-- **Training data knowledge** of production Python CLI tools (AWS CLI, GitHub CLI, Heroku CLI, pip, npm)
-- **Analysis of mc codebase** (examined source files, PROJECT.md requirements)
-- **Python CLI ecosystem patterns** (Click, Typer, argparse conventions)
+**kind (Kubernetes IN Docker):**
+- [kind Quick Start](https://kind.sigs.k8s.io/docs/user/quick-start/) - Official kind documentation
+- [Getting Started with Kind](https://betterstack.com/community/guides/scaling-docker/kind/) - Better Stack Community
+- [kind GitHub Repository](https://github.com/kubernetes-sigs/kind) - Kubernetes SIGs
 
-**Verification limitations:**
-- WebSearch and WebFetch unavailable during research
-- Cannot verify current state of specific library documentation
-- Recommendations based on established patterns as of training cutoff (January 2025)
+**minikube:**
+- [minikube Commands Reference](https://minikube.sigs.k8s.io/docs/commands/) - Official minikube documentation (updated 2026-01-10)
+- [Kubernetes Minikube: A Pragmatic 2026 Playbook](https://thelinuxcode.com/kubernetes-minikube-a-pragmatic-2026-playbook/) - TheLinuxCode
+- [Exploring Minikube Commands](https://www.civo.com/academy/kubernetes-setup/exploring-minikube-commands) - Civo Academy
 
-**Confidence by category:**
-- Table Stakes: HIGH (these are well-established CLI requirements)
-- Differentiators: MEDIUM (based on pattern analysis, not user research)
-- Anti-Features: HIGH (well-documented pitfalls in CLI tool development)
-- Implementation patterns: MEDIUM (standard patterns, but library versions may vary)
+**devcontainer CLI:**
+- [devcontainers/cli GitHub](https://github.com/devcontainers/cli) - Official reference implementation
+- [Dev Container CLI Documentation](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli) - VS Code Docs
+- [Demystifying Dev Container Lifecycle](https://www.daytona.io/dotfiles/demystifying-the-dev-container-lifecycle-a-walkthrough) - Daytona
 
-**Recommend:**
-- Validate caching approach against current httpx/requests-cache libraries
-- Verify retry library recommendations (tenacity vs alternatives)
-- Consider user feedback on progress indicators vs silent operation
-- Validate logging framework choice (stdlib logging vs loguru vs structlog)
+**Container Best Practices & Anti-Patterns:**
+- [Container Anti-Patterns](https://dev.to/idsulik/container-anti-patterns-common-docker-mistakes-and-how-to-avoid-them-4129) - DEV Community (March 2025)
+- [Docker Container Anti-Patterns](https://medium.com/@aishwarya.rk347/title-docker-container-anti-patterns-pitfalls-to-avoid-in-containerization-d2524b9748a0) - Medium
+- [Docker Best Practices and Anti-Patterns](https://ubk.hashnode.dev/docker-best-practices-and-anti-patterns) - Hashnode
+- [8 Docker Antipatterns to Stop Using](https://www.capitalone.com/tech/software-engineering/8-docker-antipatterns-to-avoid/) - Capital One Tech
+- [Docker Anti Patterns](https://codefresh.io/blog/docker-anti-patterns/) - Codefresh
+
+**Container Debugging & Inspection:**
+- [Mastering Docker Debugging](https://dev.to/docker/mastering-docker-debugging-a-guide-to-docker-desktop-and-cli-tools-for-troubleshooting-containers-5a8d) - DEV Community
+- [Kubernetes Basics in 2026](https://www.nucamp.co/blog/kubernetes-basics-in-2026-container-orchestration-for-backend-developers) - Nucamp
+- [Mastering Docker Inspect](https://moldstud.com/articles/p-mastering-docker-inspect-advanced-techniques-for-effective-container-debugging) - MoldStud
+- [Top crictl Commands for Debugging](https://dev.to/omerberatsezer/top-15-crictl-commands-with-output-debugging-kubernetes-nodes-4ao4) - DEV Community
+
+**Container Labels & Metadata:**
+- [Docker Object Labels](https://docs.docker.com/engine/manage-resources/labels/) - Official Docker documentation
+- [Docker Best Practices: Tags and Labels](https://www.docker.com/blog/docker-best-practices-using-tags-and-labels-to-manage-docker-image-sprawl/) - Docker Blog
+- [Docker Labels and OCI Annotations](https://snyk.io/blog/how-and-when-to-use-docker-labels-oci-container-annotations/) - Snyk
+- [Mastering Docker Labels](https://dev.to/abhay_yt_52a8e72b213be229/mastering-docker-labels-for-efficient-metadata-management-3oi) - DEV Community
+
+**Container Cleanup & Management:**
+- [Remove Orphaned Containers](https://linuxhint.com/docker-remove-orphans/) - LinuxHint
+- [Docker Compose Down --remove-orphans](https://dockerpros.com/wiki/docker-compose-down-remove-orphans/) - DockerPros
+- [Docker Disk Usage Cleanup](https://oneuptime.com/blog/post/2026-01-06-docker-disk-usage-cleanup/view) - OneUptime (2026-01-06)
+- [Clean Up Orphaned Resources in containerd](https://hexshift.medium.com/how-to-clean-up-orphaned-resources-in-containerd-safely-9d42cdc6cff9) - Medium
+
+**Terminal Automation:**
+- [iTerm2 Scripting Documentation](https://iterm2.com/documentation-scripting.html) - Official iTerm2 documentation
+- [Docker Desktop Support for iTerm2](https://www.docker.com/blog/desktop-support-for-iterm2-a-feature-request-from-the-docker-public-roadmap/) - Docker Blog
+- [Automate Multi-Window Experience on iTerm2](https://dev.to/vivekkodira/automate-a-multi-window-experience-on-iterm2-2j9e) - DEV Community
+- [Starting Multiple App Processes in iTerm2 Tabs](https://geoffhudik.com/tech/2020/08/23/mac-starting-multiple-app-processes-in-iterm2-tabs/) - GeoffHudik.com
+
+**Workspace Isolation Patterns:**
+- [Dev Containers: Multiple Projects & Shared Config](https://dev.to/graezykev/dev-containers-part-5-multiple-projects-shared-container-configuration-2hoi) - DEV Community
+- [Azure Machine Learning Workspace Concepts](https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace?view=azureml-api-2) - Microsoft Learn
+- [Considerations for Multitenant Container Apps](https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/service/container-apps) - Microsoft Azure Architecture
 
 ---
-*Feature research for: Production-ready Python CLI infrastructure*
-*Researched: 2026-01-20*
-*Context: MC CLI hardening project - adding infrastructure to existing functional CLI*
+*Feature research for: MC v2.0 Containerization*
+*Researched: 2026-01-26*
