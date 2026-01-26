@@ -127,10 +127,12 @@ Plans:
   3. Host terminal returns to prompt after launching container terminal
   4. Graceful degradation when terminal emulator unsupported (helpful error message)
   5. TTY detection prevents breaking piped/programmatic output
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- TBD
+- [ ] 12-01-PLAN.md — Terminal launcher abstraction with macOS and Linux support
+- [ ] 12-02-PLAN.md — Shell customization and welcome banner with case metadata
+- [ ] 12-03-PLAN.md — CLI integration with auto-create/attach workflow
 
 ### Phase 13: Container Image & Backwards Compatibility
 **Goal**: Build RHEL 10 container image with mc CLI and validate v1.0 commands work unchanged
@@ -167,11 +169,11 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 9. Container Architecture & Podman Integration | v2.0 | 2/2 | Complete | 2026-01-26 |
 | 10. Salesforce Integration & Case Resolution | v2.0 | 3/3 | Complete | 2026-01-26 |
 | 11. Container Lifecycle & State Management | v2.0 | 0/5 | Ready to execute | - |
-| 12. Terminal Attachment & Exec | v2.0 | 0/TBD | Not started | - |
+| 12. Terminal Attachment & Exec | v2.0 | 0/3 | Ready to execute | - |
 | 13. Container Image & Backwards Compatibility | v2.0 | 0/TBD | Not started | - |
 
 **Note:** OpenShift tools (oc, ocm, backplane) deferred to v2.1+ milestones. Each tool will be its own milestone to handle tool-specific configuration mounting requirements.
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 (Phase 11 planned: 5 plans)*
+*Last updated: 2026-01-26 (Phase 12 planned: 3 plans)*
