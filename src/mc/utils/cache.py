@@ -241,3 +241,37 @@ def get_case_metadata(
     cache.set(case_number, case_details, account_details)
 
     return case_details, account_details, False
+
+
+def get_cached_age_minutes(case_number: str) -> int:
+    """Get age of cached case metadata in minutes.
+
+    Args:
+        case_number: Case number
+
+    Returns:
+        Age in minutes (0 if not cached)
+    """
+    cache = CaseMetadataCache()
+
+    # Get cache entry to check timestamp
+    case_data, account_data, was_cached = cache.get(case_number)
+
+    if not was_cached:
+        return 0
+
+    # Calculate age from current time
+    with cache._get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT cached_at FROM case_metadata WHERE case_number = ?",
+            (case_number,)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return 0
+
+        cached_at = row[0]
+        age_seconds = int(time.time()) - cached_at
+        return age_seconds // 60

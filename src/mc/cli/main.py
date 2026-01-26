@@ -88,6 +88,10 @@ def main() -> ExitCode:
         parser_comments = subparsers.add_parser('case-comments', help='Display case comments')
         parser_comments.add_argument('case_number', type=str, help='Case number')
 
+        # Case Terminal subcommand (Phase 12 - terminal attachment)
+        parser_case = subparsers.add_parser('case', help='Attach terminal to case container')
+        parser_case.add_argument('case_number', type=str, help='Case number')
+
         # LDAP Search subcommand
         parser_ls = subparsers.add_parser('ls', help='Search for a user in LDAP')
         parser_ls.add_argument('uid', type=str, help='The UID to search for in LDAP')
@@ -164,6 +168,10 @@ def main() -> ExitCode:
             case.create(args.case_number, base_dir, offline_token, download=args.download)
         elif args.command == 'case-comments':
             case.case_comments(args.case_number, offline_token)
+        elif args.command == 'case':
+            # Import here to avoid circular dependency
+            from mc.cli.commands.container import case_terminal
+            case_terminal(args)
         elif args.command == 'ls':
             other.ls(args.uid, show_all=args.all)
         elif args.command == 'go':

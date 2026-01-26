@@ -8,6 +8,8 @@ from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
 from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
+from mc.integrations.salesforce_api import SalesforceAPIClient
+from mc.terminal.attach import attach_terminal
 from platformdirs import user_data_dir
 
 
@@ -156,38 +158,68 @@ def exec_command(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def quick_access(args: argparse.Namespace) -> None:
-    """Quick access (mc <case_number>).
+def case_terminal(args: argparse.Namespace) -> None:
+    """Attach terminal to case container (mc case <number>).
+
+    Primary entry point for terminal attachment workflow. Launches new terminal
+    window attached to case container with auto-create/auto-start.
 
     Args:
         args: Parsed arguments with case_number
     """
     case_number = args.case_number
-    manager = _get_manager()
 
-    # Get workspace path from ConfigManager
-    config = ConfigManager()
-    base_dir = config.get("workspace.base_directory", os.path.expanduser("~/mc"))
-    workspace_path = os.path.join(base_dir, case_number)
+    # Initialize dependencies
+    config_manager = ConfigManager()
+
+    # Get Salesforce credentials from config
+    try:
+        config = config_manager.load()
+        sf_config = config.get("salesforce", {})
+        sf_username = sf_config.get("username")
+        sf_password = sf_config.get("password")
+        sf_token = sf_config.get("security_token")
+
+        if not all([sf_username, sf_password, sf_token]):
+            print(
+                "Error: Salesforce credentials not configured. "
+                "Update config at ~/.config/mc/config.toml",
+                file=sys.stderr
+            )
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"Error loading configuration: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Initialize Salesforce client
+    salesforce_client = SalesforceAPIClient(sf_username, sf_password, sf_token)
+
+    # Initialize container manager
+    container_manager = _get_manager()
 
     try:
-        # Check if container exists
-        status_info = manager.status(case_number)
-
-        if status_info["status"] == "missing":
-            # Create workspace directory if missing
-            os.makedirs(workspace_path, exist_ok=True)
-
-            # Create container
-            manager.create(case_number, workspace_path)
-            print(f"Container ready for case {case_number}")
-        else:
-            # Container exists (might be stopped, but that's OK - exec will auto-restart)
-            print(f"Container ready for case {case_number}")
-
-        # Print note about attach (Phase 12 feature)
-        print(f"To attach a terminal, use 'mc attach {case_number}' (Phase 12)")
+        # Launch terminal attachment workflow
+        attach_terminal(
+            case_number=case_number,
+            config_manager=config_manager,
+            salesforce_client=salesforce_client,
+            container_manager=container_manager
+        )
+        # Terminal launched - host terminal returns to prompt
 
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def quick_access(args: argparse.Namespace) -> None:
+    """Quick access shorthand (mc <case_number>).
+
+    Alias for case_terminal - same behavior as 'mc case <number>'.
+
+    Args:
+        args: Parsed arguments with case_number
+    """
+    # Route to case_terminal function
+    case_terminal(args)
