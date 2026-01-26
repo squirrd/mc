@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-01-26 - Phase 10 complete (Salesforce integration verified)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-01-26 - Completed 11-01-PLAN.md (Container Core State Management)
 
-Progress: [█████████░░░░░░░░░░░] 54% (13 of 24 total plans complete across all milestones)
+Progress: [█████████░░░░░░░░░░░] 58% (14 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,9 +40,10 @@ Progress: [█████████░░░░░░░░░░░] 54% (13
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 5
+- Plans completed: 6
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
+- Phase 11 in progress (1/3 plans)
 
 **By Phase:**
 
@@ -50,6 +51,7 @@ Progress: [█████████░░░░░░░░░░░] 54% (13
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
+| 11 (Container Lifecycle & State Management) | 1 | 4min | 4min |
 
 ## Accumulated Context
 
@@ -83,6 +85,9 @@ Progress: [█████████░░░░░░░░░░░] 54% (13
 - ✅ Plan 01: SalesforceAPIClient with SOQL queries, automatic token refresh, rate limiting (71 lines, 97% test coverage, 16 tests)
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 - ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
+
+**Phase 11 In Progress (1/3 plans):**
+- ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -125,6 +130,16 @@ Progress: [█████████░░░░░░░░░░░] 54% (13
 - Workspace path pinning: Pass metadata to WorkspaceManager constructor (no re-queries, stable paths)
 - Circular import avoidance: Import CaseResolver inside WorkspaceManager.from_case_number() method, use TYPE_CHECKING for type hints
 
+**Key Decisions (Phase 11):**
+
+**Plan 01:**
+- Platform-appropriate database location: Use platformdirs.user_data_dir("mc", "redhat") for state database (~/Library/Application Support/mc/containers.db on macOS, ~/.local/share/mc/containers.db on Linux)
+- WAL mode configuration: Enable Write-Ahead Logging with PRAGMA synchronous=NORMAL and cache_size=10000 for concurrent read/write
+- :memory: database handling: Maintain persistent connection with check_same_thread=False for testing (file-based databases create new connections per operation)
+- Reconciliation pattern: Accept set of container IDs from Podman, delete state entries NOT in set (detects external deletions without background polling)
+- Timestamp storage: Store as Unix integers (int(time.time())) for simplicity and cross-platform consistency
+- Connection timeout: 30-second timeout for SQLite connections (conservative for single-user CLI)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -144,9 +159,9 @@ Progress: [█████████░░░░░░░░░░░] 54% (13
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Phase 10 complete and verified (Salesforce integration)
-Resume: Run `/gsd:plan-phase 11` to begin Phase 11 planning (Container lifecycle orchestration)
+Stopped at: Completed 11-01-PLAN.md (Container Core State Management)
+Resume: Continue with 11-02 or 11-03 planning (Container orchestration and CLI commands)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (10-03 completion, Phase 10 complete)*
+*Last updated: 2026-01-26 (11-01 completion)*
