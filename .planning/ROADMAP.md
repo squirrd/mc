@@ -61,14 +61,13 @@ Transform MC from a traditional CLI tool into a container orchestrator providing
 **Milestone Goal:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
 
 ### Phase 9: Container Architecture & Podman Integration
-**Goal**: Establish rootless Podman integration with correct UID/GID mapping and platform detection
+**Goal**: Establish Podman platform detection and connection foundation for container orchestration
 **Depends on**: Nothing (first phase of v2.0)
-**Requirements**: INFRA-01, INFRA-03, INFRA-04, INFRA-05
+**Requirements**: INFRA-01, INFRA-03, INFRA-04
 **Success Criteria** (what must be TRUE):
   1. Developer can connect to Podman socket (macOS VM or Linux native)
-  2. Container volumes mount with correct permissions (workspace files readable/writable by host user)
-  3. Platform differences handled transparently (macOS Podman machine auto-starts)
-  4. Rootless limitations documented (port binding <1024, pasta networking)
+  2. Platform differences handled transparently (macOS Podman machine auto-starts)
+  3. Podman availability validated with helpful error messages
 **Plans**: 2 plans
 
 Plans:
@@ -85,23 +84,26 @@ Plans:
   3. Salesforce access tokens refresh automatically before expiration (no authentication failures)
   4. Rate limiting handled gracefully (exponential backoff on 429 errors)
   5. Workspace paths resolved from case metadata (customer name, case number)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- TBD
+- [ ] 10-01-PLAN.md — Salesforce API client with session management and token refresh
+- [ ] 10-02-PLAN.md — SQLite cache with background refresh worker
+- [ ] 10-03-PLAN.md — Case number to workspace path resolution
 
 ### Phase 11: Container Lifecycle & State Management
 **Goal**: Orchestrate container creation, listing, stopping, deletion with state reconciliation
 **Depends on**: Phase 9 (requires Podman integration)
-**Requirements**: INFRA-02, CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, CONT-06, CONT-07, CONT-08
+**Requirements**: INFRA-02, INFRA-05, CONT-01, CONT-02, CONT-03, CONT-04, CONT-05, CONT-06, CONT-07, CONT-08
 **Success Criteria** (what must be TRUE):
-  1. Developer can create container from case number (workspace mounted at /case)
+  1. Developer can create container from case number (workspace mounted at /case with correct permissions)
   2. Developer can list all case containers showing status and metadata
   3. Developer can stop running container (graceful shutdown)
   4. Developer can delete container and cleanup workspace
   5. Developer can execute command inside container
   6. Stopped containers auto-restart on access
   7. State reconciles correctly after external Podman operations (no orphaned metadata)
+  8. Container volumes use UID/GID mapping (--userns=keep-id) for correct host user permissions
 **Plans**: TBD
 
 Plans:
@@ -155,7 +157,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 7. Code Quality & Error Handling | v1.0 | 3/3 | Complete | 2026-01-22 |
 | 8. Type Safety & Modernization | v1.0 | 1/1 | Complete | 2026-01-22 |
 | 9. Container Architecture & Podman Integration | v2.0 | 0/2 | Ready to execute | - |
-| 10. Salesforce Integration & Case Resolution | v2.0 | 0/TBD | Not started | - |
+| 10. Salesforce Integration & Case Resolution | v2.0 | 0/3 | Ready to execute | - |
 | 11. Container Lifecycle & State Management | v2.0 | 0/TBD | Not started | - |
 | 12. Terminal Attachment & Exec | v2.0 | 0/TBD | Not started | - |
 | 13. Container Image & Backwards Compatibility | v2.0 | 0/TBD | Not started | - |
