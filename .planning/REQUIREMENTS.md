@@ -10,21 +10,21 @@ Requirements for containerization milestone. Each maps to roadmap phases.
 ### Infrastructure
 
 - [x] **INFRA-01**: Podman integration via podman-py library
-- [ ] **INFRA-02**: SQLite state database for container metadata
+- [x] **INFRA-02**: SQLite state database for container metadata
 - [x] **INFRA-03**: Platform detection (macOS vs Linux)
 - [x] **INFRA-04**: Podman machine auto-start on macOS
-- [ ] **INFRA-05**: Rootless container UID/GID mapping configured
+- [x] **INFRA-05**: Rootless container UID/GID mapping configured
 
 ### Container Lifecycle
 
-- [ ] **CONT-01**: User can create container from case number
-- [ ] **CONT-02**: User can list all case containers (running and stopped)
-- [ ] **CONT-03**: User can stop running container
-- [ ] **CONT-04**: User can delete container and cleanup workspace
-- [ ] **CONT-05**: User can execute command inside container
-- [ ] **CONT-06**: User can check container status (running, stopped, missing)
-- [ ] **CONT-07**: User can view container logs
-- [ ] **CONT-08**: Stopped containers auto-restart on access
+- [x] **CONT-01**: User can create container from case number
+- [x] **CONT-02**: User can list all case containers (running and stopped)
+- [x] **CONT-03**: User can stop running container
+- [x] **CONT-04**: User can delete container and cleanup workspace
+- [x] **CONT-05**: User can execute command inside container
+- [x] **CONT-06**: User can check container status (running, stopped, missing)
+- [x] **CONT-07**: User can view container logs
+- [x] **CONT-08**: Stopped containers auto-restart on access
 
 ### Salesforce Integration
 

@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** Phase 11 - Container Lifecycle & State Management
+**Current focus:** Phase 12 - Terminal Attachment & Exec
 
 ## Current Position
 
 Milestone: v2.0 Containerization
-Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: 5 of 5 complete
-Status: Phase complete
-Last activity: 2026-01-26 - Completed 11-05-PLAN.md (Container Command Execution & CLI Integration)
+Phase: 12 of 13 (Terminal Attachment & Exec)
+Plan: Not yet planned
+Status: Ready to plan
+Last activity: 2026-01-26 - Phase 11 complete (Container lifecycle verified)
 
-Progress: [██████████░░░░░░░░░░] 75% (18 of 24 total plans complete across all milestones)
+Progress: [███████████░░░░░░░░░] 67% (10 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -188,9 +188,9 @@ Progress: [██████████░░░░░░░░░░] 75% (18
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 11-05-PLAN.md (Container Command Execution & CLI Integration)
-Resume: Phase 11 complete (5/5 plans). All 8 CONT requirements (CONT-01 through CONT-08) satisfied. Continue with Phase 12 planning (Terminal Automation)
+Stopped at: Phase 11 complete and verified (Container lifecycle orchestration)
+Resume: Run `/gsd:plan-phase 12` to begin Phase 12 planning (Terminal Attachment & Exec)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (11-05 completion)*
+*Last updated: 2026-01-26 (Phase 11 complete)*
