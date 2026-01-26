@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 12 of 13 (Terminal Attachment & Exec)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-01-26 - Phase 11 complete (Container lifecycle verified)
+Plan: 2 of 3 (Shell customization complete)
+Status: In progress
+Last activity: 2026-01-26 - Completed 12-02-PLAN.md (Shell customization & banner)
 
-Progress: [███████████░░░░░░░░░] 67% (10 of 15 v2.0 plans complete)
+Progress: [███████████░░░░░░░░░] 73% (11 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -40,10 +40,11 @@ Progress: [███████████░░░░░░░░░] 67% (10
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 10
+- Plans completed: 11
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
+- Phase 12 in progress (2/3 plans)
 
 **By Phase:**
 
@@ -52,6 +53,7 @@ Progress: [███████████░░░░░░░░░] 67% (10
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
+| 12 (Terminal Attachment & Exec) | 2 | 3min | 1.5min |
 
 ## Accumulated Context
 
@@ -92,6 +94,9 @@ Progress: [███████████░░░░░░░░░] 67% (10
 - ✅ Plan 03: ContainerManager.list() with state reconciliation, metadata enrichment, uptime calculation (260 lines, 63% coverage, 13 tests)
 - ✅ Plan 04: Container lifecycle operations (stop, delete, status, logs) with 10s graceful shutdown, workspace preservation (98 lines, excellent coverage, 30 tests)
 - ✅ Plan 05: exec() with auto-restart, complete CLI commands (create/list/stop/delete/exec), mc <case_number> quick access (193 lines CLI, 100% CLI coverage, 31 tests)
+
+**Phase 12 In Progress (2/3 plans):**
+- ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -169,6 +174,14 @@ Progress: [███████████░░░░░░░░░] 67% (10
 - Workspace resolution strategy: Quick access uses ConfigManager base_directory + case_number (Phase 11 baseline, Phase 10 will enhance with Salesforce customer data)
 - CLI commands helper: _get_manager() helper avoids duplication across command functions (instantiates ContainerManager with correct dependencies)
 
+**Key Decisions (Phase 12):**
+
+**Plan 02:**
+- BASH_ENV over --rcfile: Use BASH_ENV environment variable for bashrc injection (works in both interactive and non-interactive contexts)
+- Conditional sections: Summary and next steps sections only displayed if metadata present (cleaner banner for minimal metadata)
+- Comments excluded: Comments field stored in metadata but NOT displayed in banner per CONTEXT.md requirements
+- Prefix alignment: Text wrapping includes prefix length calculation for multi-line field alignment
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -188,9 +201,9 @@ Progress: [███████████░░░░░░░░░] 67% (10
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Phase 11 complete and verified (Container lifecycle orchestration)
-Resume: Run `/gsd:plan-phase 12` to begin Phase 12 planning (Terminal Attachment & Exec)
+Stopped at: Completed 12-02-PLAN.md (Shell customization & banner generation)
+Resume: Continue Phase 12 with remaining plans (terminal launchers, integration)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (Phase 11 complete)*
+*Last updated: 2026-01-26 (Phase 12 Plan 02 complete)*
