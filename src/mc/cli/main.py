@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 from typing import Literal, cast
-from mc.cli.commands import case, other
+from mc.cli.commands import case, container, other
 from mc.config.manager import ConfigManager
 from mc.config.wizard import run_setup_wizard
 from mc.exceptions import MCError
@@ -48,6 +48,12 @@ def check_legacy_env_vars() -> None:
 def main() -> ExitCode:
     """Main CLI entry point."""
     try:
+        # Check for quick access pattern (mc <case_number>) before parsing
+        if len(sys.argv) > 1 and sys.argv[1].isdigit() and len(sys.argv[1]) == 8:
+            # Quick access: mc <case_number>
+            # Insert 'quick_access' as the command
+            sys.argv = [sys.argv[0], 'quick_access'] + sys.argv[1:]
+
         # Create argument parser early to handle --version/--help without config
         parser = argparse.ArgumentParser(prog='mc', description='MC CLI tool')
         parser.add_argument('--version', action='version',
@@ -91,6 +97,29 @@ def main() -> ExitCode:
         parser_go = subparsers.add_parser('go', help='Print or launch Salesforce case URL')
         parser_go.add_argument('case_number', type=str, help='Case number')
         parser_go.add_argument('-l', '--launch', action='store_true', help='Launch URL in Chrome')
+
+        # Container subcommand
+        container_parser = subparsers.add_parser('container', help='Container lifecycle operations')
+        container_subparsers = container_parser.add_subparsers(dest='container_command')
+
+        container_subparsers.add_parser('list', help='List all containers')
+
+        create_parser = container_subparsers.add_parser('create', help='Create container')
+        create_parser.add_argument('case_number', help='Case number')
+
+        stop_parser = container_subparsers.add_parser('stop', help='Stop container')
+        stop_parser.add_argument('case_number', help='Case number')
+
+        delete_parser = container_subparsers.add_parser('delete', help='Delete container')
+        delete_parser.add_argument('case_number', help='Case number')
+
+        exec_parser = container_subparsers.add_parser('exec', help='Execute command in container')
+        exec_parser.add_argument('case_number', help='Case number')
+        exec_parser.add_argument('command', nargs='+', help='Command to execute')
+
+        # Quick access subcommand (hidden, used via mc <case_number>)
+        quick_parser = subparsers.add_parser('quick_access', help=argparse.SUPPRESS)
+        quick_parser.add_argument('case_number', type=str, help='Case number')
 
         # Parse arguments (--version/--help exit here, before config check)
         args = parser.parse_args()
@@ -139,6 +168,21 @@ def main() -> ExitCode:
             other.ls(args.uid, show_all=args.all)
         elif args.command == 'go':
             other.go(args.case_number, launch=args.launch)
+        elif args.command == 'container':
+            if args.container_command == 'list':
+                container.list_containers(args)
+            elif args.container_command == 'create':
+                container.create(args)
+            elif args.container_command == 'stop':
+                container.stop(args)
+            elif args.container_command == 'delete':
+                container.delete(args)
+            elif args.container_command == 'exec':
+                container.exec_command(args)
+            else:
+                container_parser.print_help()
+        elif args.command == 'quick_access':
+            container.quick_access(args)
         else:
             parser.print_help()
 
