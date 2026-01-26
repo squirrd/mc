@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 10 of 13 (Salesforce Integration & Case Resolution)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-01-26 - Phase 9 complete (Podman integration verified)
+Plan: 01 of 03 complete
+Status: In progress
+Last activity: 2026-01-26 - Completed 10-01-PLAN.md (Salesforce API client integration)
 
-Progress: [█████████░░░░░░░░░░░] 42% (10 of 24 total plans complete across all milestones)
+Progress: [█████████░░░░░░░░░░░] 46% (11 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,14 +40,16 @@ Progress: [█████████░░░░░░░░░░░] 42% (10
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 2
+- Plans completed: 3
 - Phase 9 complete (2/2 plans)
+- Phase 10 in progress (1/3 plans)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
+| 10 (Salesforce Integration & Case Resolution) | 1 | 10min | 10min |
 
 ## Accumulated Context
 
@@ -77,6 +79,9 @@ Progress: [█████████░░░░░░░░░░░] 42% (10
 - ✅ Plan 02: PodmanClient wrapper with lazy connection, retry logic (3 attempts, exponential backoff), platform-specific error messages (187 lines, 91% test coverage)
 - All success criteria met, 8/8 must-haves verified, INFRA-01/03/04 requirements complete
 
+**Phase 10 Progress (1/3 plans):**
+- ✅ Plan 01: SalesforceAPIClient with SOQL queries, automatic token refresh, rate limiting (71 lines, 97% test coverage, 16 tests)
+
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
 - Phase 10: Salesforce API integration, caching, token refresh
@@ -98,6 +103,14 @@ Progress: [█████████░░░░░░░░░░░] 42% (10
 - Platform-specific remediation: Error messages suggest 'podman machine start' (macOS) or 'dnf install podman' (Linux)
 - Type safety: Added type: ignore for podman-py untyped methods while maintaining strict mypy compliance
 
+**Key Decisions (Phase 10):**
+
+**Plan 01:**
+- Proactive token refresh: Refresh 5 minutes before 2-hour expiry (prevents mid-operation auth failures)
+- Read-only config mount: Containers access host config via read-only mount (prevents corruption)
+- Retry rate limits only: Retry 429 errors but fail fast on 401/403 (auth errors are permanent)
+- simple-salesforce library: Use simple-salesforce for OAuth2 session management (don't hand-roll token requests)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -117,9 +130,9 @@ Progress: [█████████░░░░░░░░░░░] 42% (10
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Phase 9 complete and verified (Podman integration foundation)
-Resume: Run `/gsd:plan-phase 10` to begin Phase 10 planning (Salesforce integration)
+Stopped at: Completed 10-01-PLAN.md (Salesforce API client integration)
+Resume: Continue Phase 10 with next plan (Case metadata caching or workspace path resolution)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (Phase 9 completion)*
+*Last updated: 2026-01-26 (10-01 completion)*
