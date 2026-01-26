@@ -1,16 +1,12 @@
-"""Terminal customization for containerized environments.
+"""Terminal launcher abstraction for MC CLI."""
 
-This module provides shell customization for MC containers, including
-custom bashrc generation with welcome banners and helper functions.
-"""
-
-from mc.terminal.banner import format_field, generate_banner
-from mc.terminal.shell import generate_bashrc, get_bashrc_path, write_bashrc
+from mc.terminal.detector import detect_terminal, find_available_terminal
+from mc.terminal.launcher import LaunchOptions, TerminalLauncher, get_launcher
 
 __all__ = [
-    "format_field",
-    "generate_banner",
-    "generate_bashrc",
-    "get_bashrc_path",
-    "write_bashrc",
+    "TerminalLauncher",
+    "LaunchOptions",
+    "get_launcher",
+    "detect_terminal",
+    "find_available_terminal",
 ]
