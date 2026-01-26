@@ -1,7 +1,7 @@
 """Podman client wrapper with lazy connection and retry logic."""
 
 import time
-from typing import Callable, Optional, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 import podman
 
@@ -111,15 +111,18 @@ class PodmanClient:
             ensure_podman_ready(self._platform_type)
 
             # Get socket path based on platform
+            socket_path: Optional[str]
             if self._socket_path:
                 socket_path = self._socket_path
             else:
                 socket_path = get_socket_path(self._platform_type)
 
             # Construct URI
-            uri: Optional[str] = None
+            uri: Optional[str]
             if socket_path:
                 uri = f"unix://{socket_path}"
+            else:
+                uri = None
 
             # Connect with retry logic
             def _connect() -> podman.PodmanClient:
@@ -163,25 +166,30 @@ class PodmanClient:
         except Exception:
             return False
 
-    def get_version(self) -> dict:
+    def get_version(self) -> Dict[str, Any]:
         """
         Get Podman version information.
 
         Returns:
             dict: Version information including API version, Podman version, OS, etc.
         """
-        return self.client.version()
+        return self.client.version()  # type: ignore[no-any-return, no-untyped-call]
 
     def close(self) -> None:
         """Close Podman connection if open."""
         if self._client is not None:
-            self._client.close()
+            self._client.close()  # type: ignore[no-untyped-call]
             self._client = None
 
     def __enter__(self) -> 'PodmanClient':
         """Context manager entry - return self for use in with statement."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any]
+    ) -> None:
         """Context manager exit - close connection."""
         self.close()
