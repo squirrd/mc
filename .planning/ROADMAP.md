@@ -106,10 +106,14 @@ Plans:
   6. Stopped containers auto-restart on access
   7. State reconciles correctly after external Podman operations (no orphaned metadata)
   8. Container volumes use UID/GID mapping (--userns=keep-id) for correct host user permissions
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- TBD
+- [ ] 11-01-PLAN.md — SQLite state management with WAL mode and reconciliation
+- [ ] 11-02-PLAN.md — Container creation with volume mounting and UID/GID mapping
+- [ ] 11-03-PLAN.md — Container listing with formatted table output
+- [ ] 11-04-PLAN.md — Container lifecycle operations (stop, delete, status, logs)
+- [ ] 11-05-PLAN.md — Command execution with auto-restart and CLI integration
 
 ### Phase 12: Terminal Attachment & Exec
 **Goal**: Auto-open terminal windows to containerized workspaces on case access
@@ -160,7 +164,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 8. Type Safety & Modernization | v1.0 | 1/1 | Complete | 2026-01-22 |
 | 9. Container Architecture & Podman Integration | v2.0 | 2/2 | Complete | 2026-01-26 |
 | 10. Salesforce Integration & Case Resolution | v2.0 | 0/3 | Ready to execute | - |
-| 11. Container Lifecycle & State Management | v2.0 | 0/TBD | Not started | - |
+| 11. Container Lifecycle & State Management | v2.0 | 0/5 | Ready to execute | - |
 | 12. Terminal Attachment & Exec | v2.0 | 0/TBD | Not started | - |
 | 13. Container Image & Backwards Compatibility | v2.0 | 0/TBD | Not started | - |
 
@@ -168,4 +172,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-01-26 (scope reduced: OpenShift tools deferred to v2.1+)*
+*Last updated: 2026-01-26 (Phase 11 planned: 5 plans)*
