@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: 2 of 3 complete
-Status: In progress
-Last activity: 2026-01-26 - Completed 11-02-PLAN.md (Container Creation Orchestration)
+Plan: 3 of 3 complete
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 11-03-PLAN.md (Container List Operation)
 
-Progress: [█████████░░░░░░░░░░░] 62% (15 of 24 total plans complete across all milestones)
+Progress: [██████████░░░░░░░░░░] 67% (16 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,10 +40,10 @@ Progress: [█████████░░░░░░░░░░░] 62% (15
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 7
+- Plans completed: 8
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
-- Phase 11 in progress (2/3 plans)
+- Phase 11 complete (3/3 plans)
 
 **By Phase:**
 
@@ -51,7 +51,7 @@ Progress: [█████████░░░░░░░░░░░] 62% (15
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
-| 11 (Container Lifecycle & State Management) | 2 | 11min | 5.5min |
+| 11 (Container Lifecycle & State Management) | 3 | 21min | 7min |
 
 ## Accumulated Context
 
@@ -86,9 +86,10 @@ Progress: [█████████░░░░░░░░░░░] 62% (15
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 - ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
 
-**Phase 11 In Progress (2/3 plans):**
+**Phase 11 Complete (3/3 plans) — VERIFIED:**
 - ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
 - ✅ Plan 02: ContainerManager with create() orchestration, auto-restart pattern, workspace auto-creation, userns_mode=keep-id (259 lines, 85%+ coverage, 14 tests)
+- ✅ Plan 03: ContainerManager.list() with state reconciliation, metadata enrichment, uptime calculation (260 lines, 63% coverage, 13 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -146,7 +147,13 @@ Progress: [█████████░░░░░░░░░░░] 62% (15
 - Workspace auto-creation: Create workspace directory before mount with exist_ok=True (prevents mount failures when directory missing)
 - Non-fatal reconciliation: Reconciliation failures print warning but don't block operations (degraded mode for offline scenarios)
 - Cleanup on state failure: If state persistence fails, stop and remove container to prevent orphaned containers (all-or-nothing consistency)
-- Exception handling pattern: Wrap podman-py exceptions in RuntimeError with helpful messages (consistent error interface)
+
+**Plan 03:**
+- Reconcile before listing: Call _reconcile() before querying containers to detect external deletions (ensures list accuracy)
+- Sort by created_at: Sort containers newest-first by state database timestamp (better UX for developers working on recent cases)
+- Missing metadata handling: Return "N/A" for workspace_path and "Unknown" for created_at when container not in state (edge case - shouldn't happen with proper create flow)
+- Uptime format: Human-readable format prioritizes larger units (days > hours > minutes > seconds) for readability
+- Empty uptime for stopped: Only running containers show uptime (stopped/exited containers have empty string)
 
 ### Pending Todos
 
@@ -167,9 +174,9 @@ Progress: [█████████░░░░░░░░░░░] 62% (15
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 11-02-PLAN.md (Container Creation Orchestration)
-Resume: Continue with 11-03 (Container list, stop, delete operations)
+Stopped at: Completed 11-03-PLAN.md (Container List Operation)
+Resume: Phase 11 complete. Continue with Phase 12 planning (Terminal Automation)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (11-02 completion)*
+*Last updated: 2026-01-26 (11-03 completion)*
