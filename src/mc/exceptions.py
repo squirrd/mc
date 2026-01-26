@@ -174,3 +174,67 @@ class FileOperationError(MCError):
     """
 
     exit_code = 74  # EX_IOERR from sysexits.h
+
+
+class SalesforceAPIError(APIError):
+    """Salesforce API error with context-specific suggestions.
+
+    Raised when Salesforce API operations fail, providing actionable
+    suggestions based on the HTTP status code.
+
+    Attributes:
+        status_code: HTTP status code from the response
+    """
+
+    def __init__(self, message: str, suggestion: str | None = None) -> None:
+        """Initialize SalesforceAPIError.
+
+        Args:
+            message: Human-readable error message
+            suggestion: Optional suggestion for fixing the error
+        """
+        super().__init__(message, suggestion)
+        self.status_code: int | None = None
+
+    @classmethod
+    def from_status_code(cls, status_code: int, message: str) -> 'SalesforceAPIError':
+        """Create SalesforceAPIError from status code with helpful message.
+
+        Maps common HTTP status codes to user-friendly error messages
+        with actionable suggestions.
+
+        Args:
+            status_code: HTTP status code
+            message: Base error message
+
+        Returns:
+            SalesforceAPIError instance with appropriate message and status code
+        """
+        status_messages = {
+            401: "Check: SF_USERNAME, SF_PASSWORD, and SF_SECURITY_TOKEN in config",
+            403: "Check: User has Case read permissions in Salesforce",
+            404: "Case not found. Check: Case number is correct",
+            429: "Rate limited. Try: Wait a moment and retry",
+            500: "Salesforce server error. Try: Retry in a few minutes",
+            503: "Salesforce temporarily unavailable. Try: Retry in a few minutes"
+        }
+
+        suggestion = status_messages.get(status_code)
+        if suggestion:
+            error = cls(f"HTTP {status_code}: {message}", suggestion)
+        else:
+            error = cls(f"HTTP {status_code}: {message}")
+
+        error.status_code = status_code
+        return error
+
+
+class ConfigError(MCError):
+    """Configuration error.
+
+    Raised when configuration validation or loading fails.
+
+    Exit code 78 (EX_CONFIG): Configuration error.
+    """
+
+    exit_code = 78  # EX_CONFIG from sysexits.h
