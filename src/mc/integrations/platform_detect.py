@@ -141,7 +141,7 @@ def get_socket_path(platform_type: str) -> Optional[str]:
         raise ValueError(f"Unsupported platform: {platform_type}")
 
 
-def check_podman_version(warn_threshold: int = 3, fail_threshold: int = 7) -> dict:
+def check_podman_version(warn_threshold: int = 3, fail_threshold: int = 7) -> dict[str, Optional[int] | str]:
     """
     Check Podman version compatibility.
 
