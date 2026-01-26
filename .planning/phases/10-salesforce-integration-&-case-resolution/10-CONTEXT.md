@@ -18,18 +18,17 @@ Query Red Hat Support Case API for case metadata (customer name, case summary, s
 - **Reuse workspace path logic**: Existing WorkspaceManager and shorten_and_format() for path construction
 - **Claude's discretion**: Determine optimal controller/agent split for API integration
 
-### Cache Behavior (Activity-Aware)
-- **Active terminal**: 5-10 minute TTL while terminal has shell keystroke activity
-- **Inactive terminal**: Pause cache updates after 30 minutes of inactivity
-- **Background auto-refresh**: Automatically refresh cache during active periods
-- **Refresh failure handling**: Notify user immediately if background refresh fails (network error, API down)
-- **Cache storage location**: Claude decides between host filesystem (~/.mc/cache) or SQLite state database
+### Cache Behavior (Fixed TTL)
+- **TTL**: Fixed 5-minute cache TTL for case metadata
+- **Background auto-refresh**: Automatically refresh cache every 4 minutes (before TTL expires)
+- **Refresh failure handling**: Log errors but continue worker (don't block other cache refreshes)
+- **Cache storage location**: SQLite database with WAL mode for concurrent access (~/.mc/cache/case_metadata.db)
 
 ### Token Management
-- **Distribution approach**: Claude decides optimal method to make tokens available to containers
-- **Refresh strategy**: Claude determines proactive vs reactive refresh timing
-- **Storage location**: Claude chooses secure storage (host cache, SQLite, env vars)
-- **Refresh failure UX**: Graceful degradation - allow cached/offline operations, warn about auth issues
+- **Distribution approach**: Mount host config directory into containers read-only
+- **Refresh strategy**: Proactive refresh 5 minutes before 2-hour token expiry
+- **Storage location**: Host config file (~/.mc/config.toml) with secure permissions (0600)
+- **Container access**: Read-only mount of config file, tokens refreshed by host process
 
 ### Case Resolution & Workspace Paths
 - **Path structure**: Same as v1.0 - {base_dir}/{account_name}/{case_number}-{summary}
@@ -38,14 +37,6 @@ Query Red Hat Support Case API for case metadata (customer name, case summary, s
 - **Metadata changes**: Container workspace path pinned at creation time (no auto-updates)
 - **Workspace creation timing**: Lazy creation - workspace created when first accessed, not during container creation
 - **Query operations**: No standalone query commands - metadata only fetched during container operations
-
-### Claude's Discretion
-- API client controller/agent split architecture
-- Cache storage location (filesystem vs SQLite)
-- Token distribution mechanism
-- Token refresh timing (proactive vs reactive)
-- Activity detection implementation details for cache TTL
-- Background refresh notification mechanism
 
 </decisions>
 
@@ -62,7 +53,9 @@ Query Red Hat Support Case API for case metadata (customer name, case summary, s
 <deferred>
 ## Deferred Ideas
 
-None - discussion stayed within phase scope
+- **Activity-aware cache TTL**: Defer to future enhancement - start with fixed 5-minute TTL, add activity detection later if needed
+- **Background refresh failure notifications**: Defer to future enhancement - start with error logging, add notifications later if needed
+- **Cache corruption auto-recovery**: Defer to future enhancement - start with fail-fast on corruption, add recovery later if needed
 
 </deferred>
 
@@ -70,3 +63,4 @@ None - discussion stayed within phase scope
 
 *Phase: 10-salesforce-integration-&-case-resolution*
 *Context gathered: 2026-01-26*
+*Updated: 2026-01-26 (revised to fixed TTL approach)*
