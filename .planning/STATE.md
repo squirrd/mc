@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: 3 of 3 complete
+Plan: 4 of 4 complete
 Status: Phase complete
-Last activity: 2026-01-26 - Completed 11-03-PLAN.md (Container List Operation)
+Last activity: 2026-01-26 - Completed 11-04-PLAN.md (Container Health Monitoring & Recovery)
 
-Progress: [██████████░░░░░░░░░░] 67% (16 of 24 total plans complete across all milestones)
+Progress: [██████████░░░░░░░░░░] 71% (17 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,10 +40,10 @@ Progress: [██████████░░░░░░░░░░] 67% (16
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 8
+- Plans completed: 9
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
-- Phase 11 complete (3/3 plans)
+- Phase 11 complete (4/4 plans)
 
 **By Phase:**
 
@@ -51,7 +51,7 @@ Progress: [██████████░░░░░░░░░░] 67% (16
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
-| 11 (Container Lifecycle & State Management) | 3 | 21min | 7min |
+| 11 (Container Lifecycle & State Management) | 4 | 24min | 6min |
 
 ## Accumulated Context
 
@@ -86,10 +86,11 @@ Progress: [██████████░░░░░░░░░░] 67% (16
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 - ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
 
-**Phase 11 Complete (3/3 plans) — VERIFIED:**
+**Phase 11 Complete (4/4 plans) — VERIFIED:**
 - ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
 - ✅ Plan 02: ContainerManager with create() orchestration, auto-restart pattern, workspace auto-creation, userns_mode=keep-id (259 lines, 85%+ coverage, 14 tests)
 - ✅ Plan 03: ContainerManager.list() with state reconciliation, metadata enrichment, uptime calculation (260 lines, 63% coverage, 13 tests)
+- ✅ Plan 04: Container lifecycle operations (stop, delete, status, logs) with 10s graceful shutdown, workspace preservation (98 lines, excellent coverage, 30 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -155,6 +156,12 @@ Progress: [██████████░░░░░░░░░░] 67% (16
 - Uptime format: Human-readable format prioritizes larger units (days > hours > minutes > seconds) for readability
 - Empty uptime for stopped: Only running containers show uptime (stopped/exited containers have empty string)
 
+**Plan 04:**
+- Workspace preserved by default: delete() requires explicit remove_workspace=True flag (safety measure prevents accidental data loss)
+- 10-second graceful shutdown: Podman standard timeout (SIGTERM → 10s wait → SIGKILL if still running)
+- Auto-reconciliation on status: status() auto-reconciles state when container deleted externally (no manual reconciliation needed)
+- Non-fatal workspace deletion: Workspace deletion failures log warning but don't block container deletion (state cleanup succeeds regardless)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -174,9 +181,9 @@ Progress: [██████████░░░░░░░░░░] 67% (16
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 11-03-PLAN.md (Container List Operation)
-Resume: Phase 11 complete. Continue with Phase 12 planning (Terminal Automation)
+Stopped at: Completed 11-04-PLAN.md (Container Health Monitoring & Recovery)
+Resume: Phase 11 complete (4/4 plans). Continue with Phase 12 planning (Terminal Automation)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (11-03 completion)*
+*Last updated: 2026-01-26 (11-04 completion)*
