@@ -14,6 +14,11 @@ def get_default_config() -> Dict[str, Any]:
         "api": {
             "offline_token": ""
         },
+        "salesforce": {
+            "username": "",
+            "password": "",
+            "security_token": ""
+        },
         "podman": {
             "timeout": 120,
             "retry_attempts": 3,
@@ -42,6 +47,16 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
     if "offline_token" not in config["api"]:
         return False
+
+    # Salesforce config is required
+    if "salesforce" not in config or not isinstance(config["salesforce"], dict):
+        return False
+
+    # Validate required Salesforce fields
+    required_sf_fields = ["username", "password", "security_token"]
+    for field in required_sf_fields:
+        if field not in config["salesforce"]:
+            return False
 
     # Podman config is optional, but if present must have valid structure
     if "podman" in config:
