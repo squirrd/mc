@@ -29,7 +29,7 @@ Requirements for containerization milestone. Each maps to roadmap phases.
 ### Salesforce Integration
 
 - [ ] **SF-01**: Query Salesforce for case metadata (customer name, cluster ID)
-- [ ] **SF-02**: Cache case metadata locally with TTL
+- [ ] **SF-02**: Cache case metadata locally with 5-minute TTL
 - [ ] **SF-03**: Auto-refresh Salesforce access tokens before expiration
 - [ ] **SF-04**: Handle Salesforce rate limits with exponential backoff
 - [ ] **SF-05**: Resolve workspace paths from case metadata
@@ -124,7 +124,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-02 | Phase 11 | Pending |
 | INFRA-03 | Phase 9 | Pending |
 | INFRA-04 | Phase 9 | Pending |
-| INFRA-05 | Phase 9 | Pending |
+| INFRA-05 | Phase 11 | Pending |
 | CONT-01 | Phase 11 | Pending |
 | CONT-02 | Phase 11 | Pending |
 | CONT-03 | Phase 11 | Pending |
@@ -159,12 +159,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Unmapped: 0
 
 **Phase breakdown:**
-- Phase 9: 4 requirements (INFRA-01, INFRA-03, INFRA-04, INFRA-05)
+- Phase 9: 3 requirements (INFRA-01, INFRA-03, INFRA-04)
 - Phase 10: 5 requirements (SF-01, SF-02, SF-03, SF-04, SF-05)
-- Phase 11: 9 requirements (INFRA-02, CONT-01 through CONT-08)
+- Phase 11: 10 requirements (INFRA-02, INFRA-05, CONT-01 through CONT-08)
 - Phase 12: 5 requirements (TERM-01 through TERM-05)
 - Phase 13: 9 requirements (IMG-01, IMG-02, IMG-04 through IMG-07, COMPAT-01 through COMPAT-03)
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 (scope reduced: OpenShift tools deferred to v2.1+)*
+*Last updated: 2026-01-26 (SF-02 clarified: 5-minute TTL)*
