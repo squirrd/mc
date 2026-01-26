@@ -1,5 +1,7 @@
 """Container lifecycle management and orchestration."""
 
+from __future__ import annotations
+
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -257,3 +259,278 @@ class ContainerManager:
         container_list.sort(key=sort_key, reverse=True)
 
         return container_list
+
+    def stop(self, case_number: str, timeout: int = 10) -> bool:
+        """Stop running container gracefully.
+
+        Args:
+            case_number: Case number
+            timeout: Seconds to wait for graceful shutdown before SIGKILL (default: 10)
+
+        Returns:
+            True if container stopped, False if already stopped
+
+        Raises:
+            RuntimeError: If container not found or stop fails
+        """
+        # Get container metadata from state
+        metadata = self.state.get_container(case_number)
+        if not metadata:
+            raise RuntimeError(f"No container found for case {case_number}")
+
+        # Get container from Podman
+        try:
+            container = self.podman.client.containers.get(metadata.container_id)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to get container for case {case_number}: {e}"
+            ) from e
+
+        # Check if already stopped
+        if container.status in ("stopped", "exited"):
+            return False
+
+        # Stop container gracefully
+        try:
+            container.stop(timeout=timeout)  # type: ignore[no-untyped-call]
+            return True
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to stop container for case {case_number}: {e}"
+            ) from e
+
+    def delete(self, case_number: str, remove_workspace: bool = False) -> None:
+        """Delete container and clean up state.
+
+        Workspace is PRESERVED by default (safety measure).
+
+        Args:
+            case_number: Case number
+            remove_workspace: If True, also delete workspace directory (DANGEROUS, default: False)
+
+        Raises:
+            RuntimeError: If container not found or deletion fails
+        """
+        import shutil
+
+        # Get container metadata from state
+        metadata = self.state.get_container(case_number)
+        if not metadata:
+            raise RuntimeError(f"No container found for case {case_number}")
+
+        # Get container from Podman (may be already deleted externally)
+        try:
+            container = self.podman.client.containers.get(metadata.container_id)
+
+            # Stop container if running
+            if container.status not in ("stopped", "exited"):
+                container.stop(timeout=10)  # type: ignore[no-untyped-call]
+
+            # Remove container
+            container.remove()  # type: ignore[no-untyped-call]
+
+        except Exception as e:
+            # Container might have been deleted externally - check if it's NotFound
+            error_str = str(e).lower()
+            if "not found" not in error_str and "no such container" not in error_str:
+                raise RuntimeError(
+                    f"Failed to delete container for case {case_number}: {e}"
+                ) from e
+            # If container not found, continue to clean up state
+
+        # Delete from state database
+        try:
+            self.state.delete_container(case_number)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to delete container state for case {case_number}: {e}"
+            ) from e
+
+        # Delete workspace if requested
+        if remove_workspace:
+            try:
+                if os.path.exists(metadata.workspace_path):
+                    shutil.rmtree(metadata.workspace_path)
+                    print(f"WARNING: Deleted workspace at {metadata.workspace_path}")
+            except OSError as e:
+                # Non-fatal - log warning but don't fail delete operation
+                print(
+                    f"Warning: Failed to delete workspace at {metadata.workspace_path}: {e}"
+                )
+
+        print(f"Deleted container for case {case_number}")
+
+    def status(self, case_number: str) -> dict[str, Any]:
+        """Get container status and metadata.
+
+        Args:
+            case_number: Case number
+
+        Returns:
+            Dictionary with keys:
+            - status: str (running, stopped, exited, missing)
+            - container_id: str | None
+            - workspace_path: str | None
+            - created_at: int | None (Unix timestamp)
+
+        Raises:
+            RuntimeError: If Podman query fails
+        """
+        # Get container metadata from state
+        metadata = self.state.get_container(case_number)
+        if not metadata:
+            return {
+                "status": "missing",
+                "container_id": None,
+                "workspace_path": None,
+                "created_at": None,
+            }
+
+        # Try to get container from Podman
+        try:
+            container = self.podman.client.containers.get(metadata.container_id)
+            return {
+                "status": container.status,
+                "container_id": container.short_id,
+                "workspace_path": metadata.workspace_path,
+                "created_at": metadata.created_at,
+            }
+        except Exception as e:
+            # Container in state but not in Podman - reconcile
+            error_str = str(e).lower()
+            if "not found" in error_str or "no such container" in error_str:
+                self.state.delete_container(case_number)
+                return {
+                    "status": "missing",
+                    "container_id": None,
+                    "workspace_path": None,
+                    "created_at": None,
+                }
+            raise RuntimeError(
+                f"Failed to query container status for case {case_number}: {e}"
+            ) from e
+
+    def logs(self, case_number: str, tail: int = 50, follow: bool = False) -> str:
+        """Get container logs.
+
+        Args:
+            case_number: Case number
+            tail: Number of lines to show (default: 50)
+            follow: If True, stream logs continuously (default: False)
+
+        Returns:
+            Log output as string
+
+        Raises:
+            RuntimeError: If container not found or logs retrieval fails
+        """
+        # Get container metadata from state
+        metadata = self.state.get_container(case_number)
+        if not metadata:
+            raise RuntimeError(f"No container found for case {case_number}")
+
+        # Get container from Podman
+        try:
+            container = self.podman.client.containers.get(metadata.container_id)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to get container for case {case_number}: {e}"
+            ) from e
+
+        # Get logs
+        try:
+            logs = container.logs(
+                stdout=True,
+                stderr=True,
+                timestamps=True,
+                tail=tail,
+                follow=follow,
+            )  # type: ignore[no-untyped-call]
+
+            # Decode bytes to string if necessary
+            if isinstance(logs, bytes):
+                return logs.decode("utf-8")
+            return logs
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to retrieve logs for case {case_number}: {e}"
+            ) from e
+
+    def _get_or_restart(self, case_number: str) -> Any:
+        """Get container, restarting if stopped.
+
+        Args:
+            case_number: Case number
+
+        Returns:
+            Running container instance
+
+        Raises:
+            RuntimeError: If container not found or restart fails
+        """
+        # Get metadata from state
+        metadata = self.state.get_container(case_number)
+        if not metadata:
+            raise RuntimeError(f"No container found for case {case_number}")
+
+        try:
+            # Get container from Podman
+            container = self.podman.client.containers.get(metadata.container_id)
+
+            # Auto-restart if stopped
+            if container.status in ("stopped", "exited"):
+                print(f"Restarting container for case {case_number}...")
+                container.start()  # type: ignore[no-untyped-call]
+
+            return container
+
+        except Exception as e:
+            # Wrap Podman exceptions in RuntimeError
+            if "NotFound" in str(type(e).__name__):
+                raise RuntimeError(f"Container not found for case {case_number}") from e
+            raise RuntimeError(
+                f"Failed to access container for case {case_number}: {e}"
+            ) from e
+
+    def exec(
+        self, case_number: str, command: str | list[str], workdir: str = "/case"
+    ) -> tuple[int, str]:
+        """Execute command inside container, auto-restarting if stopped.
+
+        Args:
+            case_number: Case number
+            command: Command to execute (string or list of args)
+            workdir: Working directory for command (default: /case)
+
+        Returns:
+            Tuple of (exit_code, output)
+            - exit_code: int (0 for success, non-zero for error)
+            - output: str (combined stdout/stderr)
+
+        Raises:
+            RuntimeError: If container not found or exec fails
+        """
+        # Get container, auto-restarting if stopped
+        container = self._get_or_restart(case_number)
+
+        try:
+            # Execute command inside container
+            exit_code, output = container.exec_run(
+                cmd=command,
+                stdout=True,
+                stderr=True,
+                stdin=False,
+                tty=False,
+                workdir=workdir,
+            )
+
+            # Decode output from bytes to string
+            output_str = output.decode("utf-8") if isinstance(output, bytes) else output
+
+            return (exit_code, output_str)
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to execute command in container for case {case_number}: {e}"
+            ) from e
