@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete
 Status: In progress
-Last activity: 2026-01-26 - Completed 11-01-PLAN.md (Container Core State Management)
+Last activity: 2026-01-26 - Completed 11-02-PLAN.md (Container Creation Orchestration)
 
-Progress: [█████████░░░░░░░░░░░] 58% (14 of 24 total plans complete across all milestones)
+Progress: [█████████░░░░░░░░░░░] 62% (15 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,10 +40,10 @@ Progress: [█████████░░░░░░░░░░░] 58% (14
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 6
+- Plans completed: 7
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
-- Phase 11 in progress (1/3 plans)
+- Phase 11 in progress (2/3 plans)
 
 **By Phase:**
 
@@ -51,7 +51,7 @@ Progress: [█████████░░░░░░░░░░░] 58% (14
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
-| 11 (Container Lifecycle & State Management) | 1 | 4min | 4min |
+| 11 (Container Lifecycle & State Management) | 2 | 11min | 5.5min |
 
 ## Accumulated Context
 
@@ -86,8 +86,9 @@ Progress: [█████████░░░░░░░░░░░] 58% (14
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 - ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
 
-**Phase 11 In Progress (1/3 plans):**
+**Phase 11 In Progress (2/3 plans):**
 - ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
+- ✅ Plan 02: ContainerManager with create() orchestration, auto-restart pattern, workspace auto-creation, userns_mode=keep-id (259 lines, 85%+ coverage, 14 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -140,6 +141,13 @@ Progress: [█████████░░░░░░░░░░░] 58% (14
 - Timestamp storage: Store as Unix integers (int(time.time())) for simplicity and cross-platform consistency
 - Connection timeout: 30-second timeout for SQLite connections (conservative for single-user CLI)
 
+**Plan 02:**
+- Auto-restart pattern: Existing stopped/exited containers restart instead of creating duplicates (prevents container proliferation)
+- Workspace auto-creation: Create workspace directory before mount with exist_ok=True (prevents mount failures when directory missing)
+- Non-fatal reconciliation: Reconciliation failures print warning but don't block operations (degraded mode for offline scenarios)
+- Cleanup on state failure: If state persistence fails, stop and remove container to prevent orphaned containers (all-or-nothing consistency)
+- Exception handling pattern: Wrap podman-py exceptions in RuntimeError with helpful messages (consistent error interface)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -159,9 +167,9 @@ Progress: [█████████░░░░░░░░░░░] 58% (14
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 11-01-PLAN.md (Container Core State Management)
-Resume: Continue with 11-02 or 11-03 planning (Container orchestration and CLI commands)
+Stopped at: Completed 11-02-PLAN.md (Container Creation Orchestration)
+Resume: Continue with 11-03 (Container list, stop, delete operations)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (11-01 completion)*
+*Last updated: 2026-01-26 (11-02 completion)*
