@@ -9,10 +9,10 @@ Requirements for containerization milestone. Each maps to roadmap phases.
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Podman integration via podman-py library
+- [x] **INFRA-01**: Podman integration via podman-py library
 - [ ] **INFRA-02**: SQLite state database for container metadata
-- [ ] **INFRA-03**: Platform detection (macOS vs Linux)
-- [ ] **INFRA-04**: Podman machine auto-start on macOS
+- [x] **INFRA-03**: Platform detection (macOS vs Linux)
+- [x] **INFRA-04**: Podman machine auto-start on macOS
 - [ ] **INFRA-05**: Rootless container UID/GID mapping configured
 
 ### Container Lifecycle
