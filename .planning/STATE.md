@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 10 of 13 (Salesforce Integration & Case Resolution)
-Plan: 01 of 03 complete
+Plan: 02 of 03 complete
 Status: In progress
-Last activity: 2026-01-26 - Completed 10-01-PLAN.md (Salesforce API client integration)
+Last activity: 2026-01-26 - Completed 10-02-PLAN.md (SQLite cache with background refresh)
 
-Progress: [█████████░░░░░░░░░░░] 46% (11 of 24 total plans complete across all milestones)
+Progress: [█████████░░░░░░░░░░░] 50% (12 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,16 +40,16 @@ Progress: [█████████░░░░░░░░░░░] 46% (11
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 3
+- Plans completed: 4
 - Phase 9 complete (2/2 plans)
-- Phase 10 in progress (1/3 plans)
+- Phase 10 in progress (2/3 plans)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
-| 10 (Salesforce Integration & Case Resolution) | 1 | 10min | 10min |
+| 10 (Salesforce Integration & Case Resolution) | 2 | 14min | 7min |
 
 ## Accumulated Context
 
@@ -79,8 +79,9 @@ Progress: [█████████░░░░░░░░░░░] 46% (11
 - ✅ Plan 02: PodmanClient wrapper with lazy connection, retry logic (3 attempts, exponential backoff), platform-specific error messages (187 lines, 91% test coverage)
 - All success criteria met, 8/8 must-haves verified, INFRA-01/03/04 requirements complete
 
-**Phase 10 Progress (1/3 plans):**
+**Phase 10 Progress (2/3 plans):**
 - ✅ Plan 01: SalesforceAPIClient with SOQL queries, automatic token refresh, rate limiting (71 lines, 97% test coverage, 16 tests)
+- ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -111,6 +112,13 @@ Progress: [█████████░░░░░░░░░░░] 46% (11
 - Retry rate limits only: Retry 429 errors but fail fast on 401/403 (auth errors are permanent)
 - simple-salesforce library: Use simple-salesforce for OAuth2 session management (don't hand-roll token requests)
 
+**Plan 02:**
+- Separate cache database: ~/.mc/cache/case_metadata.db (not integrated into state.db) - different access patterns
+- 5-minute TTL: Reduced from 30 minutes to balance freshness with API rate limiting
+- 4-minute refresh interval: Refresh before 5-minute TTL expires to ensure cache stays fresh
+- Error handling: Log refresh failures but continue worker (one case failure shouldn't block all refreshes)
+- WAL mode: Enable Write-Ahead Logging for concurrent readers while background worker writes
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -130,9 +138,9 @@ Progress: [█████████░░░░░░░░░░░] 46% (11
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 10-01-PLAN.md (Salesforce API client integration)
-Resume: Continue Phase 10 with next plan (Case metadata caching or workspace path resolution)
+Stopped at: Completed 10-02-PLAN.md (SQLite cache with background refresh)
+Resume: Continue Phase 10 with next plan (workspace path resolution or case metadata integration)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (10-01 completion)*
+*Last updated: 2026-01-26 (10-02 completion)*
