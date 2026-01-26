@@ -133,11 +133,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-06 | Phase 11 | Pending |
 | CONT-07 | Phase 11 | Pending |
 | CONT-08 | Phase 11 | Pending |
-| SF-01 | Phase 10 | Pending |
-| SF-02 | Phase 10 | Pending |
-| SF-03 | Phase 10 | Pending |
-| SF-04 | Phase 10 | Pending |
-| SF-05 | Phase 10 | Pending |
+| SF-01 | Phase 10 | Complete |
+| SF-02 | Phase 10 | Complete |
+| SF-03 | Phase 10 | Complete |
+| SF-04 | Phase 10 | Complete |
+| SF-05 | Phase 10 | Complete |
 | TERM-01 | Phase 12 | Pending |
 | TERM-02 | Phase 12 | Pending |
 | TERM-03 | Phase 12 | Pending |
