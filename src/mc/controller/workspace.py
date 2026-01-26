@@ -2,10 +2,14 @@
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from mc.exceptions import WorkspaceError
 from mc.utils.formatters import shorten_and_format
 from mc.utils.file_ops import create_file, create_directory
+
+if TYPE_CHECKING:
+    from mc.controller.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -136,3 +140,31 @@ class WorkspaceManager:
             if file_path.name == 'attach':
                 return file_path
         return None
+
+    @classmethod
+    def from_case_number(
+        cls,
+        case_number: str,
+        cache_manager: "CacheManager",
+        base_dir: Path
+    ) -> "WorkspaceManager":
+        """Create WorkspaceManager from case number using Salesforce metadata.
+
+        Convenience method for creating WorkspaceManager when you have a case
+        number but need to fetch customer name and case summary from Salesforce.
+
+        Args:
+            case_number: Case number to resolve
+            cache_manager: CacheManager for fetching case metadata
+            base_dir: Base directory for workspaces
+
+        Returns:
+            WorkspaceManager instance with Salesforce-sourced metadata
+
+        Raises:
+            WorkspaceError: If case metadata missing required fields
+        """
+        from mc.controller.case_resolver import CaseResolver
+
+        resolver = CaseResolver(cache_manager, base_dir)
+        return resolver.get_workspace_manager(case_number)
