@@ -1,156 +1,243 @@
-"""Case metadata caching utilities."""
+"""Case metadata caching utilities with SQLite backend."""
 
 import json
-import os
+import sqlite3
 import time
 import logging
-from typing import Any, cast
+from pathlib import Path
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 logger = logging.getLogger(__name__)
 
 
 # Cache configuration
-CACHE_DIR = os.path.expanduser("~/.mc/cache")
-CACHE_TTL_SECONDS = 1800  # 30 minutes
+CACHE_DIR = Path.home() / ".mc" / "cache"
+CACHE_TTL_SECONDS = 300  # 5 minutes (per REQUIREMENTS.md SF-02)
 
 
-def get_cache_path(case_number: str) -> str:
+class CaseMetadataCache:
+    """SQLite-based cache with concurrent access support.
+
+    Uses Write-Ahead Logging (WAL) mode for concurrent reads during
+    background refresh operations. Provides atomic upserts and thread-safe
+    connection management.
+
+    Attributes:
+        db_path: Path to SQLite database file
     """
-    Get cache file path for a case number.
 
-    Args:
-        case_number: Case number
+    def __init__(self, cache_dir: Path | None = None) -> None:
+        """Initialize SQLite cache.
 
-    Returns:
-        str: Path to cache file
-    """
-    return os.path.join(CACHE_DIR, f"case_{case_number}.json")
+        Args:
+            cache_dir: Directory for cache database (default: ~/.mc/cache)
+        """
+        if cache_dir is None:
+            cache_dir = CACHE_DIR
 
+        self.cache_dir = Path(cache_dir)
+        self.db_path = self.cache_dir / "case_metadata.db"
 
-def is_cache_expired(cached_at: float, ttl_seconds: int = CACHE_TTL_SECONDS) -> bool:
-    """
-    Check if cache is expired.
+        # Ensure cache directory exists with secure permissions
+        self.cache_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
 
-    Args:
-        cached_at: Unix timestamp when data was cached
-        ttl_seconds: Cache TTL in seconds (default: CACHE_TTL_SECONDS)
+        # Initialize database schema
+        self._init_db()
 
-    Returns:
-        bool: True if cache is expired
-    """
-    current_time = time.time()
-    return current_time >= (cached_at + ttl_seconds)
+    def _init_db(self) -> None:
+        """Initialize SQLite database with WAL mode for concurrent access."""
+        with self._get_connection() as conn:
+            # Enable WAL mode for concurrent readers + single writer
+            conn.execute("PRAGMA journal_mode=WAL")
 
+            # Create schema
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS case_cache (
+                    case_number TEXT PRIMARY KEY,
+                    case_data TEXT NOT NULL,
+                    account_data TEXT NOT NULL,
+                    cached_at REAL NOT NULL,
+                    ttl_seconds INTEGER NOT NULL
+                )
+            """)
 
-def load_cache(case_number: str) -> dict[str, Any] | None:
-    """
-    Load cached case metadata if it exists.
+            logger.debug("Initialized cache database at %s", self.db_path)
 
-    Args:
-        case_number: Case number
+    @contextmanager
+    def _get_connection(self) -> Iterator[sqlite3.Connection]:
+        """Thread-safe connection context manager.
 
-    Returns:
-        dict or None: Cache dict with data and cached_at if valid,
-                     None if cache doesn't exist or is corrupted
-    """
-    cache_path = get_cache_path(case_number)
-    if not os.path.exists(cache_path):
-        return None
+        Yields:
+            sqlite3.Connection: Database connection
 
-    try:
-        with open(cache_path, 'r') as f:
-            cache = json.load(f)
-        return cast(dict[str, Any], cache)
-    except (json.JSONDecodeError, IOError) as e:
-        # Corrupted cache, delete it
-        logger.debug("Corrupted cache file, deleting: %s", e)
+        Raises:
+            sqlite3.OperationalError: If connection fails after retry
+        """
+        conn = sqlite3.connect(str(self.db_path), timeout=5.0)
         try:
-            os.remove(cache_path)
-        except OSError:
-            pass
-        return None
+            yield conn
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            # Retry once on lock timeout
+            logger.warning("Database operation failed, retrying: %s", e)
+            conn.rollback()
+            time.sleep(0.1)
+            try:
+                yield conn
+                conn.commit()
+            except sqlite3.OperationalError:
+                logger.error("Database operation failed after retry")
+                conn.rollback()
+                raise
+        finally:
+            conn.close()
+
+    def get(self, case_number: str) -> tuple[dict[str, Any], dict[str, Any], bool]:
+        """Get case metadata from cache.
+
+        Args:
+            case_number: Case number
+
+        Returns:
+            tuple: (case_data, account_data, was_cached)
+                - case_data: Case metadata dict (empty if not cached)
+                - account_data: Account metadata dict (empty if not cached)
+                - was_cached: True if data came from cache and wasn't expired
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT case_data, account_data, cached_at, ttl_seconds "
+                "FROM case_cache WHERE case_number = ?",
+                (case_number,)
+            )
+            row = cursor.fetchone()
+
+            if row:
+                case_data_json, account_data_json, cached_at, ttl_seconds = row
+
+                # Check expiry
+                if not self._is_expired(cached_at, ttl_seconds):
+                    logger.debug("Cache hit for case %s", case_number)
+                    return (
+                        json.loads(case_data_json),
+                        json.loads(account_data_json),
+                        True
+                    )
+                else:
+                    logger.debug("Cache expired for case %s", case_number)
+
+        # Cache miss or expired
+        return {}, {}, False
+
+    def set(
+        self,
+        case_number: str,
+        case_data: dict[str, Any],
+        account_data: dict[str, Any],
+        ttl_seconds: int = CACHE_TTL_SECONDS
+    ) -> None:
+        """Cache case metadata with TTL.
+
+        Uses INSERT OR REPLACE for atomic upserts.
+
+        Args:
+            case_number: Case number
+            case_data: Case metadata dict
+            account_data: Account metadata dict
+            ttl_seconds: Cache TTL in seconds (default: 300 = 5 minutes)
+        """
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO case_cache
+                (case_number, case_data, account_data, cached_at, ttl_seconds)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    case_number,
+                    json.dumps(case_data),
+                    json.dumps(account_data),
+                    time.time(),
+                    ttl_seconds
+                )
+            )
+
+            logger.debug("Cached metadata for case %s", case_number)
+
+    def _is_expired(self, cached_at: float, ttl_seconds: int) -> bool:
+        """Check if cache entry is expired.
+
+        Args:
+            cached_at: Unix timestamp when data was cached
+            ttl_seconds: Cache TTL in seconds
+
+        Returns:
+            bool: True if cache is expired
+        """
+        current_time = time.time()
+        return current_time >= (cached_at + ttl_seconds)
+
+    def list_all(self) -> list[str]:
+        """List all cached case numbers.
+
+        Returns:
+            list: List of cached case numbers
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute("SELECT case_number FROM case_cache")
+            return [row[0] for row in cursor.fetchall()]
+
+    def delete(self, case_number: str) -> None:
+        """Delete cache entry for case.
+
+        Args:
+            case_number: Case number
+        """
+        with self._get_connection() as conn:
+            conn.execute(
+                "DELETE FROM case_cache WHERE case_number = ?",
+                (case_number,)
+            )
+            logger.debug("Deleted cache for case %s", case_number)
 
 
-def cache_case_metadata(case_number: str, case_details: dict[str, Any], account_details: dict[str, Any]) -> None:
-    """
-    Save case metadata to cache with timestamp.
+# Backward compatibility: v1.0 function signature
+def get_case_metadata(
+    case_number: str,
+    api_client: Any,
+    force_refresh: bool = False
+) -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """Get case metadata from cache or API (v1.0 compatibility function).
+
+    This function maintains backward compatibility with v1.0 code that
+    expects JSON file-based caching. In v2.0, use CaseMetadataCache directly
+    for better control over cache lifecycle.
 
     Args:
         case_number: Case number
-        case_details: Case details dict from API
-        account_details: Account details dict from API
-    """
-    # Create cache structure
-    cache = {
-        'data': {
-            'case_details': case_details,
-            'account_details': account_details
-        },
-        'cached_at': time.time()
-    }
-
-    # Ensure cache directory exists with secure permissions
-    os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
-
-    # Write file atomically with secure permissions
-    cache_path = get_cache_path(case_number)
-    fd = os.open(cache_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        json.dump(cache, f, indent=2)
-
-    logger.debug("Cached metadata for case %s", case_number)
-
-
-def get_cached_age_minutes(case_number: str) -> int | None:
-    """
-    Get age of cached data in minutes.
-
-    Args:
-        case_number: Case number
-
-    Returns:
-        int or None: Age in minutes if cache exists, None otherwise
-    """
-    cache = load_cache(case_number)
-    if not cache or 'cached_at' not in cache:
-        return None
-
-    age_seconds = time.time() - cache['cached_at']
-    return int(age_seconds / 60)
-
-
-def get_case_metadata(case_number: str, api_client: Any, force_refresh: bool = False) -> tuple[dict[str, Any], dict[str, Any], bool]:
-    """
-    Get case metadata from cache or API.
-
-    Checks cache first and returns cached data if within TTL window.
-    Otherwise fetches fresh data from API and updates cache.
-
-    Args:
-        case_number: Case number
-        api_client: RedHatAPIClient instance
+        api_client: API client with fetch_case_details() and fetch_account_details()
         force_refresh: If True, bypass cache and fetch from API
 
     Returns:
         tuple: (case_details, account_details, was_cached)
-            - case_details: Case details dict
-            - account_details: Account details dict
-            - was_cached: True if data came from cache
     """
+    cache = CaseMetadataCache()
+
     # Check cache unless force refresh
     if not force_refresh:
-        cache = load_cache(case_number)
-        if cache and not is_cache_expired(cache['cached_at']):
-            logger.debug("Cache hit for case %s (age: %dm)", case_number, get_cached_age_minutes(case_number))
-            data = cache['data']
-            return data['case_details'], data['account_details'], True
+        case_data, account_data, was_cached = cache.get(case_number)
+        if was_cached:
+            return case_data, account_data, True
 
     # Cache miss or expired - fetch from API
     logger.debug("Cache miss for case %s, fetching from API", case_number)
     case_details = api_client.fetch_case_details(case_number)
-    account_details = api_client.fetch_account_details(case_details['accountNumberRef'])
+    account_details = api_client.fetch_account_details(
+        case_details['accountNumberRef']
+    )
 
     # Update cache
-    cache_case_metadata(case_number, case_details, account_details)
+    cache.set(case_number, case_details, account_details)
 
     return case_details, account_details, False
