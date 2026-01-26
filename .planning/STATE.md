@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 10 of 13 (Salesforce Integration & Case Resolution)
-Plan: 02 of 03 complete
-Status: In progress
-Last activity: 2026-01-26 - Completed 10-02-PLAN.md (SQLite cache with background refresh)
+Plan: 03 of 03 complete
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 10-03-PLAN.md (Case resolution & workspace integration)
 
-Progress: [█████████░░░░░░░░░░░] 50% (12 of 24 total plans complete across all milestones)
+Progress: [█████████░░░░░░░░░░░] 54% (13 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,16 +40,16 @@ Progress: [█████████░░░░░░░░░░░] 50% (12
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 4
+- Plans completed: 5
 - Phase 9 complete (2/2 plans)
-- Phase 10 in progress (2/3 plans)
+- Phase 10 complete (3/3 plans)
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
-| 10 (Salesforce Integration & Case Resolution) | 2 | 14min | 7min |
+| 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 
 ## Accumulated Context
 
@@ -79,9 +79,10 @@ Progress: [█████████░░░░░░░░░░░] 50% (12
 - ✅ Plan 02: PodmanClient wrapper with lazy connection, retry logic (3 attempts, exponential backoff), platform-specific error messages (187 lines, 91% test coverage)
 - All success criteria met, 8/8 must-haves verified, INFRA-01/03/04 requirements complete
 
-**Phase 10 Progress (2/3 plans):**
+**Phase 10 Complete (3/3 plans) — VERIFIED:**
 - ✅ Plan 01: SalesforceAPIClient with SOQL queries, automatic token refresh, rate limiting (71 lines, 97% test coverage, 16 tests)
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
+- ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -119,6 +120,11 @@ Progress: [█████████░░░░░░░░░░░] 50% (12
 - Error handling: Log refresh failures but continue worker (one case failure shouldn't block all refreshes)
 - WAL mode: Enable Write-Ahead Logging for concurrent readers while background worker writes
 
+**Plan 03:**
+- Metadata validation with fallbacks: case_summary falls back to Subject, account_name falls back to account_data.name
+- Workspace path pinning: Pass metadata to WorkspaceManager constructor (no re-queries, stable paths)
+- Circular import avoidance: Import CaseResolver inside WorkspaceManager.from_case_number() method, use TYPE_CHECKING for type hints
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -138,9 +144,9 @@ Progress: [█████████░░░░░░░░░░░] 50% (12
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 10-02-PLAN.md (SQLite cache with background refresh)
-Resume: Continue Phase 10 with next plan (workspace path resolution or case metadata integration)
+Stopped at: Completed 10-03-PLAN.md (Case resolution & workspace integration)
+Resume: Phase 10 complete. Ready for Phase 11 (Container lifecycle orchestration)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (10-02 completion)*
+*Last updated: 2026-01-26 (10-03 completion, Phase 10 complete)*
