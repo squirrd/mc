@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 11 of 13 (Container Lifecycle & State Management)
-Plan: 4 of 4 complete
+Plan: 5 of 5 complete
 Status: Phase complete
-Last activity: 2026-01-26 - Completed 11-04-PLAN.md (Container Health Monitoring & Recovery)
+Last activity: 2026-01-26 - Completed 11-05-PLAN.md (Container Command Execution & CLI Integration)
 
-Progress: [██████████░░░░░░░░░░] 71% (17 of 24 total plans complete across all milestones)
+Progress: [██████████░░░░░░░░░░] 75% (18 of 24 total plans complete across all milestones)
 
 ## Performance Metrics
 
@@ -40,10 +40,10 @@ Progress: [██████████░░░░░░░░░░] 71% (17
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 9
+- Plans completed: 10
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
-- Phase 11 complete (4/4 plans)
+- Phase 11 complete (5/5 plans)
 
 **By Phase:**
 
@@ -51,7 +51,7 @@ Progress: [██████████░░░░░░░░░░] 71% (17
 |-------|-------|-------|----------|
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
-| 11 (Container Lifecycle & State Management) | 4 | 24min | 6min |
+| 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
 
 ## Accumulated Context
 
@@ -86,11 +86,12 @@ Progress: [██████████░░░░░░░░░░] 71% (17
 - ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
 - ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
 
-**Phase 11 Complete (4/4 plans) — VERIFIED:**
+**Phase 11 Complete (5/5 plans) — VERIFIED:**
 - ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
 - ✅ Plan 02: ContainerManager with create() orchestration, auto-restart pattern, workspace auto-creation, userns_mode=keep-id (259 lines, 85%+ coverage, 14 tests)
 - ✅ Plan 03: ContainerManager.list() with state reconciliation, metadata enrichment, uptime calculation (260 lines, 63% coverage, 13 tests)
 - ✅ Plan 04: Container lifecycle operations (stop, delete, status, logs) with 10s graceful shutdown, workspace preservation (98 lines, excellent coverage, 30 tests)
+- ✅ Plan 05: exec() with auto-restart, complete CLI commands (create/list/stop/delete/exec), mc <case_number> quick access (193 lines CLI, 100% CLI coverage, 31 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -162,6 +163,12 @@ Progress: [██████████░░░░░░░░░░] 71% (17
 - Auto-reconciliation on status: status() auto-reconciles state when container deleted externally (no manual reconciliation needed)
 - Non-fatal workspace deletion: Workspace deletion failures log warning but don't block container deletion (state cleanup succeeds regardless)
 
+**Plan 05:**
+- Auto-restart helper extraction: _get_or_restart(case_number) extracted as standalone method for reusability across operations (attach, logs streaming)
+- Quick access pattern: Implemented via sys.argv manipulation before argument parsing (detects 8-digit case number and inserts 'quick_access' command)
+- Workspace resolution strategy: Quick access uses ConfigManager base_directory + case_number (Phase 11 baseline, Phase 10 will enhance with Salesforce customer data)
+- CLI commands helper: _get_manager() helper avoids duplication across command functions (instantiates ContainerManager with correct dependencies)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -181,9 +188,9 @@ Progress: [██████████░░░░░░░░░░] 71% (17
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 11-04-PLAN.md (Container Health Monitoring & Recovery)
-Resume: Phase 11 complete (4/4 plans). Continue with Phase 12 planning (Terminal Automation)
+Stopped at: Completed 11-05-PLAN.md (Container Command Execution & CLI Integration)
+Resume: Phase 11 complete (5/5 plans). All 8 CONT requirements (CONT-01 through CONT-08) satisfied. Continue with Phase 12 planning (Terminal Automation)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (11-04 completion)*
+*Last updated: 2026-01-26 (11-05 completion)*
