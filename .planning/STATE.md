@@ -5,19 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** v2.0 Containerization - per-case isolated workspaces
+**Current focus:** Phase 9 - Container Architecture & Podman Integration
 
 ## Current Position
 
 Milestone: v2.0 Containerization
-Status: Defining requirements
-Last activity: 2026-01-26 — Milestone v2.0 started
+Phase: 9 of 13 (Container Architecture & Podman Integration)
+Plan: 1 of 3 complete
+Status: In progress
+Last activity: 2026-01-26 - Completed 09-01-PLAN.md (Platform Detection & Podman Foundation)
 
-Progress: [░░░░░░░░░░░░] 0% (not yet planned)
+Progress: [████████░░░░░░░░░░░░] 43% (9 of 21 total plans complete across all milestones)
 
 ## Performance Metrics
 
-**v1.0 Milestone:**
+**v1.0 Milestone (SHIPPED 2026-01-22):**
 - Total plans completed: 21
 - Average duration: 4.0 min
 - Total execution time: 1.32 hours
@@ -36,6 +38,17 @@ Progress: [░░░░░░░░░░░░] 0% (not yet planned)
 | 7 (Performance Optimization) | 3 | 16min | 5.3min |
 | 8 (Type Safety & Modernization) | 1 | 12min | 12min |
 
+**v2.0 Status:**
+- Roadmap created: 5 phases (9-13)
+- Plans completed: 1
+- Phase 9 in progress (1 of 3 plans complete)
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 9 (Container Architecture & Podman Integration) | 1 | 4min | 4min |
+
 ## Accumulated Context
 
 ### v1.0 Shipped (2026-01-22)
@@ -49,35 +62,56 @@ Progress: [░░░░░░░░░░░░] 0% (not yet planned)
 - TOML configuration system replacing environment variables
 
 **Tech Stack:**
-- Python 3.11+ (upgraded from 3.8+)
-- pytest, requests, rich, tqdm, tenacity, backoff, platformdirs, types-requests
+- Python 3.11+, pytest, requests, rich, tqdm, tenacity, backoff, platformdirs
 - 2,590 lines of production code
 - 110 files modified
 
-**Archived:**
-- Full details: `.planning/milestones/v1.0-ROADMAP.md`
-- Requirements: `.planning/milestones/v1.0-REQUIREMENTS.md`
-- Summary: `.planning/MILESTONES.md`
+### v2.0 Containerization
+
+**Architecture:** Host-controller + container-agent pattern with shared codebase (80% code reuse)
+
+**Stack:** podman-py 5.7.0, simple-salesforce 1.12.9, SQLite for state, platform-specific terminal launchers
+
+**Phase 9 Progress (1/3 complete):**
+- ✅ Plan 01: Platform detection with macOS/Linux support, Podman availability checking, socket path resolution
+- ⏳ Plan 02: Podman client wrapper (pending)
+- ⏳ Plan 03: Container creation with UID/GID mapping (pending)
+
+**Phase Overview:**
+- Phase 9: Podman integration, platform detection, UID/GID mapping
+- Phase 10: Salesforce API integration, caching, token refresh
+- Phase 11: Container lifecycle orchestration, state management with SQLite
+- Phase 12: Terminal automation (iTerm2/gnome-terminal), auto-attach workflow
+- Phase 13: RHEL 10 container image with tools, backwards compatibility
+
+**Key Decisions (Phase 9-01):**
+- Lazy platform detection (no import-time overhead, testable without Podman)
+- Sliding window version compatibility (warn at 3 versions, fail at 7+)
+- Socket path priority: CONTAINER_HOST → XDG_RUNTIME_DIR → UID-based → rootful fallback
+- macOS Podman machine: interactive prompt to start (no silent auto-start)
 
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 
-### Known Technical Debt
-
-- 2 cosmetic type annotation gaps in config module (mypy passes, functionally complete)
-- 20 test failures from Path vs string type changes (tests need modernization)
-
 ### Blockers/Concerns
 
-None - v1.0 shipped successfully.
+**From research (critical for v2.0):**
+- Phase 9: UID/GID mapping must use `--userns=keep-id` and `:U` suffix (prevent permission errors)
+- Phase 10: Salesforce tokens expire after 2 hours (proactive refresh 5 min before expiry)
+- Phase 11: State reconciliation required (orphaned containers from crashes)
+- Phase 12: Terminal launcher needs cross-platform testing (macOS vs Linux)
+
+**Tech debt from v1.0:**
+- 2 cosmetic type annotation gaps in config module (not blocking)
+- 20 test failures from Path vs string type changes (deferred)
 
 ## Session Continuity
 
-Last session: 2026-01-22T20:35:00Z
-Milestone: v1.0 complete and archived
-Next step: `/gsd:new-milestone` to define next milestone goals
+Last session: 2026-01-26
+Stopped at: Completed 09-01-PLAN.md (Platform Detection & Podman Foundation)
+Resume file: None
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-22 — v1.0 milestone complete*
+*Last updated: 2026-01-26 (Plan 09-01 execution)*
