@@ -15,7 +15,7 @@ Plan: 2 of 3 (Shell customization complete)
 Status: In progress
 Last activity: 2026-01-26 - Completed 12-02-PLAN.md (Shell customization & banner)
 
-Progress: [███████████░░░░░░░░░] 73% (11 of 15 v2.0 plans complete)
+Progress: [████████████░░░░░░░░] 80% (12 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -40,7 +40,7 @@ Progress: [███████████░░░░░░░░░] 73% (11
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 11
+- Plans completed: 12
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
@@ -53,7 +53,7 @@ Progress: [███████████░░░░░░░░░] 73% (11
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
-| 12 (Terminal Attachment & Exec) | 2 | 3min | 1.5min |
+| 12 (Terminal Attachment & Exec) | 2 | 7min | 3.5min |
 
 ## Accumulated Context
 
@@ -96,6 +96,7 @@ Progress: [███████████░░░░░░░░░] 73% (11
 - ✅ Plan 05: exec() with auto-restart, complete CLI commands (create/list/stop/delete/exec), mc <case_number> quick access (193 lines CLI, 100% CLI coverage, 31 tests)
 
 **Phase 12 In Progress (2/3 plans):**
+- ✅ Plan 01: Terminal launcher abstraction with macOS (iTerm2, Terminal.app) and Linux (gnome-terminal, konsole, xfce4-terminal) support, AppleScript automation, non-blocking subprocess execution (140 lines, 93-97% coverage, 45 tests)
 - ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
 
 **Phase Overview:**
@@ -176,6 +177,12 @@ Progress: [███████████░░░░░░░░░] 73% (11
 
 **Key Decisions (Phase 12):**
 
+**Plan 01:**
+- Protocol-based launcher abstraction: Python Protocol enables static type checking while allowing platform-specific implementations without inheritance overhead
+- Non-blocking subprocess execution: subprocess.Popen() with background threading.Thread cleanup to return control immediately while preventing zombie processes
+- AppleScript string escaping: Escape backslashes first, then quotes for injection safety on macOS terminal automation
+- Priority-based terminal detection: macOS (iTerm2 > Terminal.app), Linux (gnome-terminal > konsole > xfce4-terminal > xterm) for predictable selection
+
 **Plan 02:**
 - BASH_ENV over --rcfile: Use BASH_ENV environment variable for bashrc injection (works in both interactive and non-interactive contexts)
 - Conditional sections: Summary and next steps sections only displayed if metadata present (cleaner banner for minimal metadata)
@@ -201,9 +208,9 @@ Progress: [███████████░░░░░░░░░] 73% (11
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 12-02-PLAN.md (Shell customization & banner generation)
-Resume: Continue Phase 12 with remaining plans (terminal launchers, integration)
+Stopped at: Completed 12-01-PLAN.md and 12-02-PLAN.md (Terminal launcher and shell customization)
+Resume: Continue to 12-03 (Container attachment workflow)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (Phase 12 Plan 02 complete)*
+*Last updated: 2026-01-26 (Phase 12 in progress - 2/3 plans complete)*
