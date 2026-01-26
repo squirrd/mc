@@ -13,6 +13,11 @@ def get_default_config() -> Dict[str, Any]:
         "base_directory": "~/mc",
         "api": {
             "offline_token": ""
+        },
+        "podman": {
+            "timeout": 120,
+            "retry_attempts": 3,
+            "socket_path": None
         }
     }
 
@@ -37,5 +42,20 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
     if "offline_token" not in config["api"]:
         return False
+
+    # Podman config is optional, but if present must have valid structure
+    if "podman" in config:
+        if not isinstance(config["podman"], dict):
+            return False
+
+        # Validate podman config fields if present
+        podman_config = config["podman"]
+        if "timeout" in podman_config and not isinstance(podman_config["timeout"], int):
+            return False
+        if "retry_attempts" in podman_config and not isinstance(podman_config["retry_attempts"], int):
+            return False
+        if "socket_path" in podman_config and podman_config["socket_path"] is not None:
+            if not isinstance(podman_config["socket_path"], str):
+                return False
 
     return True
