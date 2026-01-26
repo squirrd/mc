@@ -3,8 +3,8 @@
 import time
 import logging
 from typing import Any
-from simple_salesforce import Salesforce  # type: ignore
-from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceError  # type: ignore
+from simple_salesforce import Salesforce  # type: ignore[attr-defined]
+from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceError
 from tenacity import (
     retry,
     stop_after_attempt,
