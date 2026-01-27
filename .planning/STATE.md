@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 12 of 13 (Terminal Attachment & Exec)
-Plan: 2 of 3 (Shell customization complete)
-Status: In progress
-Last activity: 2026-01-26 - Completed 12-02-PLAN.md (Shell customization & banner)
+Plan: 3 of 3 (Phase complete)
+Status: Phase complete
+Last activity: 2026-01-27 - Completed 12-03-PLAN.md (Terminal attachment workflow)
 
-Progress: [████████████░░░░░░░░] 80% (12 of 15 v2.0 plans complete)
+Progress: [█████████████░░░░░░░] 87% (13 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -40,11 +40,12 @@ Progress: [████████████░░░░░░░░] 80% (12
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 12
+- Plans completed: 13
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
-- Phase 12 in progress (2/3 plans)
+- Phase 12 complete (3/3 plans)
+- Phase 13 in progress (0/2 plans)
 
 **By Phase:**
 
@@ -53,7 +54,7 @@ Progress: [████████████░░░░░░░░] 80% (12
 | 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
-| 12 (Terminal Attachment & Exec) | 2 | 7min | 3.5min |
+| 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 
 ## Accumulated Context
 
@@ -95,9 +96,10 @@ Progress: [████████████░░░░░░░░] 80% (12
 - ✅ Plan 04: Container lifecycle operations (stop, delete, status, logs) with 10s graceful shutdown, workspace preservation (98 lines, excellent coverage, 30 tests)
 - ✅ Plan 05: exec() with auto-restart, complete CLI commands (create/list/stop/delete/exec), mc <case_number> quick access (193 lines CLI, 100% CLI coverage, 31 tests)
 
-**Phase 12 In Progress (2/3 plans):**
+**Phase 12 Complete (3/3 plans) — VERIFIED:**
 - ✅ Plan 01: Terminal launcher abstraction with macOS (iTerm2, Terminal.app) and Linux (gnome-terminal, konsole, xfce4-terminal) support, AppleScript automation, non-blocking subprocess execution (140 lines, 93-97% coverage, 45 tests)
 - ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
+- ✅ Plan 03: Terminal attachment orchestration with TTY detection, auto-create/auto-start workflow, CLI integration for mc case <number> command (244 lines attach.py, 90% coverage, 21 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -189,6 +191,13 @@ Progress: [████████████░░░░░░░░] 80% (12
 - Comments excluded: Comments field stored in metadata but NOT displayed in banner per CONTEXT.md requirements
 - Prefix alignment: Text wrapping includes prefix length calculation for multi-line field alignment
 
+**Plan 03:**
+- TTY detection mandatory: sys.stdout.isatty() prevents terminal launch when stdout piped/redirected (protects scripting use cases)
+- Case number validation at attachment layer: Enforce 8-digit format before Salesforce call for early failure detection
+- Metadata fallbacks for robustness: account_name defaults to "Unknown", description uses subject if case_summary missing
+- Error messages brief with fix hints: "Terminal launch failed. Run: mc --check-terminal" per CONTEXT.md requirements
+- CLI routing via lazy import: case_terminal() imported inside main.py command routing to avoid circular dependency
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -207,10 +216,10 @@ Progress: [████████████░░░░░░░░] 80% (12
 
 ## Session Continuity
 
-Last session: 2026-01-26
-Stopped at: Completed 12-01-PLAN.md and 12-02-PLAN.md (Terminal launcher and shell customization)
-Resume: Continue to 12-03 (Container attachment workflow)
+Last session: 2026-01-27
+Stopped at: Completed 12-03-PLAN.md (Terminal attachment workflow) - Phase 12 complete
+Resume: Ready for Phase 13 (Container Image & Deployment)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26 (Phase 12 in progress - 2/3 plans complete)*
+*Last updated: 2026-01-27 (Phase 12 complete - 3/3 plans, Phase 13 ready)*
