@@ -73,6 +73,10 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=60",
 ]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "backwards_compatibility: marks tests as backwards compatibility tests",
+]
 
 [tool.coverage.run]
 source = ["src"]
