@@ -220,6 +220,8 @@ Progress: [████████████████████] 100% (1
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
+- [2026-01-26] v2.x deferred containerization features (area: planning)
+- [2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)
 
 ### Blockers/Concerns
 
