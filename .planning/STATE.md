@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 13 of 13 (Container Image & Backwards Compatibility)
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-01-27 - Completed 13-01-PLAN.md (Container image & runtime detection)
+Plan: 2 of 2
+Status: Phase complete
+Last activity: 2026-01-27 - Completed 13-02-PLAN.md (Backwards compatibility integration)
 
-Progress: [██████████████░░░░░░] 93% (14 of 15 v2.0 plans complete)
+Progress: [████████████████████] 100% (15 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -40,12 +40,12 @@ Progress: [██████████████░░░░░░] 93% (14
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 14
+- Plans completed: 15
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
-- Phase 13 in progress (1/2 plans)
+- Phase 13 complete (2/2 plans)
 
 **By Phase:**
 
@@ -55,7 +55,7 @@ Progress: [██████████████░░░░░░] 93% (14
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
-| 13 (Container Image & Backwards Compatibility) | 1 | 7min | 7min |
+| 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
 
 ## Accumulated Context
 
@@ -102,8 +102,9 @@ Progress: [██████████████░░░░░░] 93% (14
 - ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
 - ✅ Plan 03: Terminal attachment orchestration with TTY detection, auto-create/auto-start workflow, CLI integration for mc case <number> command (244 lines attach.py, 90% coverage, 21 tests)
 
-**Phase 13 In Progress (1/2 plans):**
+**Phase 13 Complete (2/2 plans) — VERIFIED:**
 - ✅ Plan 01: RHEL 10 UBI container image (391 MB) with MC CLI, Python 3.12, essential tools (vim, nano, curl, openssl, wget), runtime mode detection via MC_RUNTIME_MODE environment variable (12 lines runtime.py, 100% test coverage, 13 tests)
+- ✅ Plan 02: ContainerManager updated to use mc-rhel10:latest with environment variables (CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE=agent), image verification with build instructions, comprehensive integration tests (8 tests, 13 unit tests updated)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -211,6 +212,11 @@ Progress: [██████████████░░░░░░] 93% (14
 - Editable install with --no-build-isolation: Requires setuptools/wheel pre-installed, prevents runtime import errors
 - Non-root mcuser: Created for security, works with Phase 11 --userns=keep-id pattern for permission mapping
 
+**Plan 02:**
+- Image verification before creation: Explicit check for mc-rhel10:latest with build command in error message (prevents cryptic Podman errors)
+- Environment variables over entrypoint args: Set CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE via environment dict (simpler than command args, accessible to all processes)
+- Integration test skip strategy: MC_TEST_INTEGRATION environment variable required (prevents false failures on systems without Podman/image)
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -230,9 +236,9 @@ Progress: [██████████████░░░░░░] 93% (14
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 13-01-PLAN.md (Container image & runtime detection)
-Resume: Ready for 13-02-PLAN.md (Backwards compatibility validation)
+Stopped at: Completed 13-02-PLAN.md (Backwards compatibility integration)
+Resume: Phase 13 complete - All v2.0 plans finished (15/15)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-27 (Phase 13 in progress - 1/2 plans complete)*
+*Last updated: 2026-01-27 (Phase 13 complete - v2.0 milestone finished)*
