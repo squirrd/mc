@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** Phase 12 - Terminal Attachment & Exec
+**Current focus:** Phase 13 - Container Image & Backwards Compatibility
 
 ## Current Position
 
 Milestone: v2.0 Containerization
-Phase: 12 of 13 (Terminal Attachment & Exec)
-Plan: 3 of 3 (Phase complete)
-Status: Phase complete
-Last activity: 2026-01-27 - Completed 12-03-PLAN.md (Terminal attachment workflow)
+Phase: 13 of 13 (Container Image & Backwards Compatibility)
+Plan: Not yet planned
+Status: Ready to plan
+Last activity: 2026-01-27 - Phase 12 complete and verified (Terminal attachment workflow)
 
 Progress: [█████████████░░░░░░░] 87% (13 of 15 v2.0 plans complete)
 
@@ -45,7 +45,7 @@ Progress: [█████████████░░░░░░░] 87% (13
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
-- Phase 13 in progress (0/2 plans)
+- Phase 13 not started
 
 **By Phase:**
 

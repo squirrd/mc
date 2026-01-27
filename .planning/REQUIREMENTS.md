@@ -36,16 +36,16 @@ Requirements for containerization milestone. Each maps to roadmap phases.
 
 ### Terminal Integration
 
-- [ ] **TERM-01**: Auto-open new terminal window on `mc case <number>`
-- [ ] **TERM-02**: Detect terminal emulator (iTerm2, gnome-terminal, etc.)
-- [ ] **TERM-03**: Attach container shell in new terminal window
-- [ ] **TERM-04**: Graceful degradation if terminal emulator unsupported
-- [ ] **TERM-05**: Return host terminal to prompt after launching container
+- [x] **TERM-01**: Auto-open new terminal window on `mc case <number>`
+- [x] **TERM-02**: Detect terminal emulator (iTerm2, gnome-terminal, etc.)
+- [x] **TERM-03**: Attach container shell in new terminal window
+- [x] **TERM-04**: Graceful degradation if terminal emulator unsupported
+- [x] **TERM-05**: Return host terminal to prompt after launching container
 
 ### Container Image
 
 - [ ] **IMG-01**: Build RHEL 10 base container image
-- [ ] **IMG-02**: Install essential bash tools in image (openssl, curl, jq, vim, etc.)
+- [ ] **IMG-02**: Install essential bash tools in image (openssl, curl, vim, etc.; jq runtime-installable via EPEL)
 - [ ] **IMG-04**: Install mc CLI in container (agent mode)
 - [ ] **IMG-05**: Mount case workspace at /case in container
 - [ ] **IMG-06**: Container has access to mc CLI configuration
@@ -138,11 +138,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SF-03 | Phase 10 | Complete |
 | SF-04 | Phase 10 | Complete |
 | SF-05 | Phase 10 | Complete |
-| TERM-01 | Phase 12 | Pending |
-| TERM-02 | Phase 12 | Pending |
-| TERM-03 | Phase 12 | Pending |
-| TERM-04 | Phase 12 | Pending |
-| TERM-05 | Phase 12 | Pending |
+| TERM-01 | Phase 12 | Complete |
+| TERM-02 | Phase 12 | Complete |
+| TERM-03 | Phase 12 | Complete |
+| TERM-04 | Phase 12 | Complete |
+| TERM-05 | Phase 12 | Complete |
 | IMG-01 | Phase 13 | Pending |
 | IMG-02 | Phase 13 | Pending |
 | IMG-04 | Phase 13 | Pending |
@@ -167,4 +167,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 (SF-02 clarified: 5-minute TTL)*
+*Last updated: 2026-01-26 (IMG-02 clarified: jq runtime-installable, not in base image)*
