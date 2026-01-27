@@ -42,6 +42,10 @@ class TestCreateNewContainer:
         # State returns None (no existing container)
         state_db.get_container.return_value = None
 
+        # Mock image verification (mc-rhel10:latest exists)
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
         # Mock container creation
         mock_container = MagicMock()
         mock_container.id = "abc123"
@@ -66,10 +70,13 @@ class TestCreateNewContainer:
         # Verify workspace directory created
         mock_makedirs.assert_called_once_with("/path/to/workspace", exist_ok=True)
 
+        # Verify image exists check
+        podman_client.client.images.get.assert_called_once_with("mc-rhel10:latest")
+
         # Verify container created with correct parameters
         podman_client.client.containers.create.assert_called_once()
         create_call = podman_client.client.containers.create.call_args
-        assert create_call.kwargs["image"] == "registry.access.redhat.com/ubi9/ubi:latest"
+        assert create_call.kwargs["image"] == "mc-rhel10:latest"
         assert create_call.kwargs["name"] == "mc-12345678"
         assert create_call.kwargs["command"] == ["/bin/bash", "-l"]
         assert create_call.kwargs["detach"] is True
@@ -79,6 +86,10 @@ class TestCreateNewContainer:
         assert create_call.kwargs["labels"]["mc.managed"] == "true"
         assert create_call.kwargs["labels"]["mc.case_number"] == "12345678"
         assert create_call.kwargs["labels"]["mc.customer"] == "TestCustomer"
+        assert create_call.kwargs["environment"]["CASE_NUMBER"] == "12345678"
+        assert create_call.kwargs["environment"]["CUSTOMER_NAME"] == "TestCustomer"
+        assert create_call.kwargs["environment"]["WORKSPACE_PATH"] == "/case"
+        assert create_call.kwargs["environment"]["MC_RUNTIME_MODE"] == "agent"
         assert create_call.kwargs["volumes"] == {
             "/path/to/workspace": {"bind": "/case", "mode": "rw"}
         }
@@ -103,6 +114,10 @@ class TestCreateNewContainer:
         podman_client.client.containers.list.return_value = []
         state_db.get_container.return_value = None
 
+        # Mock image verification
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
         mock_container = MagicMock()
         mock_container.id = "abc123"
         podman_client.client.containers.create.return_value = mock_container
@@ -110,9 +125,10 @@ class TestCreateNewContainer:
         manager = ContainerManager(podman_client, state_db)
         manager.create("12345678", "/path/to/workspace")
 
-        # Verify default customer name used
+        # Verify default customer name used in label and environment
         create_call = podman_client.client.containers.create.call_args
         assert create_call.kwargs["labels"]["mc.customer"] == "Unknown"
+        assert create_call.kwargs["environment"]["CUSTOMER_NAME"] == "Unknown"
 
 
 class TestAutoRestartStopped:
@@ -302,6 +318,10 @@ class TestReconciliation:
             "No such container: deleted123"
         )
 
+        # Mock image verification
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
         # Mock new container creation
         mock_new_container = MagicMock()
         mock_new_container.id = "new456"
@@ -332,6 +352,28 @@ class TestErrorHandling:
     """Tests for error handling."""
 
     @patch('mc.container.manager.os.makedirs')
+    def test_image_not_found_raises_runtime_error(self, mock_makedirs):
+        """Test RuntimeError raised when mc-rhel10:latest image not found."""
+        podman_client = Mock(spec=PodmanClient)
+        state_db = Mock(spec=StateDatabase)
+
+        podman_client.client.containers.list.return_value = []
+        state_db.get_container.return_value = None
+
+        # Mock image not found
+        podman_client.client.images.get.side_effect = Exception(
+            "No such image: mc-rhel10:latest"
+        )
+
+        manager = ContainerManager(podman_client, state_db)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            manager.create("12345678", "/path/to/workspace")
+
+        assert "Image mc-rhel10:latest not found" in str(exc_info.value)
+        assert "podman build -t mc-rhel10:latest -f container/Containerfile ." in str(exc_info.value)
+
+    @patch('mc.container.manager.os.makedirs')
     def test_create_failure_raises_runtime_error(self, mock_makedirs):
         """Test RuntimeError raised when container creation fails."""
         podman_client = Mock(spec=PodmanClient)
@@ -340,9 +382,13 @@ class TestErrorHandling:
         podman_client.client.containers.list.return_value = []
         state_db.get_container.return_value = None
 
+        # Mock image exists
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
         # Mock creation failure
         podman_client.client.containers.create.side_effect = Exception(
-            "Image not found"
+            "Insufficient memory"
         )
 
         manager = ContainerManager(podman_client, state_db)
@@ -351,7 +397,7 @@ class TestErrorHandling:
             manager.create("12345678", "/path/to/workspace")
 
         assert "Failed to create container for case 12345678" in str(exc_info.value)
-        assert "Image not found" in str(exc_info.value)
+        assert "Insufficient memory" in str(exc_info.value)
 
     @patch('mc.container.manager.os.makedirs')
     def test_start_failure_raises_runtime_error(self, mock_makedirs):
@@ -361,6 +407,10 @@ class TestErrorHandling:
 
         podman_client.client.containers.list.return_value = []
         state_db.get_container.return_value = None
+
+        # Mock image exists
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
 
         mock_container = MagicMock()
         mock_container.id = "abc123"
@@ -384,6 +434,10 @@ class TestErrorHandling:
 
         podman_client.client.containers.list.return_value = []
         state_db.get_container.return_value = None
+
+        # Mock image exists
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
 
         mock_container = MagicMock()
         mock_container.id = "abc123"

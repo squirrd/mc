@@ -75,10 +75,20 @@ class ContainerManager:
         # 3. Create workspace directory if missing (prevents mount failures)
         os.makedirs(workspace_path, exist_ok=True)
 
-        # 4. Create new container via Podman API
+        # 4. Verify mc-rhel10:latest image exists
+        try:
+            self.podman.client.images.get("mc-rhel10:latest")
+        except Exception as e:
+            raise RuntimeError(
+                f"Image mc-rhel10:latest not found. "
+                f"Run 'podman build -t mc-rhel10:latest -f container/Containerfile .' first. "
+                f"Error: {e}"
+            ) from e
+
+        # 5. Create new container via Podman API
         try:
             container = self.podman.client.containers.create(
-                image="registry.access.redhat.com/ubi9/ubi:latest",
+                image="mc-rhel10:latest",
                 name=f"mc-{case_number}",
                 command=["/bin/bash", "-l"],
                 detach=True,
@@ -86,6 +96,12 @@ class ContainerManager:
                     "mc.managed": "true",
                     "mc.case_number": case_number,
                     "mc.customer": customer_name,
+                },
+                environment={
+                    "CASE_NUMBER": str(case_number),
+                    "CUSTOMER_NAME": customer_name,
+                    "WORKSPACE_PATH": "/case",
+                    "MC_RUNTIME_MODE": "agent",
                 },
                 volumes={
                     workspace_path: {"bind": "/case", "mode": "rw"}
@@ -99,7 +115,7 @@ class ContainerManager:
                 f"Failed to create container for case {case_number}: {e}"
             ) from e
 
-        # 5. Start container
+        # 6. Start container
         try:
             container.start()  # type: ignore[no-untyped-call]
         except Exception as e:
@@ -107,7 +123,7 @@ class ContainerManager:
                 f"Failed to start container for case {case_number}: {e}"
             ) from e
 
-        # 6. Record in state database
+        # 7. Record in state database
         try:
             self.state.add_container(case_number, container.id, workspace_path)  # type: ignore[attr-defined]
         except Exception as e:
