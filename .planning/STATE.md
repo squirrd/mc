@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization
 Phase: 13 of 13 (Container Image & Backwards Compatibility)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-01-27 - Phase 12 complete and verified (Terminal attachment workflow)
+Plan: 1 of 2
+Status: In progress
+Last activity: 2026-01-27 - Completed 13-01-PLAN.md (Container image & runtime detection)
 
-Progress: [█████████████░░░░░░░] 87% (13 of 15 v2.0 plans complete)
+Progress: [██████████████░░░░░░] 93% (14 of 15 v2.0 plans complete)
 
 ## Performance Metrics
 
@@ -40,12 +40,12 @@ Progress: [█████████████░░░░░░░] 87% (13
 
 **v2.0 Status:**
 - Roadmap created: 5 phases (9-13)
-- Plans completed: 13
+- Plans completed: 14
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
-- Phase 13 not started
+- Phase 13 in progress (1/2 plans)
 
 **By Phase:**
 
@@ -55,6 +55,7 @@ Progress: [█████████████░░░░░░░] 87% (13
 | 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
+| 13 (Container Image & Backwards Compatibility) | 1 | 7min | 7min |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Progress: [█████████████░░░░░░░] 87% (13
 - ✅ Plan 01: Terminal launcher abstraction with macOS (iTerm2, Terminal.app) and Linux (gnome-terminal, konsole, xfce4-terminal) support, AppleScript automation, non-blocking subprocess execution (140 lines, 93-97% coverage, 45 tests)
 - ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
 - ✅ Plan 03: Terminal attachment orchestration with TTY detection, auto-create/auto-start workflow, CLI integration for mc case <number> command (244 lines attach.py, 90% coverage, 21 tests)
+
+**Phase 13 In Progress (1/2 plans):**
+- ✅ Plan 01: RHEL 10 UBI container image (391 MB) with MC CLI, Python 3.12, essential tools (vim, nano, curl, openssl, wget), runtime mode detection via MC_RUNTIME_MODE environment variable (12 lines runtime.py, 100% test coverage, 13 tests)
 
 **Phase Overview:**
 - Phase 9: Podman integration, platform detection, UID/GID mapping
@@ -198,6 +202,15 @@ Progress: [█████████████░░░░░░░] 87% (13
 - Error messages brief with fix hints: "Terminal launch failed. Run: mc --check-terminal" per CONTEXT.md requirements
 - CLI routing via lazy import: case_terminal() imported inside main.py command routing to avoid circular dependency
 
+**Key Decisions (Phase 13):**
+
+**Plan 01:**
+- Python 3.12 in RHEL 10 UBI: Pre-installed in ubi10/ubi:10.1, compatible with pyproject.toml requirement (>=3.11)
+- jq exclusion: Not available in UBI repos without EPEL, excluded from base image to avoid dependency complexity, documented for runtime install if needed
+- Runtime mode detection: MC_RUNTIME_MODE environment variable instead of /.dockerenv file check (reliable across Docker/Podman/BuildKit)
+- Editable install with --no-build-isolation: Requires setuptools/wheel pre-installed, prevents runtime import errors
+- Non-root mcuser: Created for security, works with Phase 11 --userns=keep-id pattern for permission mapping
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
@@ -217,9 +230,9 @@ Progress: [█████████████░░░░░░░] 87% (13
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 12-03-PLAN.md (Terminal attachment workflow) - Phase 12 complete
-Resume: Ready for Phase 13 (Container Image & Deployment)
+Stopped at: Completed 13-01-PLAN.md (Container image & runtime detection)
+Resume: Ready for 13-02-PLAN.md (Backwards compatibility validation)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-27 (Phase 12 complete - 3/3 plans, Phase 13 ready)*
+*Last updated: 2026-01-27 (Phase 13 in progress - 1/2 plans complete)*
