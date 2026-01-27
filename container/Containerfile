@@ -1,33 +1,87 @@
-FROM registry.access.redhat.com/ubi9/ubi:latest
+# MC CLI Container Image - RHEL 10 UBI Base
+#
+# This container image provides an isolated environment for Red Hat case work
+# with the mc CLI pre-installed and essential bash tools available.
+#
+# Features:
+# - RHEL 10 UBI base image (registry.access.redhat.com/ubi10/ubi:10.1)
+# - MC CLI installed in editable mode from /opt/mc
+# - Python 3.12 runtime (pre-installed in RHEL 10 UBI, compatible with 3.11+ requirement)
+# - Essential text editors (vim, nano), networking tools (curl, wget)
+# - Non-root mcuser for security (works with --userns=keep-id)
+# - Runtime mode detection via MC_RUNTIME_MODE=agent environment variable
+# - Case workspace mounted at /case with proper ownership
+#
+# Build:
+#   podman build -t mc-rhel10:latest -f container/Containerfile .
+#
+# Run:
+#   podman run --rm -it -v /path/to/workspace:/case:U mc-rhel10:latest
 
-# Install necessary tools
-RUN dnf install -y --allowerasing curl tar gzip unzip
-# Install oc CLI
-RUN curl -sLo openshift-client-linux.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-arm64.tar.gz && \
-    tar -xzf openshift-client-linux.tar.gz -C /usr/local/bin oc kubectl && \
-    rm openshift-client-linux.tar.gz
+FROM registry.access.redhat.com/ubi10/ubi:10.1
 
-# Install ocm CLI
-RUN curl -sLo ocm https://github.com/openshift-online/ocm-cli/releases/latest/download/ocm-linux-arm64 && \
-    chmod +x ocm && \
-    mv ocm /usr/local/bin/ && \
-    mkdir -p /root/.config/ocm
+LABEL maintainer="MC CLI Team"
+LABEL description="RHEL 10 UBI container with MC CLI and essential tools for Red Hat case work"
+LABEL version="2.0"
 
-# Install backplane CLI
-RUN curl -sL https://api.github.com/repos/openshift/backplane-cli/releases/latest | \
-    grep "browser_download_url.*Linux_arm64" | \
-    cut -d '"' -f 4 | \
-    xargs curl -sLo backplane-cli.tar.gz && \
-    tar -xzf backplane-cli.tar.gz -C /usr/local/bin ocm-backplane && \
-    rm backplane-cli.tar.gz && \
-    mkdir -p /root/.config/backplane
+# Install Python 3.12 (pre-installed in UBI 10, but adding python3-pip for package management)
+# Install essential bash tools in single layer with cache cleanup
+# Note: python3 (3.12) is pre-installed in ubi10/ubi:10.1, curl is also pre-installed
+RUN dnf install -y \
+    python3-pip \
+    vim \
+    nano \
+    wget \
+    openssl \
+    && dnf clean all
 
-RUN mkdir /root/Cases
+# Note: jq excluded from base image (not available in UBI repos without EPEL)
+# Users can install jq at runtime if needed via: dnf install -y jq (after enabling EPEL)
+# Essential tools pre-installed in UBI: tar, gzip, openssl, sed, grep, awk, find, less
 
+# Create non-root user for security
+# System user/group with proper UID/GID ranges
+RUN groupadd --system mcuser && \
+    useradd --system --gid mcuser --home-dir /home/mcuser --create-home mcuser
 
+# Create case workspace mount point with correct ownership
+# Will be mounted from host via -v workspace:/case:U flag
+RUN mkdir -p /case && \
+    chown mcuser:mcuser /case
 
-# Set a working directory
-WORKDIR /root
+# Install MC CLI in editable mode from project root
+# Copy entire project to /opt/mc for installation
+COPY --chown=mcuser:mcuser . /opt/mc
 
-# Set the entrypoint to bash
+# Install build dependencies for editable install
+# setuptools and wheel required when using --no-build-isolation
+RUN pip3 install --no-cache-dir setuptools wheel
+
+# Install MC CLI and dependencies
+# --no-cache-dir: Don't cache pip downloads (reduces image size)
+# --no-build-isolation: Required for editable install to work at runtime
+# -e /opt/mc: Editable install allows code changes without image rebuild
+RUN pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
+
+# Copy and set permissions for entrypoint script
+COPY --chmod=755 container/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# Set runtime mode environment variable to identify agent mode (inside container)
+# Controller mode (host) has this unset and defaults to "controller"
+ENV MC_RUNTIME_MODE=agent
+
+# Switch to non-root user for all subsequent operations
+# Matches Phase 11 --userns=keep-id pattern for permission mapping
+USER mcuser
+
+# Set working directory to case workspace
+# Containers start in the mounted case workspace
+WORKDIR /case
+
+# Use exec form for proper signal handling (SIGTERM/SIGINT)
+# Entrypoint handles environment initialization and shell customization
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Default command: interactive bash shell
+# Can be overridden at runtime (e.g., podman run mc-rhel10 python3 script.py)
 CMD ["/bin/bash"]
