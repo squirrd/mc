@@ -34,11 +34,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 - 6 days from start to ship (2026-01-26 → 2026-02-01)
 
 **Known issues shipped (v2.0.1 backlog):**
-- Terminal attachment broken due to Salesforce API method name mismatch (get_case vs query_case) — **CRITICAL BUG**
-- Podman URI byte string errors still occurring despite Phase 14.1-01 fix attempt
-- Cache database initialization failures on second `mc create` command run
+- ✅ FIXED: Terminal attachment broken due to Salesforce API method name mismatch
+- ✅ FIXED: Cache database initialization failures on second `mc create` command run
+- ✅ FIXED: Podman URI byte string errors (byte string handling added)
 - Runtime mode detection created but not integrated into decision logic
 - Phase 13 missing VERIFICATION.md (deliverables present and verified functional)
+- Podman URI scheme error on macOS (still investigating - see pending todos)
 
 See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
@@ -59,17 +60,23 @@ See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
 See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
-### Pending Todos
+### Pending Todos (12 remaining)
 
-**P0 (Critical):**
-- [2026-02-01] Fix terminal attachment Salesforce API call - change get_case to query_case in attach.py line 136 (area: api, milestone: v2.0.1)
+**Completed (moved to done/):**
+- [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
+- [2026-02-01] ✅ Rename offline_token config to rh_api_offline_token
+- [2026-02-01] ✅ Fix UAT test plan - mc container ls → mc container list
+- [2026-02-01] ✅ Fix terminal attachment Salesforce API method call
+- [2026-02-01] ✅ Fix cache database initialization in mc create command
+- [2026-02-01] ✅ Fix Podman URI scheme byte string error in container commands
 
-**Other:**
+**Still pending:**
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
+- [2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)
+- [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
+- [2026-02-01] Validate case number format before credential/API checks (area: general)
 - [2026-02-01] Consolidate config directory under ~/mc workspace (area: config)
-- [2026-02-01] Fix cache database initialization in mc create (area: database)
-- [2026-02-01] Fix Podman URI scheme byte string error (area: api)
 - [2026-02-01] Fix container create image detection failure (area: containers)
 - [2026-02-01] Use pre-built container images from quay.io instead of local builds (area: containers)
 - [2026-02-01] Fix workspace path structure to use cases/<customer>/<case>-<description> (area: containers)
