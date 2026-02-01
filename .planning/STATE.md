@@ -72,6 +72,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-01] Fix Podman URI scheme byte string error (area: api)
 - [2026-02-01] Fix container create image detection failure (area: containers)
 - [2026-02-01] Use pre-built container images from quay.io instead of local builds (area: containers)
+- [2026-02-01] Fix workspace path structure to use cases/<customer>/<case>-<description> (area: containers)
 
 ## Session Continuity
 
