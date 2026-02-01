@@ -60,7 +60,7 @@ See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
 See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
-### Pending Todos (10 remaining)
+### Pending Todos (16 remaining)
 
 **Completed (moved to done/):**
 - [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
@@ -83,6 +83,12 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-01] Improve container list output - replace workspace path with description (area: ui)
 - [2026-02-01] Prevent duplicate terminal launches and focus existing terminals (area: containers)
 - [2026-02-01] Auto-close terminal when shell exits (area: containers)
+- [2026-02-01] Fix test dependencies and imports (area: testing) - 2 import errors
+- [2026-02-01] Fix HTTP error handling tests (area: testing) - 14 test failures
+- [2026-02-01] Fix container management tests (area: testing) - 6 test failures
+- [2026-02-01] Fix terminal attachment tests (area: testing) - 17 test failures
+- [2026-02-01] Fix validation and integration tests (area: testing) - 5 test failures/errors
+- [2026-02-01] Fix workspace and metadata tests (area: testing) - 5 test failures
 
 ## Session Continuity
 
