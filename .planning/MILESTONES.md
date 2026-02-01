@@ -1,5 +1,40 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0 Containerization + Distribution (Shipped: 2026-02-01)
+
+**Delivered:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
+
+**Phases completed:** 9-14.1 (7 phases, 22 plans total)
+
+**Key accomplishments:**
+
+- Container orchestration with full lifecycle management (create, list, stop, delete, exec) using podman-py and SQLite state persistence
+- Platform detection for macOS/Linux with automatic Podman machine handling, lazy connection, and retry logic with exponential backoff
+- Salesforce integration for case metadata querying with 5-minute cache TTL, automatic token refresh, and workspace path resolution
+- Terminal automation across iTerm2, Terminal.app, gnome-terminal, and konsole with custom bashrc and welcome banners
+- RHEL 10 UBI container image (549 MB) with MC CLI, essential bash tools, and runtime mode detection preserving v1.0 backwards compatibility
+- Modern distribution via uv tool supporting development (uv run), UAT (uv tool install -e .), and production (uv tool install git+) workflows
+
+**Stats:**
+
+- 124 files created/modified
+- 6,056 lines of Python (cumulative)
+- 7 phases, 22 plans
+- 6 days from start to ship (2026-01-26 → 2026-02-01)
+
+**Git range:** `feat(09-01)` (d3c88a9) → `docs(14.1)` (2495e3f)
+
+**Known issues shipped (v2.0.1 backlog):**
+- Terminal attachment broken due to Salesforce API method name mismatch (get_case vs query_case) — **CRITICAL BUG**
+- Podman URI byte string errors still occurring despite Phase 14.1-01 fix attempt
+- Cache database initialization failures on second `mc create` command run
+- Runtime mode detection created but not integrated into decision logic
+- Phase 13 missing VERIFICATION.md (deliverables present and verified functional)
+
+**What's next:** v2.0.1 patch release to fix critical terminal attachment bug and UAT issues
+
+---
+
 ## v1.0 Hardening (Shipped: 2026-01-22)
 
 **Delivered:** Production-ready MC CLI with comprehensive testing, type safety, security hardening, and performance optimizations

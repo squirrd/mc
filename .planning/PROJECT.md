@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A production-ready Python CLI tool for Red Hat support case management with comprehensive test coverage, type safety, security hardening, and performance optimizations. The tool manages case workspaces, downloads attachments in parallel, searches employee directories, and integrates with Red Hat's support ecosystem through robust, well-tested interfaces.
+A production-ready Python CLI tool and container orchestrator for Red Hat support case management. Provides isolated per-case containerized workspaces with automatic Salesforce integration, terminal automation, and comprehensive lifecycle management. Built with type safety, security hardening, and modern Python 3.11+ practices.
 
 ## Core Value
 
