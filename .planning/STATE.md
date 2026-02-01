@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** Phase 13 - Container Image & Backwards Compatibility
+**Current focus:** Phase 14 - Installation & Distribution
 
 ## Current Position
 
-Milestone: v2.0 Containerization
-Phase: 13 of 13 (Container Image & Backwards Compatibility)
-Plan: 2 of 2
+Milestone: v2.0 Containerization + Distribution
+Phase: 14 of 14 (Installation & Distribution - uv tool support)
+Plan: 1 of 1
 Status: Phase complete
-Last activity: 2026-01-27 - Completed 13-02-PLAN.md (Backwards compatibility integration)
+Last activity: 2026-02-01 - Completed 14-01-PLAN.md (uv-based project management and installation workflows)
 
-Progress: [████████████████████] 100% (15 of 15 v2.0 plans complete)
+Progress: [████████████████████] 100% (16 of 16 plans complete)
 
 ## Performance Metrics
 
@@ -39,13 +39,14 @@ Progress: [████████████████████] 100% (1
 | 8 (Type Safety & Modernization) | 1 | 12min | 12min |
 
 **v2.0 Status:**
-- Roadmap created: 5 phases (9-13)
-- Plans completed: 15
+- Roadmap created: 6 phases (9-14)
+- Plans completed: 16
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
 - Phase 13 complete (2/2 plans)
+- Phase 14 complete (1/1 plans)
 
 **By Phase:**
 
@@ -56,6 +57,7 @@ Progress: [████████████████████] 100% (1
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 | 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
+| 14 (Installation & Distribution) | 1 | 4min | 4min |
 
 ## Accumulated Context
 
@@ -217,11 +219,28 @@ Progress: [████████████████████] 100% (1
 - Environment variables over entrypoint args: Set CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE via environment dict (simpler than command args, accessible to all processes)
 - Integration test skip strategy: MC_TEST_INTEGRATION environment variable required (prevents false failures on systems without Podman/image)
 
+**Phase 14 Complete (1/1 plans) — VERIFIED:**
+- ✅ Plan 01: uv-based project management with .python-version (3.11), uv.lock lockfile (1219 lines, 30 packages), comprehensive INSTALL.md (306 lines) documenting three workflows, README.md updated with modern installation instructions (4 minutes)
+
+**Key Decisions (Phase 14):**
+
+**Plan 01:**
+- uv unified tooling: Chosen for 10-100x faster workflow than pip/pipx/virtualenv, modern approach aligned with Python packaging evolution
+- Python 3.11 version pin: Matches pyproject.toml requires-python >=3.11, ensures uv uses correct Python version automatically via .python-version file
+- Three distinct workflows: Development (uv run), UAT (uv tool install -e .), Production (uv tool install git+https://...)
+- Comprehensive troubleshooting: Document common issues (PATH configuration, conda interference, Podman integration) to reduce support burden
+- PyPI publishing deferred: Focus on git-based distribution for now, PyPI publishing workflow to be addressed in future phase if needed
+
+### Roadmap Evolution
+
+- Phase 14 added: Installation & Distribution - Support dev/UAT/prod workflows with uv tool
+- Phase 14 complete: Modern distribution approach established
+
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)
+- ~~[2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)~~ — COMPLETE (Phase 14-01)
 
 ### Blockers/Concerns
 
@@ -237,10 +256,10 @@ Progress: [████████████████████] 100% (1
 
 ## Session Continuity
 
-Last session: 2026-01-27
-Stopped at: Completed 13-02-PLAN.md (Backwards compatibility integration)
-Resume: Phase 13 complete - All v2.0 plans finished (15/15)
+Last session: 2026-02-01
+Stopped at: Completed 14-01-PLAN.md (uv-based project management and installation workflows)
+Resume: Phase 14 complete - All planned work finished (16/16 plans)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-27 (Phase 13 complete - v2.0 milestone finished)*
+*Last updated: 2026-02-01 (Phase 14 complete - Distribution support added)*
