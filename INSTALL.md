@@ -307,8 +307,10 @@ mc-rhel10    latest    <image-id>    <timestamp>    391 MB
 
 ```toml
 [api]
-offline_token = "your_token_here"
+rh_api_offline_token = "your_token_here"
 ```
+
+**Note:** If upgrading from an earlier version, rename `api.offline_token` to `api.rh_api_offline_token` in your config file. The old key name is still supported but deprecated.
 
 Or export temporarily:
 ```bash

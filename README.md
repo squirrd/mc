@@ -64,7 +64,7 @@ Configure your Red Hat API offline token in the config file:
 
 ```toml
 [api]
-offline_token = "your_token_here"
+rh_api_offline_token = "your_token_here"
 
 [workspace]
 base_directory = "~/mc"  # Optional, default location for case workspaces
