@@ -61,6 +61,32 @@ class ConfigManager:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
 
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get config value by dotted key path with default fallback.
+
+        Args:
+            key: Dotted key path (e.g., 'workspace.base_directory')
+            default: Default value if key not found or config doesn't exist
+
+        Returns:
+            Config value or default
+
+        Examples:
+            >>> config.get('workspace.base_directory', '~/mc')
+            '/Users/user/mc'
+            >>> config.get('missing.key', 'fallback')
+            'fallback'
+        """
+        try:
+            config = self.load()
+            keys = key.split('.')
+            value = config
+            for k in keys:
+                value = value[k]
+            return value
+        except (FileNotFoundError, KeyError, TypeError):
+            return default
+
     def save(self, config: Dict[str, Any]) -> None:
         """Save configuration to file.
 
