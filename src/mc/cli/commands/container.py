@@ -1,9 +1,9 @@
 """Container lifecycle commands.
 
 Authentication Architecture:
-- Container lifecycle commands (create, list, stop, delete, exec): No Salesforce required
-- Terminal attachment (case_terminal, quick_access): Salesforce required for metadata
-- Salesforce credentials only validated at terminal attachment time
+- Container lifecycle commands (create, list, stop, delete, exec): No authentication required
+- Terminal attachment (case_terminal, quick_access): Red Hat API credentials required for metadata
+- Red Hat API credentials only validated at terminal attachment time
 """
 
 import argparse
@@ -14,8 +14,9 @@ from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
 from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
-from mc.integrations.salesforce_api import SalesforceAPIClient
+from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.attach import attach_terminal
+from mc.utils.auth import get_access_token
 from mc.utils.validation import validate_case_number
 from platformdirs import user_data_dir
 
@@ -36,7 +37,13 @@ def create(args: argparse.Namespace) -> None:
     Args:
         args: Parsed arguments with case_number
     """
-    case_number = args.case_number
+    # Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(args.case_number)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     manager = _get_manager()
 
     # Get workspace path from ConfigManager
@@ -107,7 +114,13 @@ def stop(args: argparse.Namespace) -> None:
     Args:
         args: Parsed arguments with case_number
     """
-    case_number = args.case_number
+    # Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(args.case_number)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     manager = _get_manager()
 
     try:
@@ -127,7 +140,13 @@ def delete(args: argparse.Namespace) -> None:
     Args:
         args: Parsed arguments with case_number
     """
-    case_number = args.case_number
+    # Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(args.case_number)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     manager = _get_manager()
 
     # Print warning
@@ -146,7 +165,13 @@ def exec_command(args: argparse.Namespace) -> None:
     Args:
         args: Parsed arguments with case_number and command
     """
-    case_number = args.case_number
+    # Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(args.case_number)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     command = args.command  # List of command parts
     manager = _get_manager()
 
@@ -184,18 +209,17 @@ def case_terminal(args: argparse.Namespace) -> None:
     # Initialize dependencies
     config_manager = ConfigManager()
 
-    # Get Salesforce credentials from config
+    # Get Red Hat API offline token from config
     try:
         config = config_manager.load()
-        sf_config = config.get("salesforce", {})
-        sf_username = sf_config.get("username")
-        sf_password = sf_config.get("password")
-        sf_token = sf_config.get("security_token")
 
-        if not all([sf_username, sf_password, sf_token]):
+        # Try new key first, fall back to old key for backwards compatibility
+        offline_token = config["api"].get("rh_api_offline_token") or config["api"].get("offline_token")
+
+        if not offline_token:
             config_path = config_manager.get_config_path()
             print(
-                f"Error: Salesforce credentials not configured. "
+                f"Error: Red Hat API offline token not configured. "
                 f"Update config at {config_path}",
                 file=sys.stderr
             )
@@ -205,8 +229,13 @@ def case_terminal(args: argparse.Namespace) -> None:
         print(f"Error loading configuration: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Initialize Salesforce client
-    salesforce_client = SalesforceAPIClient(sf_username, sf_password, sf_token)
+    # Initialize Red Hat API client
+    try:
+        access_token = get_access_token(offline_token)
+        api_client = RedHatAPIClient(access_token)
+    except Exception as e:
+        print(f"Error authenticating with Red Hat API: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Initialize container manager
     container_manager = _get_manager()
@@ -216,7 +245,7 @@ def case_terminal(args: argparse.Namespace) -> None:
         attach_terminal(
             case_number=case_number,
             config_manager=config_manager,
-            salesforce_client=salesforce_client,
+            api_client=api_client,
             container_manager=container_manager
         )
         # Terminal launched - host terminal returns to prompt

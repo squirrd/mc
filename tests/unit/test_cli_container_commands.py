@@ -12,6 +12,51 @@ from mc.cli.commands import container
 class TestCLICreate:
     """Tests for mc container create command."""
 
+    def test_create_invalid_case_number_too_short(self, capsys):
+        """Test mc container create rejects case number that's too short."""
+        args = argparse.Namespace(case_number="123")
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.create(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: '123'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
+
+    def test_create_invalid_case_number_too_long(self, capsys):
+        """Test mc container create rejects case number that's too long."""
+        args = argparse.Namespace(case_number="123456789")
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.create(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: '123456789'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
+
+    def test_create_invalid_case_number_non_digits(self, capsys):
+        """Test mc container create rejects case number with non-digits."""
+        args = argparse.Namespace(case_number="abcd1234")
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.create(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: 'abcd1234'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
+
     @patch("mc.cli.commands.container._get_manager")
     @patch("mc.cli.commands.container.ConfigManager")
     @patch("mc.cli.commands.container.os.makedirs")
@@ -179,6 +224,21 @@ class TestCLIList:
 class TestCLIStop:
     """Tests for mc container stop command."""
 
+    def test_stop_invalid_case_number(self, capsys):
+        """Test mc container stop rejects invalid case number."""
+        args = argparse.Namespace(case_number="123")
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.stop(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: '123'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
+
     @patch("mc.cli.commands.container._get_manager")
     def test_stop_success(self, mock_get_manager, capsys):
         """Test mc container stop <case> calls manager.stop()."""
@@ -233,6 +293,21 @@ class TestCLIStop:
 class TestCLIDelete:
     """Tests for mc container delete command."""
 
+    def test_delete_invalid_case_number(self, capsys):
+        """Test mc container delete rejects invalid case number."""
+        args = argparse.Namespace(case_number="123")
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.delete(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: '123'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
+
     @patch("mc.cli.commands.container._get_manager")
     def test_delete_success(self, mock_get_manager, capsys):
         """Test mc container delete <case> calls manager.delete()."""
@@ -269,6 +344,21 @@ class TestCLIDelete:
 
 class TestCLIExec:
     """Tests for mc container exec command."""
+
+    def test_exec_invalid_case_number(self, capsys):
+        """Test mc container exec rejects invalid case number."""
+        args = argparse.Namespace(case_number="123", command=["echo", "test"])
+
+        # Run command should exit
+        with pytest.raises(SystemExit) as exc_info:
+            container.exec_command(args)
+
+        assert exc_info.value.code == 1
+
+        # Verify error message
+        captured = capsys.readouterr()
+        assert "Invalid case number: '123'" in captured.err
+        assert "must be exactly 8 digits" in captured.err
 
     @patch("mc.cli.commands.container._get_manager")
     def test_exec_success(self, mock_get_manager, capsys):
