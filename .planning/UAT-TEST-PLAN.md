@@ -22,7 +22,8 @@ Before starting:
 
 **Build container image if needed:**
 ```bash
-podman build -t mc-rhel10:latest -f Containerfile .
+# From project root directory
+podman build -t mc-rhel10:latest -f container/Containerfile .
 ```
 
 ---
