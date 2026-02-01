@@ -106,6 +106,10 @@ def get_socket_path(platform_type: str) -> Optional[str]:
     # Check CONTAINER_HOST environment variable first
     container_host = os.getenv('CONTAINER_HOST')
     if container_host:
+        # Ensure string type (decode if bytes somehow present)
+        if isinstance(container_host, bytes):
+            container_host = container_host.decode('utf-8')
+
         # Parse unix:// URI
         if container_host.startswith('unix://'):
             return container_host[7:]  # Remove 'unix://' prefix
