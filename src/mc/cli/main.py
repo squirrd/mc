@@ -151,7 +151,13 @@ def main() -> ExitCode:
 
         # Get configuration values
         base_dir = config["base_directory"]
-        offline_token = config["api"]["offline_token"]
+
+        # Try new key first, fall back to old key for backwards compatibility
+        offline_token = config["api"].get("rh_api_offline_token") or config["api"].get("offline_token")
+
+        # Warn if using deprecated key
+        if not config["api"].get("rh_api_offline_token") and config["api"].get("offline_token"):
+            logger.warning("Config key 'api.offline_token' is deprecated. Please rename to 'api.rh_api_offline_token' in your config file.")
 
         # Verify base directory exists
         if not does_path_exist(base_dir):
