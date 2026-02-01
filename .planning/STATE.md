@@ -243,12 +243,13 @@ Progress: [████████████████████] 100% (1
 
 - Phase 14 added: Installation & Distribution - Support dev/UAT/prod workflows with uv tool
 - Phase 14 complete: Modern distribution approach established
+- Phase 14.1 inserted after Phase 14: UAT Critical Fixes (URGENT) - blocking bugs discovered during manual UAT testing
 
 ### Pending Todos
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Rename offline_token config to salesforce_offline_token (area: config)
+- [2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)
 - [2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)
 - [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
 - [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)

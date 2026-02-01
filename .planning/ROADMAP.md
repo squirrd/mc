@@ -176,6 +176,23 @@ Three distinct workflows enabled by uv tool:
 - UAT: `uv tool install -e .` for temporary testing from local directory
 - Production: `uv tool install git+...` for global installation from git or PyPI
 
+### Phase 14.1: UAT Bug Fixes (INSERTED)
+
+**Goal:** Fix all bugs discovered during UAT testing before milestone completion
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 14.1 to break down)
+
+**Details:**
+Five bugs discovered during manual UAT testing:
+- **BLOCKING:** Unify authentication - remove direct Salesforce dependency from container commands
+- **BLOCKING:** Fix Podman URI scheme error - byte string passed instead of decoded string
+- **UX:** Validate case number format before credential/API checks
+- **UX:** Rename offline_token config to rh_api_offline_token for clarity
+- **DOCS:** Fix UAT test plan - mc container ls should be mc container list
+
 ## Progress
 
 **Execution Order:**
