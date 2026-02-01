@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization + Distribution
 Phase: 14.1 of 14.1 (UAT Critical Fixes - URGENT)
-Plan: 2 of 5
+Plan: 4 of 5
 Status: In progress
-Last activity: 2026-02-01 - Completed 14.1-02-PLAN.md (Unify authentication)
+Last activity: 2026-02-01 - Completed 14.1-04-PLAN.md (Config key rename)
 
-Progress: [█████████████████████░] 90% (20 of 22 plans complete)
+Progress: [█████████████████████░] 95% (21 of 22 plans complete)
 
 ## Performance Metrics
 
@@ -40,14 +40,14 @@ Progress: [█████████████████████░] 9
 
 **v2.0 Status:**
 - Roadmap created: 6 phases (9-14) + Phase 14.1 (UAT Critical Fixes)
-- Plans completed: 19 of 22
+- Plans completed: 21 of 22
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
 - Phase 13 complete (2/2 plans)
 - Phase 14 complete (2/2 plans)
-- Phase 14.1 in progress (2/5 plans)
+- Phase 14.1 in progress (4/5 plans)
 
 **By Phase:**
 
@@ -59,7 +59,7 @@ Progress: [█████████████████████░] 9
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 | 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
 | 14 (Installation & Distribution) | 2 | 9min | 4.5min |
-| 14.1 (UAT Critical Fixes) | 2/5 | 5min | 2.5min |
+| 14.1 (UAT Critical Fixes) | 4/5 | 13min | 3.25min |
 
 ## Accumulated Context
 
@@ -251,6 +251,12 @@ Progress: [█████████████████████░] 9
 - Container lifecycle commands never initialize SalesforceAPIClient (only terminal attachment requires Salesforce)
 - Authentication boundaries documented in module docstring instead of inline comments (survives linter/formatter changes)
 
+**Plan 04:**
+- Use rh_api_offline_token instead of offline_token for clarity (indicates Red Hat API, not generic token)
+- Maintain backwards compatibility: validation accepts both keys, code tries new key first with fallback
+- Log deprecation warning when old key detected (helps users migrate gradually)
+- Fixed socket_path None → empty string for TOML compatibility (discovered during testing)
+
 ### Roadmap Evolution
 
 - Phase 14 added: Installation & Distribution - Support dev/UAT/prod workflows with uv tool
@@ -261,7 +267,7 @@ Progress: [█████████████████████░] 9
 
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)
+- ~~[2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)~~ — COMPLETE (Phase 14.1-04)
 - ~~[2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)~~ — COMPLETE (Phase 14.1-02)
 - [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
 - [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
@@ -283,9 +289,9 @@ Progress: [█████████████████████░] 9
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 14.1-02-PLAN.md (Unify authentication)
-Resume: Phase 14.1 in progress (2/5 plans complete)
+Stopped at: Completed 14.1-04-PLAN.md (Config key rename)
+Resume: Phase 14.1 in progress (4/5 plans complete)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-01 (Phase 14.1 in progress - 2/5 UAT critical fixes complete)*
+*Last updated: 2026-02-01 (Phase 14.1 in progress - 4/5 UAT critical fixes complete)*
