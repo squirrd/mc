@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization + Distribution
 Phase: 14 of 14 (Installation & Distribution - uv tool support)
-Plan: 1 of 1
+Plan: 2 of 2
 Status: Phase complete
-Last activity: 2026-02-01 - Completed 14-01-PLAN.md (uv-based project management and installation workflows)
+Last activity: 2026-02-01 - Completed 14-02-PLAN.md (entry point integration tests and UAT validation)
 
-Progress: [████████████████████] 100% (16 of 16 plans complete)
+Progress: [████████████████████] 100% (17 of 17 plans complete)
 
 ## Performance Metrics
 
@@ -40,13 +40,13 @@ Progress: [████████████████████] 100% (1
 
 **v2.0 Status:**
 - Roadmap created: 6 phases (9-14)
-- Plans completed: 16
+- Plans completed: 17
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
 - Phase 13 complete (2/2 plans)
-- Phase 14 complete (1/1 plans)
+- Phase 14 complete (2/2 plans)
 
 **By Phase:**
 
@@ -57,7 +57,7 @@ Progress: [████████████████████] 100% (1
 | 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 | 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
-| 14 (Installation & Distribution) | 1 | 4min | 4min |
+| 14 (Installation & Distribution) | 2 | 9min | 4.5min |
 
 ## Accumulated Context
 
@@ -219,8 +219,9 @@ Progress: [████████████████████] 100% (1
 - Environment variables over entrypoint args: Set CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE via environment dict (simpler than command args, accessible to all processes)
 - Integration test skip strategy: MC_TEST_INTEGRATION environment variable required (prevents false failures on systems without Podman/image)
 
-**Phase 14 Complete (1/1 plans) — VERIFIED:**
+**Phase 14 Complete (2/2 plans) — VERIFIED:**
 - ✅ Plan 01: uv-based project management with .python-version (3.11), uv.lock lockfile (1219 lines, 30 packages), comprehensive INSTALL.md (306 lines) documenting three workflows, README.md updated with modern installation instructions (4 minutes)
+- ✅ Plan 02: Entry point integration tests with pytest-console-scripts (3 tests), UAT workflow validation confirming editable install functionality, version assertion bug fix (5 minutes)
 
 **Key Decisions (Phase 14):**
 
@@ -230,6 +231,12 @@ Progress: [████████████████████] 100% (1
 - Three distinct workflows: Development (uv run), UAT (uv tool install -e .), Production (uv tool install git+https://...)
 - Comprehensive troubleshooting: Document common issues (PATH configuration, conda interference, Podman integration) to reduce support burden
 - PyPI publishing deferred: Focus on git-based distribution for now, PyPI publishing workflow to be addressed in future phase if needed
+
+**Plan 02:**
+- pytest-console-scripts over subprocess: More reliable entry point testing with ScriptRunner fixture, supports in-process and subprocess modes
+- Three test scenarios: Version check, help display, invalid command handling (covers basic entry point verification)
+- UAT validation checkpoint: Manual verification required for real-world installation testing (PATH config, terminal behavior, editable mode)
+- Version assertion fix: Bug detected during verification, test expected 0.1.0 but version bumped to 2.0.0 in prior commit
 
 ### Roadmap Evolution
 
@@ -257,8 +264,8 @@ Progress: [████████████████████] 100% (1
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 14-01-PLAN.md (uv-based project management and installation workflows)
-Resume: Phase 14 complete - All planned work finished (16/16 plans)
+Stopped at: Completed 14-02-PLAN.md (entry point integration tests and UAT validation)
+Resume: Phase 14 complete - All planned work finished (17/17 plans)
 
 ---
 *State initialized: 2026-01-20*
