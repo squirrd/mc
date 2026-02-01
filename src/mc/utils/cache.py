@@ -1,6 +1,7 @@
 """Case metadata caching utilities with SQLite backend."""
 
 import json
+import shutil
 import sqlite3
 import time
 import logging
@@ -11,8 +12,8 @@ from typing import Any, Iterator
 logger = logging.getLogger(__name__)
 
 
-# Cache configuration
-CACHE_DIR = Path.home() / ".mc" / "cache"
+# Cache configuration - consolidated under ~/mc/config/cache/
+CACHE_DIR = Path.home() / "mc" / "config" / "cache"
 CACHE_TTL_SECONDS = 300  # 5 minutes (per REQUIREMENTS.md SF-02)
 
 
@@ -31,13 +32,21 @@ class CaseMetadataCache:
         """Initialize SQLite cache.
 
         Args:
-            cache_dir: Directory for cache database (default: ~/.mc/cache)
+            cache_dir: Directory for cache database (default: ~/mc/config/cache)
         """
         if cache_dir is None:
             cache_dir = CACHE_DIR
 
         self.cache_dir = Path(cache_dir)
         self.db_path = self.cache_dir / "case_metadata.db"
+
+        # Auto-migration: Move from old ~/mc/cache/ location if needed
+        if not self.db_path.exists():
+            old_cache_path = Path.home() / "mc" / "cache" / "case_metadata.db"
+            if old_cache_path.exists():
+                self.cache_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
+                shutil.copy2(old_cache_path, self.db_path)
+                logger.info(f"Migrated cache from {old_cache_path} to {self.db_path}")
 
         # Ensure cache directory exists with secure permissions
         self.cache_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -264,7 +273,7 @@ def get_cached_age_minutes(case_number: str) -> int:
     with cache._get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT cached_at FROM case_metadata WHERE case_number = ?",
+            "SELECT cached_at FROM case_cache WHERE case_number = ?",
             (case_number,)
         )
         row = cursor.fetchone()
@@ -272,6 +281,6 @@ def get_cached_age_minutes(case_number: str) -> int:
         if not row:
             return 0
 
-        cached_at = row[0]
-        age_seconds = int(time.time()) - cached_at
+        cached_at: float = row[0]
+        age_seconds = int(time.time()) - int(cached_at)
         return age_seconds // 60

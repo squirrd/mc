@@ -1,5 +1,6 @@
 """Configuration file manager for MC CLI."""
 
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,6 @@ else:
     import tomli as tomllib
 
 import tomli_w
-from platformdirs import user_config_dir
 
 
 class ConfigManager:
@@ -28,14 +28,42 @@ class ConfigManager:
     def get_config_path(self) -> Path:
         """Get config file path, creating directory if needed.
 
+        Uses consolidated ~/mc/config/ location. Auto-migrates from old
+        platformdirs location on first access if needed.
+
         Returns:
             Path to config file
         """
         if self._config_path is None:
-            config_dir = Path(user_config_dir(self.app_name, appauthor=False))
-            config_dir.mkdir(parents=True, exist_ok=True)
+            # New consolidated location: ~/mc/config/config.toml
+            config_dir = Path.home() / self.app_name / "config"
             self._config_path = config_dir / "config.toml"
+
+            # Auto-migration: Move from old platformdirs location if needed
+            if not self._config_path.exists():
+                old_path = self._get_old_config_path()
+                if old_path and old_path.exists():
+                    config_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(old_path, self._config_path)
+                    print(f"Migrated config from {old_path} to {self._config_path}")
+                else:
+                    # No old config, just ensure new directory exists
+                    config_dir.mkdir(parents=True, exist_ok=True)
+
         return self._config_path
+
+    def _get_old_config_path(self) -> Path | None:
+        """Get old platformdirs config path for migration.
+
+        Returns:
+            Path to old config file, or None if not using old location
+        """
+        try:
+            from platformdirs import user_config_dir
+            old_dir = Path(user_config_dir(self.app_name, appauthor=False))
+            return old_dir / "config.toml"
+        except ImportError:
+            return None
 
     def exists(self) -> bool:
         """Check if config file exists.

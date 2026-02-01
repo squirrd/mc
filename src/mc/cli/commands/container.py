@@ -18,15 +18,29 @@ from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.attach import attach_terminal
 from mc.utils.auth import get_access_token
 from mc.utils.validation import validate_case_number
-from platformdirs import user_data_dir
 
 
 def _get_manager() -> ContainerManager:
     """Get ContainerManager instance (helper to avoid duplication)."""
     podman_client = PodmanClient()
-    data_dir = user_data_dir("mc", "redhat")
-    os.makedirs(data_dir, exist_ok=True)
-    db_path = os.path.join(data_dir, "containers.db")
+
+    # Consolidated location: ~/mc/state/containers.db
+    state_dir = os.path.join(os.path.expanduser("~"), "mc", "state")
+    os.makedirs(state_dir, exist_ok=True)
+    db_path = os.path.join(state_dir, "containers.db")
+
+    # Auto-migration: Move from old platformdirs location if needed
+    if not os.path.exists(db_path):
+        try:
+            from platformdirs import user_data_dir
+            old_db_path = os.path.join(user_data_dir("mc", "redhat"), "containers.db")
+            if os.path.exists(old_db_path):
+                import shutil
+                shutil.copy2(old_db_path, db_path)
+                print(f"Migrated state database from {old_db_path} to {db_path}")
+        except ImportError:
+            pass
+
     state_db = StateDatabase(db_path)
     return ContainerManager(podman_client, state_db)
 
