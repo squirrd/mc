@@ -136,7 +136,7 @@ mc <case_number>
 **Objective:** View all case containers
 
 ```bash
-mc container ls
+mc container list
 ```
 
 **Expected:**
@@ -156,7 +156,7 @@ mc container ls
 mc container stop <case_number>
 
 # Verify stopped
-mc container ls
+mc container list
 
 # Restart by accessing case again
 mc case <case_number>
@@ -165,7 +165,7 @@ mc case <case_number>
 mc container delete <case_number>
 
 # Verify deletion
-mc container ls
+mc container list
 ```
 
 **Expected:**
@@ -525,7 +525,7 @@ exit
 mc case <case_number>
 
 # 7. View other cases
-mc container ls
+mc container list
 
 # 8. Cleanup when done
 mc container delete <case_number>
