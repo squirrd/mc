@@ -56,8 +56,23 @@ class ContainerManager:
                 # Get container from Podman
                 container = self.podman.client.containers.get(existing.container_id)
 
+                # Reload container to ensure attrs is properly populated
+                try:
+                    container.reload()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+
+                # Get status with defensive handling
+                try:
+                    status = container.status
+                except (TypeError, KeyError, AttributeError):
+                    if isinstance(container.attrs, dict):
+                        status = container.attrs.get("State", {}).get("Status", "unknown")
+                    else:
+                        status = "unknown"
+
                 # Auto-restart if stopped/exited
-                if container.status in ("stopped", "exited"):
+                if status in ("stopped", "exited"):
                     print(f"Restarting container for case {case_number}...")
                     container.start()  # type: ignore[no-untyped-call]
 
@@ -90,7 +105,7 @@ class ContainerManager:
             container = self.podman.client.containers.create(
                 image="mc-rhel10:latest",
                 name=f"mc-{case_number}",
-                command=["/bin/bash", "-l"],
+                command=["/bin/bash", "-c", "tail -f /dev/null"],
                 detach=True,
                 labels={
                     "mc.managed": "true",
@@ -225,8 +240,25 @@ class ContainerManager:
                 # Skip containers without case number (shouldn't happen)
                 continue
 
+            # Reload container to ensure attrs is properly populated
+            # (workaround for podman-py versions where attrs may be incomplete)
+            try:
+                container.reload()  # type: ignore[no-untyped-call]
+            except Exception:
+                # If reload fails, continue with existing data
+                pass
+
             # Get status and customer from container
-            status = container.status
+            # Defensive: handle case where container.status might fail due to attrs issues
+            try:
+                status = container.status
+            except (TypeError, KeyError, AttributeError):
+                # Fallback: try to get status from attrs directly, or use "unknown"
+                if isinstance(container.attrs, dict):
+                    status = container.attrs.get("State", {}).get("Status", "unknown")
+                else:
+                    status = "unknown"
+
             customer = container.labels.get("mc.customer", "Unknown")
 
             # Get metadata from state database
@@ -302,8 +334,22 @@ class ContainerManager:
                 f"Failed to get container for case {case_number}: {e}"
             ) from e
 
+        # Reload container to ensure attrs is properly populated
+        try:
+            container.reload()  # type: ignore[no-untyped-call]
+        except Exception:
+            pass
+
         # Check if already stopped
-        if container.status in ("stopped", "exited"):
+        try:
+            status = container.status
+        except (TypeError, KeyError, AttributeError):
+            if isinstance(container.attrs, dict):
+                status = container.attrs.get("State", {}).get("Status", "unknown")
+            else:
+                status = "unknown"
+
+        if status in ("stopped", "exited"):
             return False
 
         # Stop container gracefully
@@ -338,8 +384,23 @@ class ContainerManager:
         try:
             container = self.podman.client.containers.get(metadata.container_id)
 
+            # Reload container to ensure attrs is properly populated
+            try:
+                container.reload()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+            # Get status with defensive handling
+            try:
+                status = container.status
+            except (TypeError, KeyError, AttributeError):
+                if isinstance(container.attrs, dict):
+                    status = container.attrs.get("State", {}).get("Status", "unknown")
+                else:
+                    status = "running"  # Assume running if unknown, will try to stop
+
             # Stop container if running
-            if container.status not in ("stopped", "exited"):
+            if status not in ("stopped", "exited"):
                 container.stop(timeout=10)  # type: ignore[no-untyped-call]
 
             # Remove container
@@ -405,8 +466,24 @@ class ContainerManager:
         # Try to get container from Podman
         try:
             container = self.podman.client.containers.get(metadata.container_id)
+
+            # Reload container to ensure attrs is properly populated
+            try:
+                container.reload()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+            # Get status with defensive handling
+            try:
+                status = container.status
+            except (TypeError, KeyError, AttributeError):
+                if isinstance(container.attrs, dict):
+                    status = container.attrs.get("State", {}).get("Status", "unknown")
+                else:
+                    status = "unknown"
+
             return {
-                "status": container.status,
+                "status": status,
                 "container_id": container.short_id,
                 "workspace_path": metadata.workspace_path,
                 "created_at": metadata.created_at,
@@ -494,8 +571,23 @@ class ContainerManager:
             # Get container from Podman
             container = self.podman.client.containers.get(metadata.container_id)
 
+            # Reload container to ensure attrs is properly populated
+            try:
+                container.reload()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+            # Get status with defensive handling
+            try:
+                status = container.status
+            except (TypeError, KeyError, AttributeError):
+                if isinstance(container.attrs, dict):
+                    status = container.attrs.get("State", {}).get("Status", "unknown")
+                else:
+                    status = "unknown"
+
             # Auto-restart if stopped
-            if container.status in ("stopped", "exited"):
+            if status in ("stopped", "exited"):
                 print(f"Restarting container for case {case_number}...")
                 container.start()  # type: ignore[no-untyped-call]
 

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 # Token cache configuration
-TOKEN_CACHE_PATH = os.path.expanduser("~/.mc/token")
+TOKEN_CACHE_PATH = os.path.expanduser("~/mc/auth/token")
 EXPIRY_BUFFER_SECONDS = 300  # 5-minute buffer
 DEFAULT_TTL_SECONDS = 3600  # 1 hour default
 

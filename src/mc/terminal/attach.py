@@ -11,10 +11,11 @@ from typing import Any
 
 from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
-from mc.integrations.salesforce_api import SalesforceAPIClient
+from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.launcher import LaunchOptions, get_launcher
 from mc.terminal.shell import write_bashrc
 from mc.utils.validation import validate_case_number
+from mc.utils.cache import get_case_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,11 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
         'podman exec -it --env BASH_ENV=/path/to/bashrc --env PS1=[MC-12345678] \\w\\$ mc-12345678 /bin/bash'
     """
     # Build command with BASH_ENV for custom config and PS1 for prompt
+    # Use single quotes to prevent shell glob expansion of brackets and handle paths with spaces
     return (
         f"podman exec -it "
-        f"--env BASH_ENV={bashrc_path} "
-        f"--env PS1=[MC-{case_number}]\\ \\\\w\\\\$\\ "
+        f"--env 'BASH_ENV={bashrc_path}' "
+        f"--env 'PS1=[MC-{case_number}] \\w\\$ ' "
         f"{container_id} /bin/bash"
     )
 
@@ -91,7 +93,7 @@ def build_window_title(case_number: str, customer_name: str, description: str) -
 def attach_terminal(
     case_number: str,
     config_manager: ConfigManager,
-    salesforce_client: SalesforceAPIClient,
+    api_client: RedHatAPIClient,
     container_manager: ContainerManager,
 ) -> None:
     """Complete workflow for terminal attachment to case container.
@@ -99,7 +101,7 @@ def attach_terminal(
     Orchestrates the entire terminal attachment process:
     1. Validates case number format
     2. Checks TTY (must be interactive terminal)
-    3. Fetches case metadata from Salesforce
+    3. Fetches case metadata from Red Hat API (with caching)
     4. Auto-creates container if missing
     5. Auto-starts container if stopped
     6. Generates custom bashrc with welcome banner
@@ -108,11 +110,11 @@ def attach_terminal(
     Args:
         case_number: Case number (must be 8 digits)
         config_manager: Configuration manager for base directory
-        salesforce_client: Salesforce API client for case metadata
+        api_client: Red Hat API client for case metadata
         container_manager: Container manager for lifecycle operations
 
     Raises:
-        RuntimeError: If TTY check fails, Salesforce API fails, container
+        RuntimeError: If TTY check fails, Red Hat API fails, container
                      operations fail, or terminal launch fails
     """
     logger.info("Attaching terminal for case %s", case_number)
@@ -130,10 +132,12 @@ def attach_terminal(
     except ValueError as e:
         raise RuntimeError(str(e)) from e
 
-    # 3. Fetch case metadata from Salesforce
+    # 3. Fetch case metadata from Red Hat API (with caching)
     try:
-        logger.debug("Fetching case metadata from Salesforce for case %s", case_number)
-        case_data = salesforce_client.get_case(case_number)
+        logger.debug("Fetching case metadata from Red Hat API for case %s", case_number)
+        case_details, account_details, was_cached = get_case_metadata(case_number, api_client)
+        if was_cached:
+            logger.debug("Using cached case metadata for case %s", case_number)
     except Exception as e:
         error_msg = (
             f"Failed to fetch case metadata for case {case_number}. "
@@ -143,8 +147,8 @@ def attach_terminal(
         raise RuntimeError(error_msg) from e
 
     # Extract metadata with fallbacks
-    customer_name = case_data.get("account_name", "Unknown")
-    description = case_data.get("case_summary", case_data.get("subject", ""))
+    customer_name = account_details.get("name", "Unknown")
+    description = case_details.get("summary", "")
 
     # 4. Check if container exists, auto-create if missing
     status_info = container_manager.status(case_number)
@@ -178,7 +182,7 @@ def attach_terminal(
         logger.debug("Container stopped for case %s, will auto-start on exec", case_number)
 
     # 5. Get workspace path (from status or construct)
-    workspace_path = status_info.get("workspace_path")
+    workspace_path = status_info.get("workspace_path")  # type: ignore[assignment]
     if not workspace_path:
         base_dir = config_manager.load()["base_directory"]
         workspace_path = f"{base_dir}/{case_number}"
@@ -188,8 +192,9 @@ def attach_terminal(
         "case_number": case_number,
         "customer_name": customer_name,
         "description": description,
-        "summary": case_data.get("case_summary", ""),
-        "next_steps": case_data.get("next_steps", ""),
+        "summary": case_details.get("summary", ""),
+        "status": case_details.get("status", ""),
+        "severity": case_details.get("severity", ""),
     }
 
     # 7. Generate and write custom bashrc

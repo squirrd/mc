@@ -75,6 +75,10 @@ class PodmanClient:
             timeout: API timeout in seconds (default: 120). Increase for slow operations
                     like image pulls.
         """
+        # Defensive: ensure socket_path is string, not bytes
+        if socket_path and isinstance(socket_path, bytes):
+            socket_path = socket_path.decode('utf-8')
+
         self._socket_path = socket_path
         self._timeout = timeout
         self._client: Optional[podman.PodmanClient] = None
@@ -117,6 +121,10 @@ class PodmanClient:
             else:
                 socket_path = get_socket_path(self._platform_type)
 
+            # Defensive: ensure socket_path is string, not bytes
+            if socket_path and isinstance(socket_path, bytes):
+                socket_path = socket_path.decode('utf-8')
+
             # Construct URI
             uri: Optional[str]
             if socket_path:
@@ -124,10 +132,19 @@ class PodmanClient:
             else:
                 uri = None
 
+            # Defensive: ensure URI is string, not bytes
+            if uri and isinstance(uri, bytes):
+                uri = uri.decode('utf-8')
+
             # Connect with retry logic
             def _connect() -> podman.PodmanClient:
                 """Inner function to wrap connection in retry logic."""
-                return podman.PodmanClient(base_url=uri, timeout=self._timeout)
+                # On macOS with Podman machine, don't pass base_url (let it auto-detect)
+                # On Linux, pass the socket path URI
+                if uri is not None:
+                    return podman.PodmanClient(base_url=uri, timeout=self._timeout)
+                else:
+                    return podman.PodmanClient(timeout=self._timeout)
 
             # Use retry_podman_operation to handle transient errors
             self._client = retry_podman_operation(_connect)
