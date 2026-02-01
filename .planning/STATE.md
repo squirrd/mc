@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 ## Current Position
 
 Milestone: v2.0 Containerization + Distribution
-Phase: 14.1 of 14.1 (UAT Critical Fixes - URGENT)
-Plan: 4 of 5
-Status: In progress
-Last activity: 2026-02-01 - Completed 14.1-04-PLAN.md (Config key rename)
+Phase: 14.1 of 14.1 (UAT Bug Fixes)
+Plan: 5 of 5
+Status: Phase complete - ALL v2.0 PHASES COMPLETE
+Last activity: 2026-02-01 - Completed Phase 14.1 (all 5 UAT bug fix plans executed and verified)
 
-Progress: [█████████████████████░] 95% (21 of 22 plans complete)
+Progress: [████████████████████] 100% (22 of 22 plans complete)
 
 ## Performance Metrics
 
@@ -39,15 +39,15 @@ Progress: [█████████████████████░] 9
 | 8 (Type Safety & Modernization) | 1 | 12min | 12min |
 
 **v2.0 Status:**
-- Roadmap created: 6 phases (9-14) + Phase 14.1 (UAT Critical Fixes)
-- Plans completed: 21 of 22
+- Roadmap created: 6 phases (9-14) + Phase 14.1 (UAT Bug Fixes)
+- Plans completed: 22 of 22
 - Phase 9 complete (2/2 plans)
 - Phase 10 complete (3/3 plans)
 - Phase 11 complete (5/5 plans)
 - Phase 12 complete (3/3 plans)
 - Phase 13 complete (2/2 plans)
 - Phase 14 complete (2/2 plans)
-- Phase 14.1 in progress (4/5 plans)
+- Phase 14.1 complete (5/5 plans)
 
 **By Phase:**
 
@@ -59,7 +59,7 @@ Progress: [█████████████████████░] 9
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 | 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
 | 14 (Installation & Distribution) | 2 | 9min | 4.5min |
-| 14.1 (UAT Critical Fixes) | 4/5 | 13min | 3.25min |
+| 14.1 (UAT Bug Fixes) | 5 | 13min | 2.6min |
 
 ## Accumulated Context
 
@@ -241,6 +241,13 @@ Progress: [█████████████████████░] 9
 - UAT validation checkpoint: Manual verification required for real-world installation testing (PATH config, terminal behavior, editable mode)
 - Version assertion fix: Bug detected during verification, test expected 0.1.0 but version bumped to 2.0.0 in prior commit
 
+**Phase 14.1 Complete (5/5 plans) — VERIFIED:**
+- ✅ Plan 01: Fixed Podman URI scheme parsing - byte string detection and UTF-8 decoding in get_socket_path() (2.4 minutes, 33 tests passing)
+- ✅ Plan 02: Unified authentication - added ConfigManager.get() with defaults, removed Salesforce dependency from container lifecycle commands (3 minutes)
+- ✅ Plan 03: Early case number validation - fails in <0.3s instead of 5+ seconds, validation before credential checks (4 minutes, 29 tests passing)
+- ✅ Plan 04: Renamed offline_token to rh_api_offline_token with backwards compatibility, fixed socket_path TOML serialization bug (4 minutes)
+- ✅ Plan 05: Fixed UAT test plan documentation - corrected 4 instances of "mc container ls" to "mc container list" (<1 minute)
+
 **Key Decisions (Phase 14.1):**
 
 **Plan 01:**
@@ -275,8 +282,8 @@ Progress: [█████████████████████░] 9
 - [2026-01-26] v2.x deferred containerization features (area: planning)
 - ~~[2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)~~ — COMPLETE (Phase 14.1-04)
 - ~~[2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)~~ — COMPLETE (Phase 14.1-02)
-- [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
-- [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
+- ~~[2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)~~ — COMPLETE (Phase 14.1-05)
+- ~~[2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)~~ — COMPLETE (Phase 14.1-01)
 - ~~[2026-02-01] Validate case number format before credential/API checks (area: general)~~ — COMPLETE (Phase 14.1-03)
 - ~~[2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)~~ — COMPLETE (Phase 14-01)
 
@@ -295,9 +302,9 @@ Progress: [█████████████████████░] 9
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 14.1-04-PLAN.md (Config key rename)
-Resume: Phase 14.1 in progress (4/5 plans complete)
+Stopped at: Completed Phase 14.1 execution and verification
+Resume: ALL v2.0 PHASES COMPLETE - Ready for milestone audit
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-01 (Phase 14.1 in progress - 4/5 UAT critical fixes complete)*
+*Last updated: 2026-02-01 (Phase 14.1 complete - ALL v2.0 phases verified)*

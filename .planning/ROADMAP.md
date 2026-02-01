@@ -181,13 +181,15 @@ Three distinct workflows enabled by uv tool:
 **Goal:** Fix all bugs discovered during UAT testing before milestone completion
 **Depends on:** Phase 14
 **Plans:** 5 plans
+**Status:** Complete
+**Completed:** 2026-02-01
 
 Plans:
-- [ ] 14.1-01-PLAN.md — Fix Podman URI scheme error (byte string vs decoded string)
-- [ ] 14.1-02-PLAN.md — Unify authentication - remove Salesforce dependency from container commands
-- [ ] 14.1-03-PLAN.md — Validate case number format before credential/API checks
-- [ ] 14.1-04-PLAN.md — Rename offline_token config to rh_api_offline_token
-- [ ] 14.1-05-PLAN.md — Fix UAT test plan documentation (mc container list not ls)
+- [x] 14.1-01-PLAN.md — Fix Podman URI scheme error (byte string vs decoded string)
+- [x] 14.1-02-PLAN.md — Unify authentication - remove Salesforce dependency from container commands
+- [x] 14.1-03-PLAN.md — Validate case number format before credential/API checks
+- [x] 14.1-04-PLAN.md — Rename offline_token config to rh_api_offline_token
+- [x] 14.1-05-PLAN.md — Fix UAT test plan documentation (mc container list not ls)
 
 **Details:**
 Five bugs discovered during manual UAT testing:
@@ -218,7 +220,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 14.1
 | 12. Terminal Attachment & Exec | v2.0 | 3/3 | Complete | 2026-01-27 |
 | 13. Container Image & Backwards Compatibility | v2.0 | 2/2 | Complete | 2026-01-27 |
 | 14. Installation & Distribution | v2.0 | 2/2 | Complete | 2026-02-01 |
-| 14.1. UAT Bug Fixes | v2.0 | 0/5 | Planned | - |
+| 14.1. UAT Bug Fixes | v2.0 | 5/5 | Complete | 2026-02-01 |
 
 **Note:** OpenShift tools (oc, ocm, backplane) deferred to v2.1+ milestones. Each tool will be its own milestone to handle tool-specific configuration mounting requirements.
 
