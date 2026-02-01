@@ -16,6 +16,7 @@ from mc.terminal.launcher import LaunchOptions, get_launcher
 from mc.terminal.shell import write_bashrc
 from mc.utils.validation import validate_case_number
 from mc.utils.cache import get_case_metadata
+from mc.utils.formatters import shorten_and_format
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,13 @@ def attach_terminal(
         try:
             # Get workspace path from config
             base_dir = config_manager.load()["base_directory"]
-            workspace_path = f"{base_dir}/{case_number}"
+
+            # Format customer and description for path
+            customer_formatted = shorten_and_format(customer_name)
+            description_formatted = shorten_and_format(description)
+
+            # Construct workspace path: {base_dir}/cases/{customer}/{case}-{description}
+            workspace_path = f"{base_dir}/cases/{customer_formatted}/{case_number}-{description_formatted}"
 
             # Create container with workspace mount
             container_manager.create(
@@ -184,8 +191,13 @@ def attach_terminal(
     # 5. Get workspace path (from status or construct)
     workspace_path = status_info.get("workspace_path")  # type: ignore[assignment]
     if not workspace_path:
+        # Format customer and description for path
+        customer_formatted = shorten_and_format(customer_name)
+        description_formatted = shorten_and_format(description)
+
+        # Construct workspace path: {base_dir}/cases/{customer}/{case}-{description}
         base_dir = config_manager.load()["base_directory"]
-        workspace_path = f"{base_dir}/{case_number}"
+        workspace_path = f"{base_dir}/cases/{customer_formatted}/{case_number}-{description_formatted}"
 
     # 6. Build case metadata dict for bashrc
     case_metadata: dict[str, Any] = {
