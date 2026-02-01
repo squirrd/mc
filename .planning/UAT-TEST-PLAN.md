@@ -74,6 +74,38 @@ uv tool uninstall mc-cli
 
 ---
 
+**Understanding "Editable Mode":**
+
+Step 4 tests that code changes are reflected immediately without reinstalling. Here's what to do:
+
+1. **Make a trivial change:**
+   ```bash
+   # Edit the version description
+   # Change line 8 in src/mc/version.py
+   # From: description="MC CLI - Multi-case Container Management Tool"
+   # To:   description="MC CLI - Multi-case Container Management Tool [TESTING EDITABLE MODE]"
+   ```
+
+2. **Test without reinstalling:**
+   ```bash
+   mc --help
+   # Should show "[TESTING EDITABLE MODE]" in the description
+   ```
+
+3. **Revert the change:**
+   ```bash
+   git checkout src/mc/version.py
+   mc --help  # Should show original description
+   ```
+
+If the description changes appear immediately without running `uv tool install -e .` again, editable mode is working correctly.
+
+**Why this matters:** In production installs (`uv tool install git+...`), you'd need to reinstall to see changes. With editable mode (`-e`), developers/testers see changes instantly.
+
+---
+
+---
+
 ## Test Suite 2: Container Lifecycle (Phase 11)
 
 ### Test 2.1: Create Container from Case Number
@@ -284,10 +316,12 @@ mc case <case_number> > /dev/null
 # Inside container
 mc case <case_number>
 
-# Test helper commands
-case-info          # Should display case metadata
+# Test built-in commands
 pwd               # Should be /case
 echo $CASE_NUMBER # Should show case number
+
+# Test custom helper
+case-info         # Should display case metadata
 ```
 
 **Expected:**
