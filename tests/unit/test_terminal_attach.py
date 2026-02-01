@@ -294,7 +294,7 @@ class TestAttachTerminal:
         deps = mock_dependencies
 
         # Test 7 digits
-        with pytest.raises(RuntimeError, match="Invalid case number.*Must be 8 digits"):
+        with pytest.raises(RuntimeError, match="Invalid case number.*must be exactly 8 digits"):
             attach_terminal(
                 case_number="1234567",
                 config_manager=deps["config_manager"],
@@ -303,7 +303,7 @@ class TestAttachTerminal:
             )
 
         # Test non-digits
-        with pytest.raises(RuntimeError, match="Invalid case number.*Must be 8 digits"):
+        with pytest.raises(RuntimeError, match="Invalid case number.*must be exactly 8 digits"):
             attach_terminal(
                 case_number="abcd1234",
                 config_manager=deps["config_manager"],

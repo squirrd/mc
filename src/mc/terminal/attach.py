@@ -14,6 +14,7 @@ from mc.container.manager import ContainerManager
 from mc.integrations.salesforce_api import SalesforceAPIClient
 from mc.terminal.launcher import LaunchOptions, get_launcher
 from mc.terminal.shell import write_bashrc
+from mc.utils.validation import validate_case_number
 
 logger = logging.getLogger(__name__)
 
@@ -116,18 +117,18 @@ def attach_terminal(
     """
     logger.info("Attaching terminal for case %s", case_number)
 
-    # 1. Validate case number format (8 digits)
-    if not case_number.isdigit() or len(case_number) != 8:
-        raise RuntimeError(
-            f"Invalid case number: {case_number}. Must be 8 digits."
-        )
-
-    # 2. Check TTY - must be interactive terminal
+    # 1. Check TTY - must be interactive terminal
     if not should_launch_terminal():
         raise RuntimeError(
             "mc case command requires interactive terminal. "
             "This command cannot be used in pipes or scripts."
         )
+
+    # 2. Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(case_number)
+    except ValueError as e:
+        raise RuntimeError(str(e)) from e
 
     # 3. Fetch case metadata from Salesforce
     try:
