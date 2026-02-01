@@ -60,7 +60,7 @@ See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
 See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
-### Pending Todos (12 remaining)
+### Pending Todos (10 remaining)
 
 **Completed (moved to done/):**
 - [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
@@ -69,12 +69,12 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-01] ✅ Fix terminal attachment Salesforce API method call
 - [2026-02-01] ✅ Fix cache database initialization in mc create command
 - [2026-02-01] ✅ Fix Podman URI scheme byte string error in container commands
+- [2026-02-01] ✅ Unify authentication - remove direct Salesforce dependency from container commands
+- [2026-02-01] ✅ Fix Podman URI scheme error - byte string passed instead of decoded string
 
 **Still pending:**
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)
-- [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
 - [2026-02-01] Validate case number format before credential/API checks (area: general)
 - [2026-02-01] Consolidate config directory under ~/mc workspace (area: config)
 - [2026-02-01] Fix container create image detection failure (area: containers)
