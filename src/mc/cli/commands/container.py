@@ -16,6 +16,7 @@ from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
 from mc.integrations.salesforce_api import SalesforceAPIClient
 from mc.terminal.attach import attach_terminal
+from mc.utils.validation import validate_case_number
 from platformdirs import user_data_dir
 
 
@@ -173,7 +174,12 @@ def case_terminal(args: argparse.Namespace) -> None:
     Args:
         args: Parsed arguments with case_number
     """
-    case_number = args.case_number
+    # Validate case number format early (fail fast before expensive operations)
+    try:
+        case_number = validate_case_number(args.case_number)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Initialize dependencies
     config_manager = ConfigManager()
