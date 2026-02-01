@@ -181,9 +181,10 @@ def case_terminal(args: argparse.Namespace) -> None:
         sf_token = sf_config.get("security_token")
 
         if not all([sf_username, sf_password, sf_token]):
+            config_path = config_manager.get_config_path()
             print(
-                "Error: Salesforce credentials not configured. "
-                "Update config at ~/.config/mc/config.toml",
+                f"Error: Salesforce credentials not configured. "
+                f"Update config at {config_path}",
                 file=sys.stderr
             )
             sys.exit(1)
