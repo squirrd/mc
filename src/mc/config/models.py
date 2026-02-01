@@ -12,7 +12,7 @@ def get_default_config() -> Dict[str, Any]:
     return {
         "base_directory": "~/mc",
         "api": {
-            "offline_token": ""
+            "rh_api_offline_token": ""
         },
         "salesforce": {
             "username": "",
@@ -22,7 +22,7 @@ def get_default_config() -> Dict[str, Any]:
         "podman": {
             "timeout": 120,
             "retry_attempts": 3,
-            "socket_path": None
+            "socket_path": ""
         }
     }
 
@@ -45,7 +45,8 @@ def validate_config(config: Dict[str, Any]) -> bool:
     if "api" not in config or not isinstance(config["api"], dict):
         return False
 
-    if "offline_token" not in config["api"]:
+    # Support both rh_api_offline_token (new) and offline_token (deprecated)
+    if "rh_api_offline_token" not in config["api"] and "offline_token" not in config["api"]:
         return False
 
     # Salesforce config is required
@@ -69,7 +70,8 @@ def validate_config(config: Dict[str, Any]) -> bool:
             return False
         if "retry_attempts" in podman_config and not isinstance(podman_config["retry_attempts"], int):
             return False
-        if "socket_path" in podman_config and podman_config["socket_path"] is not None:
+        if "socket_path" in podman_config:
+            # socket_path can be empty string (auto-detect) or a path
             if not isinstance(podman_config["socket_path"], str):
                 return False
 

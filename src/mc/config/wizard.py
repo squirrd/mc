@@ -40,6 +40,6 @@ def run_setup_wizard() -> Dict[str, Any]:
     return {
         "base_directory": base_dir,
         "api": {
-            "offline_token": offline_token
+            "rh_api_offline_token": offline_token
         }
     }

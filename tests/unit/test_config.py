@@ -79,14 +79,35 @@ class TestConfigModels:
 
         assert "base_directory" in config
         assert "api" in config
-        assert "offline_token" in config["api"]
+        assert "rh_api_offline_token" in config["api"]
 
     def test_validate_config_accepts_valid_config(self):
-        """Test that validation accepts valid config."""
+        """Test that validation accepts valid config with new key."""
+        valid_config = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            }
+        }
+
+        assert validate_config(valid_config) is True
+
+    def test_validate_config_accepts_old_offline_token_key(self):
+        """Test that validation accepts old offline_token key for backwards compatibility."""
         valid_config = {
             "base_directory": "~/mc",
             "api": {
                 "offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
             }
         }
 
@@ -111,7 +132,7 @@ class TestConfigModels:
         assert validate_config(invalid_config) is False
 
     def test_validate_config_rejects_missing_offline_token(self):
-        """Test that validation rejects config without offline_token."""
+        """Test that validation rejects config without rh_api_offline_token or offline_token."""
         invalid_config = {
             "base_directory": "~/mc",
             "api": {}
@@ -131,7 +152,7 @@ class TestConfigWizard:
 
     def test_wizard_with_defaults(self, monkeypatch):
         """Test wizard uses defaults when user input is empty."""
-        # Mock input to return empty string for base_dir, token for offline_token
+        # Mock input to return empty string for base_dir, token for rh_api_offline_token
         inputs = iter(["", "test_offline_token_123"])
         monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
@@ -139,7 +160,7 @@ class TestConfigWizard:
 
         assert "base_directory" in config
         assert "mc" in config["base_directory"]
-        assert config["api"]["offline_token"] == "test_offline_token_123"
+        assert config["api"]["rh_api_offline_token"] == "test_offline_token_123"
 
     def test_wizard_with_custom_values(self, monkeypatch):
         """Test wizard uses custom values when provided."""
@@ -149,17 +170,17 @@ class TestConfigWizard:
         config = run_setup_wizard()
 
         assert config["base_directory"] == "/custom/path"
-        assert config["api"]["offline_token"] == "custom_token_456"
+        assert config["api"]["rh_api_offline_token"] == "custom_token_456"
 
     def test_wizard_requires_offline_token(self, monkeypatch):
-        """Test wizard loops until offline_token is provided."""
+        """Test wizard loops until rh_api_offline_token is provided."""
         # First two attempts are empty, third is valid
         inputs = iter(["", "", "", "finally_a_token"])
         monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
         config = run_setup_wizard()
 
-        assert config["api"]["offline_token"] == "finally_a_token"
+        assert config["api"]["rh_api_offline_token"] == "finally_a_token"
 
 
 class TestLegacyEnvVarDetection:
