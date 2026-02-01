@@ -250,6 +250,7 @@ Progress: [████████████████████] 100% (1
 - [2026-01-26] v2.x deferred containerization features (area: planning)
 - [2026-02-01] Rename offline_token config to salesforce_offline_token (area: config)
 - [2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)
+- [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
 - ~~[2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)~~ — COMPLETE (Phase 14-01)
 
 ### Blockers/Concerns
