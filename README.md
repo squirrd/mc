@@ -24,12 +24,19 @@ For detailed installation instructions covering development, UAT, and production
 - **Case Workspace Management**: Automatically creates organized directory structures for support cases
 - **Red Hat API Integration**: Fetches case details, attachments, and account information
 - **LDAP Search**: Quick lookup of Red Hat employee information
-- **Container Orchestration** (planned): Rootless Podman containers per case with persistent workspaces
-- **Multi-user Support** (planned): Admin and user privilege levels within containers
+- **Container Orchestration**: Rootless Podman containers per case with persistent workspaces
+- **Terminal Automation**: Auto-attach to containerized case environments
+- **Salesforce Integration**: Automatic case metadata caching and workspace resolution
 
-## Current Commands
+## Commands
 
-### Case Management
+### Container Workflows (v2.0)
+- `mc case <case_number>` - Launch terminal in containerized case workspace
+- `mc container ls` - List all case containers
+- `mc container stop <case_number>` - Stop a running container
+- `mc container delete <case_number>` - Remove a container
+
+### Case Management (v1.0 - still supported)
 - `mc check <case_number>` - Check workspace status for a case
 - `mc create <case_number>` - Create workspace structure for a case
 - `mc attach <case_number>` - Download case attachments
@@ -82,7 +89,44 @@ MC CLI uses different paths on macOS and Linux for configuration and data files:
 
 For complete platform path documentation, see [.planning/PLATFORM-PATHS.md](.planning/PLATFORM-PATHS.md).
 
+### Building the Container Image
+
+Before using container features, build the image:
+
+```bash
+# From project root
+podman build -t mc-rhel10:latest -f container/Containerfile .
+
+# Or use the build script
+./container/build.sh
+```
+
+Verify:
+```bash
+podman images | grep mc-rhel10
+```
+
 ## Usage Examples
+
+### Container Workflow (v2.0)
+
+```bash
+# Open terminal in containerized case workspace
+mc case 12345678
+
+# Inside container: case workspace at /case
+ls /case
+mc attach 12345678
+vim /case/notes.txt
+
+# List all case containers
+mc container ls
+
+# Stop container when done
+mc container stop 12345678
+```
+
+### Legacy Workflow (v1.0)
 
 ### Check case workspace
 ```bash

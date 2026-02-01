@@ -208,6 +208,15 @@ pip install -e .                        # Install package
 
 ### Container:
 ```bash
-./container/build.sh                    # Build container
-./container/run.sh <case_id>            # Run container
+# Build container image (mc-rhel10:latest)
+./container/build.sh
+
+# Or manually from project root:
+podman build -t mc-rhel10:latest -f container/Containerfile .
+
+# Run via mc CLI (recommended):
+mc case <case_number>
+
+# Or use legacy run script:
+./container/run.sh <case_id>
 ```

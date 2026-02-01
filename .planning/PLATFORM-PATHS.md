@@ -63,6 +63,37 @@ CACHE_DB=~/Library/Caches/mc/case_metadata.db
 # CACHE_DB=~/.cache/mc/case_metadata.db
 ```
 
+## Container Image
+
+The MC CLI container image must be built before using container features.
+
+### Building the Image
+
+**Option 1: Direct command (from project root)**
+```bash
+podman build -t mc-rhel10:latest -f container/Containerfile .
+```
+
+**Option 2: Using build script (from anywhere)**
+```bash
+./container/build.sh
+```
+
+The script automatically:
+- Navigates to project root
+- Builds image with correct name (`mc-rhel10:latest`)
+- Uses correct Containerfile path (`container/Containerfile`)
+
+### Verifying the Build
+
+```bash
+# Check image exists
+podman images | grep mc-rhel10
+
+# Should show:
+# mc-rhel10    latest    <image-id>    <timestamp>    391 MB
+```
+
 ## Future Platforms
 
 If Windows support is added:

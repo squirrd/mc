@@ -265,6 +265,28 @@ podman --version
 podman ps
 ```
 
+### Container Image Not Found
+
+**Problem:** `mc case` or container commands fail with "Image mc-rhel10:latest not found"
+
+**Solution:** Build the container image first:
+
+```bash
+# Option 1: From project root
+podman build -t mc-rhel10:latest -f container/Containerfile .
+
+# Option 2: Using build script (works from anywhere)
+./container/build.sh
+
+# Verify image exists
+podman images | grep mc-rhel10
+```
+
+**Expected output:**
+```
+mc-rhel10    latest    <image-id>    <timestamp>    391 MB
+```
+
 ### Permission Errors on Container Workspaces
 
 **Problem:** Permission denied when accessing files in container workspaces
