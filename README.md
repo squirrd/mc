@@ -58,9 +58,8 @@ For detailed installation instructions covering development, UAT, and production
 
 Configure your Red Hat API offline token in the config file:
 
-**Config file location:**
-- **macOS**: `~/Library/Application Support/mc/config.toml`
-- **Linux**: `~/.config/mc/config.toml`
+**Config file location (v2.0.1+):**
+- **All platforms**: `~/mc/config/config.toml`
 
 ```toml
 [api]
@@ -77,15 +76,23 @@ export RH_API_OFFLINE_TOKEN="your_token_here"
 
 Case workspaces are created automatically in the configured base directory.
 
-### Platform-Specific File Locations
+### Consolidated Directory Structure (v2.0.1+)
 
-MC CLI uses different paths on macOS and Linux for configuration and data files:
+MC CLI v2.0.1+ uses a unified directory structure across all platforms:
 
-| File Type | macOS | Linux (Fedora/RHEL) |
-|-----------|-------|---------------------|
-| Config | `~/Library/Application Support/mc/config.toml` | `~/.config/mc/config.toml` |
-| Container State | `~/Library/Application Support/mc/containers.db` | `~/.local/share/mc/containers.db` |
-| Case Metadata Cache | `~/Library/Caches/mc/case_metadata.db` | `~/.cache/mc/case_metadata.db` |
+```
+~/mc/
+├── config/
+│   ├── config.toml          # TOML configuration
+│   └── cache/               # Case metadata cache (SQLite)
+├── state/
+│   └── containers.db        # Container state database (SQLite)
+└── cases/
+    └── <customer>/
+        └── <case>/          # Case workspaces
+```
+
+**Auto-migration:** On first run, MC automatically migrates config, state, and cache from old platformdirs locations (e.g., `~/Library/Application Support/mc/` on macOS or `~/.config/mc/` on Linux).
 
 For complete platform path documentation, see [.planning/PLATFORM-PATHS.md](.planning/PLATFORM-PATHS.md).
 

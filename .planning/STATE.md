@@ -92,10 +92,17 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
 ## Session Continuity
 
-Last session: 2026-02-01
-Stopped at: v2.0 milestone archived and tagged
-Resume: Ready for `/gsd:new-milestone` to define next milestone
+Last session: 2026-02-02
+Stopped at: Batch A (Configuration) complete - Type annotations modernized, directories consolidated
+Resume: Continue with Batch B (Container Management) or Batch E (Testing)
+
+**Recent work (2026-02-02):**
+- ✅ Batch D complete: Authentication & API cleanup (3 todos)
+- ✅ Batch A complete: Configuration cleanup (2 todos)
+- Python 3.11+ type coverage: 100% (64/64 functions)
+- Directory structure: Consolidated under ~/mc/ for better UX
+- Auto-migration: Seamless upgrade from old platformdirs locations
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-01 (v2.0 milestone complete and archived)*
+*Last updated: 2026-02-02 (Batch A complete, 13 todos remaining)*

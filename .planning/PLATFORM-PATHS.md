@@ -1,66 +1,72 @@
 # Platform-Specific Paths Reference
 
-MC CLI uses platformdirs for cross-platform compatibility. File locations differ by OS.
+MC CLI v2.0.1+ uses a consolidated directory structure under `~/mc/` for all platforms.
 
-## Configuration Files
+## Consolidated Directory Structure (v2.0.1+)
 
-| File | macOS | Linux (Fedora/RHEL) |
-|------|-------|---------------------|
-| Main config | `~/Library/Application Support/mc/config.toml` | `~/.config/mc/config.toml` |
-| Container bashrc | `~/Library/Application Support/mc/bashrc/` | `~/.config/mc/bashrc/` |
+All MC-related files are now organized under a single `~/mc/` directory:
 
-## Data Files
+```
+~/mc/
+├── config/
+│   ├── config.toml          # TOML configuration
+│   └── cache/
+│       └── case_metadata.db # Case metadata cache (SQLite)
+├── state/
+│   └── containers.db        # Container state database (SQLite)
+└── cases/
+    └── <customer>/
+        └── <case>/          # Case workspaces
+```
 
-| File | macOS | Linux (Fedora/RHEL) |
-|------|-------|---------------------|
-| Container state DB | `~/Library/Application Support/mc/containers.db` | `~/.local/share/mc/containers.db` |
+## File Locations (All Platforms)
 
-## Cache Files
+| File | Path (macOS, Linux, all platforms) |
+|------|-----------------------------------|
+| Main config | `~/mc/config/config.toml` |
+| Container state DB | `~/mc/state/containers.db` |
+| Case metadata cache | `~/mc/config/cache/case_metadata.db` |
+| Case workspaces | `~/mc/cases/<customer>/<case>/` |
 
-| File | macOS | Linux (Fedora/RHEL) |
-|------|-------|---------------------|
-| Case metadata cache | `~/Library/Caches/mc/case_metadata.db` | `~/.cache/mc/case_metadata.db` |
-| API tokens | `~/.mc/token` | `~/.mc/token` |
+## Auto-Migration from Legacy Paths
 
-## Workspaces
+When you first run MC v2.0.1+, files are automatically migrated from old platformdirs locations:
 
-| Type | macOS | Linux (Fedora/RHEL) |
-|------|-------|-------------------|
-| Default base | Configured in config.toml | Configured in config.toml |
-| Example path | `/Users/username/mc/<customer>/<case_number>` | `/home/username/mc/<customer>/<case_number>` |
+### macOS Legacy → New
+- `~/Library/Application Support/mc/config.toml` → `~/mc/config/config.toml`
+- `~/Library/Application Support/mc/containers.db` → `~/mc/state/containers.db`
+- `~/mc/cache/case_metadata.db` → `~/mc/config/cache/case_metadata.db`
 
-## Implementation Notes
+### Linux Legacy → New
+- `~/.config/mc/config.toml` → `~/mc/config/config.toml`
+- `~/.local/share/mc/containers.db` → `~/mc/state/containers.db`
+- `~/mc/cache/case_metadata.db` → `~/mc/config/cache/case_metadata.db`
 
-- **Config directory**: Uses `platformdirs.user_config_dir("mc", appauthor=False)`
-- **Data directory**: Uses `platformdirs.user_data_dir("mc", "redhat")`
-- **Cache directory**: Uses `platformdirs.user_cache_dir("mc", "redhat")`
-- **Token file**: Legacy location at `~/.mc/token` (predates platformdirs migration)
+Migration happens automatically on first access to each component. Original files are left in place (safe to delete after verifying migration worked).
+
+## Benefits of Consolidated Structure
+
+1. **Single backup location**: Just backup `~/mc/` to preserve everything
+2. **Easier troubleshooting**: All MC data in one discoverable location
+3. **Cross-platform consistency**: Same paths on macOS, Linux, and future platforms
+4. **Simpler documentation**: No platform-specific path tables needed
 
 ## Verifying Paths
 
 ```bash
-# Check actual paths on your system
-python3 -c "
-from platformdirs import user_config_dir, user_data_dir, user_cache_dir
-print(f'Config: {user_config_dir(\"mc\", appauthor=False)}/config.toml')
-print(f'Data:   {user_data_dir(\"mc\", \"redhat\")}/containers.db')
-print(f'Cache:  {user_cache_dir(\"mc\", \"redhat\")}/case_metadata.db')
-"
-```
+# Check that new structure exists
+ls -la ~/mc/
+ls -la ~/mc/config/
+ls -la ~/mc/state/
 
-## UAT Testing
+# Verify config file location
+cat ~/mc/config/config.toml
 
-When running the UAT test plan on different platforms:
+# Check container state database
+ls -la ~/mc/state/containers.db
 
-1. **macOS testers**: Use paths as shown in test plan
-2. **Linux testers**: Uncomment Linux paths, comment out macOS paths in shell variables
-
-Example from Test 3.2:
-```bash
-# macOS:
-CACHE_DB=~/Library/Caches/mc/case_metadata.db
-# Linux:
-# CACHE_DB=~/.cache/mc/case_metadata.db
+# Check cache
+ls -la ~/mc/config/cache/case_metadata.db
 ```
 
 ## Container Image
@@ -91,12 +97,31 @@ The script automatically:
 podman images | grep mc-rhel10
 
 # Should show:
-# mc-rhel10    latest    <image-id>    <timestamp>    391 MB
+# mc-rhel10    latest    <image-id>    <timestamp>    549 MB
 ```
+
+## Implementation Notes
+
+- **Consolidated paths**: v2.0.1+ no longer uses platformdirs for config/state/cache
+- **Backward compatibility**: Auto-migration from old platformdirs locations
+- **Legacy auth tokens**: `~/.mc/token` deprecated (use `~/mc/config/config.toml` instead)
+- **Platform consistency**: All platforms use `~/mc/` structure
 
 ## Future Platforms
 
-If Windows support is added:
-- Config: `C:\Users\<username>\AppData\Local\mc\config.toml`
-- Data: `C:\Users\<username>\AppData\Local\mc\redhat\containers.db`
-- Cache: `C:\Users\<username>\AppData\Local\mc\redhat\Cache\case_metadata.db`
+If Windows support is added, the same structure will be used:
+```
+C:\Users\<username>\mc\
+├── config\
+│   ├── config.toml
+│   └── cache\
+│       └── case_metadata.db
+├── state\
+│   └── containers.db
+└── cases\
+    └── <customer>\
+        └── <case>\
+```
+
+---
+*Last updated: 2026-02-02 (v2.0.1 directory consolidation)*

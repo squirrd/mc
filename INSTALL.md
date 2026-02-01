@@ -299,18 +299,19 @@ mc-rhel10    latest    <image-id>    <timestamp>    391 MB
 
 **Problem:** Salesforce API calls fail with authentication errors
 
-**Solution:** Configure your Red Hat API offline token in the platform-specific config file:
+**Solution:** Configure your Red Hat API offline token in the config file:
 
-**Config file location:**
-- **macOS**: `~/Library/Application Support/mc/config.toml`
-- **Linux**: `~/.config/mc/config.toml`
+**Config file location (v2.0.1+):**
+- **All platforms**: `~/mc/config/config.toml`
 
 ```toml
 [api]
 rh_api_offline_token = "your_token_here"
 ```
 
-**Note:** If upgrading from an earlier version, rename `api.offline_token` to `api.rh_api_offline_token` in your config file. The old key name is still supported but deprecated.
+**Note for upgrades:**
+- v2.0.1+ auto-migrates config from old platformdirs locations on first run
+- If upgrading from v1.x, rename `api.offline_token` to `api.rh_api_offline_token` in your config file (old key still supported but deprecated)
 
 Or export temporarily:
 ```bash

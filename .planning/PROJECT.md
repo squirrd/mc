@@ -8,17 +8,25 @@ A production-ready Python CLI tool and container orchestrator for Red Hat suppor
 
 Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality.
 
-## Current Milestone: v2.0 Containerization
+## Current Milestone: v2.0.1 Cleanup & Hardening
 
-**Goal:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
+**Status:** v2.0 shipped (2026-02-01), now working through post-ship cleanup batches
 
-**Target capabilities:**
-- Per-case containerized environments eliminating credential/config collisions
-- Automatic Salesforce integration for case metadata resolution
-- Container lifecycle management (create, list, stop, exec)
-- New terminal window attachment for seamless multi-case workflow
-- Container image with essential tools (mc, oc, ocm, backplane, RHEL 10 base)
-- Mounted case workspace and shared config directories
+**v2.0 Delivered:**
+- ✓ Per-case containerized environments eliminating credential/config collisions
+- ✓ Automatic Red Hat API integration for case metadata resolution
+- ✓ Container lifecycle management (create, list, stop, delete, exec)
+- ✓ New terminal window attachment for seamless multi-case workflow
+- ✓ Container image with essential tools (mc, RHEL 10 UBI base)
+- ✓ Mounted case workspace at /case in containers
+- ✓ Modern distribution via uv tool (pipx/uv tool install git+)
+
+**v2.0.1 Cleanup (In Progress):**
+- ✅ Batch D: Authentication & API cleanup (3 todos complete)
+- ✅ Batch A: Configuration cleanup (2 todos complete)
+- ⏳ Batch B: Container Management (5 todos pending)
+- ⏳ Batch C: User Interface (1 todo pending)
+- ⏳ Batch E: Testing (5 todos pending - 49 test failures to fix)
 
 ## Requirements
 
@@ -100,27 +108,45 @@ No active requirements. Ready for next milestone definition via `/gsd:new-milest
 
 ## Context
 
-**Current State (v1.0 shipped 2026-01-22):**
-- Python 3.11+ CLI tool for Red Hat support case management
-- 2,590 lines of production Python code
-- 100+ tests with 80%+ coverage on critical modules
-- Layered architecture: CLI → Commands → Controller/Integrations → Utilities
-- External dependencies: Red Hat Support API, Red Hat SSO, Red Hat LDAP
-- Tech stack: pytest, requests, rich, tqdm, tenacity, backoff, platformdirs, types-requests
-- Configuration: TOML-based (~/.config/mc/config.toml) with cross-platform support
-- Type-safe: mypy strict mode passing with 98% type coverage
+**Current State (v2.0 shipped 2026-02-01, v2.0.1 cleanup in progress):**
+- Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
+- 6,056 lines of production Python code (cumulative v1.0 + v2.0)
+- Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
+- External dependencies: Red Hat API, Podman, SQLite
+- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, platformdirs (legacy)
+- Configuration: TOML-based (~/mc/config/config.toml) with auto-migration
+- Type-safe: mypy strict mode passing with 100% type coverage (64/64 functions)
 
 **Key Features:**
+- Container orchestration with per-case isolated workspaces
+- Automatic terminal attachment (iTerm2, Terminal.app, gnome-terminal, konsole)
+- Container lifecycle management (create, list, stop, delete, exec)
+- Red Hat API integration with 5-minute cache TTL
+- SQLite state persistence and reconciliation
 - Parallel downloads (8 concurrent threads) with rich progress bars
-- Case metadata caching (30-minute TTL) reducing API calls
 - Structured logging with sensitive data redaction
 - Comprehensive error handling with retry logic
 - Security hardening (SSL verification, token caching, input validation)
 - Modern Python 3.11+ syntax with full type hints
 
+**Directory Structure (consolidated v2.0.1):**
+```
+~/mc/
+├── config/
+│   ├── config.toml          # TOML configuration
+│   └── cache/               # Case metadata cache (SQLite)
+├── state/
+│   └── containers.db        # Container state (SQLite)
+└── cases/
+    └── <customer>/
+        └── <case>/          # Case workspaces
+```
+
 **Known Technical Debt:**
-- 2 cosmetic type annotation gaps in config module (ConfigManager.__init__ missing -> None, Dict[] vs dict[] syntax)
-- 20 test failures from Path vs string type changes (tests need modernization)
+- 49 test failures (integration/terminal/container tests need updates post-v2.0)
+- Container image detection requires local build (quay.io pre-built images planned)
+- Workspace path structure needs customer/case-desc hierarchy
+- Terminal duplicate launch prevention not implemented
 
 ## Constraints
 
@@ -150,4 +176,4 @@ No active requirements. Ready for next milestone definition via `/gsd:new-milest
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-01-26 after starting v2.0 milestone*
+*Last updated: 2026-02-02 after completing Batch A (Configuration)*
