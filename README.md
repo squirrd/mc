@@ -49,11 +49,18 @@ For detailed installation instructions covering development, UAT, and production
 
 ### Setup
 
-Configure your Red Hat API offline token in `~/.mc/config.toml`:
+Configure your Red Hat API offline token in the config file:
+
+**Config file location:**
+- **macOS**: `~/Library/Application Support/mc/config.toml`
+- **Linux**: `~/.config/mc/config.toml`
 
 ```toml
 [api]
 offline_token = "your_token_here"
+
+[workspace]
+base_directory = "~/mc"  # Optional, default location for case workspaces
 ```
 
 Or export temporarily:
@@ -61,7 +68,19 @@ Or export temporarily:
 export RH_API_OFFLINE_TOKEN="your_token_here"
 ```
 
-Case workspaces are created automatically in the configured base directory (default: `~/Cases`).
+Case workspaces are created automatically in the configured base directory.
+
+### Platform-Specific File Locations
+
+MC CLI uses different paths on macOS and Linux for configuration and data files:
+
+| File Type | macOS | Linux (Fedora/RHEL) |
+|-----------|-------|---------------------|
+| Config | `~/Library/Application Support/mc/config.toml` | `~/.config/mc/config.toml` |
+| Container State | `~/Library/Application Support/mc/containers.db` | `~/.local/share/mc/containers.db` |
+| Case Metadata Cache | `~/Library/Caches/mc/case_metadata.db` | `~/.cache/mc/case_metadata.db` |
+
+For complete platform path documentation, see [.planning/PLATFORM-PATHS.md](.planning/PLATFORM-PATHS.md).
 
 ## Usage Examples
 

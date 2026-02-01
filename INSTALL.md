@@ -277,13 +277,19 @@ podman ps
 
 **Problem:** Salesforce API calls fail with authentication errors
 
-**Solution:** Configure your Red Hat API offline token:
-```bash
-# Set in ~/.mc/config.toml
+**Solution:** Configure your Red Hat API offline token in the platform-specific config file:
+
+**Config file location:**
+- **macOS**: `~/Library/Application Support/mc/config.toml`
+- **Linux**: `~/.config/mc/config.toml`
+
+```toml
 [api]
 offline_token = "your_token_here"
+```
 
-# Or export temporarily
+Or export temporarily:
+```bash
 export RH_API_OFFLINE_TOKEN="your_token_here"
 ```
 
