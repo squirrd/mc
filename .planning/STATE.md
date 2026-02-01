@@ -251,6 +251,12 @@ Progress: [█████████████████████░] 9
 - Container lifecycle commands never initialize SalesforceAPIClient (only terminal attachment requires Salesforce)
 - Authentication boundaries documented in module docstring instead of inline comments (survives linter/formatter changes)
 
+**Plan 03:**
+- Validation moved to earliest point in call chain (before config loading, credential checks, API calls)
+- Early validation pattern: validate_case_number() called as first operation after basic checks
+- Fail-fast UX: Invalid format errors appear in <1s instead of 5+ seconds
+- Test regex pattern updated to match exact validation error message format
+
 **Plan 04:**
 - Use rh_api_offline_token instead of offline_token for clarity (indicates Red Hat API, not generic token)
 - Maintain backwards compatibility: validation accepts both keys, code tries new key first with fallback
@@ -271,7 +277,7 @@ Progress: [█████████████████████░] 9
 - ~~[2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)~~ — COMPLETE (Phase 14.1-02)
 - [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
 - [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
-- [2026-02-01] Validate case number format before credential/API checks (area: general)
+- ~~[2026-02-01] Validate case number format before credential/API checks (area: general)~~ — COMPLETE (Phase 14.1-03)
 - ~~[2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)~~ — COMPLETE (Phase 14-01)
 
 ### Blockers/Concerns
