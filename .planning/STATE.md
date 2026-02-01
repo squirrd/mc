@@ -74,6 +74,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-01] Use pre-built container images from quay.io instead of local builds (area: containers)
 - [2026-02-01] Fix workspace path structure to use cases/<customer>/<case>-<description> (area: containers)
 - [2026-02-01] Improve container list output - replace workspace path with description (area: ui)
+- [2026-02-01] Prevent duplicate terminal launches and focus existing terminals (area: containers)
 
 ## Session Continuity
 
