@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 Milestone: v2.0 Containerization + Distribution
 Phase: 14.1 of 14.1 (UAT Critical Fixes - URGENT)
-Plan: 1 of 5
+Plan: 2 of 5
 Status: In progress
-Last activity: 2026-02-01 - Completed 14.1-01-PLAN.md (CONTAINER_HOST URI parsing fix)
+Last activity: 2026-02-01 - Completed 14.1-02-PLAN.md (Unify authentication)
 
-Progress: [████████████████████░░] 86% (19 of 22 plans complete)
+Progress: [█████████████████████░] 90% (20 of 22 plans complete)
 
 ## Performance Metrics
 
@@ -47,7 +47,7 @@ Progress: [████████████████████░░] 8
 - Phase 12 complete (3/3 plans)
 - Phase 13 complete (2/2 plans)
 - Phase 14 complete (2/2 plans)
-- Phase 14.1 in progress (1/5 plans)
+- Phase 14.1 in progress (2/5 plans)
 
 **By Phase:**
 
@@ -59,7 +59,7 @@ Progress: [████████████████████░░] 8
 | 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
 | 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
 | 14 (Installation & Distribution) | 2 | 9min | 4.5min |
-| 14.1 (UAT Critical Fixes) | 1/5 | 2min | 2.4min |
+| 14.1 (UAT Critical Fixes) | 2/5 | 5min | 2.5min |
 
 ## Accumulated Context
 
@@ -241,6 +241,16 @@ Progress: [████████████████████░░] 8
 - UAT validation checkpoint: Manual verification required for real-world installation testing (PATH config, terminal behavior, editable mode)
 - Version assertion fix: Bug detected during verification, test expected 0.1.0 but version bumped to 2.0.0 in prior commit
 
+**Key Decisions (Phase 14.1):**
+
+**Plan 01:**
+- Byte string detection in CONTAINER_HOST parsing: Added isinstance(container_host, bytes) check to decode byte strings before URI parsing (prevents Podman connection errors)
+
+**Plan 02:**
+- ConfigManager.get() uses dotted key paths (e.g., 'workspace.base_directory') for nested config access with default fallback
+- Container lifecycle commands never initialize SalesforceAPIClient (only terminal attachment requires Salesforce)
+- Authentication boundaries documented in module docstring instead of inline comments (survives linter/formatter changes)
+
 ### Roadmap Evolution
 
 - Phase 14 added: Installation & Distribution - Support dev/UAT/prod workflows with uv tool
@@ -252,7 +262,7 @@ Progress: [████████████████████░░] 8
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
 - [2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)
-- [2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)
+- ~~[2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)~~ — COMPLETE (Phase 14.1-02)
 - [2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)
 - [2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)
 - [2026-02-01] Validate case number format before credential/API checks (area: general)
@@ -273,9 +283,9 @@ Progress: [████████████████████░░] 8
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 14.1-01-PLAN.md (CONTAINER_HOST URI parsing fix)
-Resume: Phase 14.1 in progress (1/5 plans complete)
+Stopped at: Completed 14.1-02-PLAN.md (Unify authentication)
+Resume: Phase 14.1 in progress (2/5 plans complete)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-01 (Phase 14.1 in progress - 1/5 UAT critical fixes complete)*
+*Last updated: 2026-02-01 (Phase 14.1 in progress - 2/5 UAT critical fixes complete)*
