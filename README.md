@@ -2,6 +2,23 @@
 
 MC is a CLI tool for managing Red Hat support case workspaces and container environments.
 
+## Installation
+
+### Quick Start
+
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install MC CLI from git
+uv tool install git+https://github.com/user/mc-cli.git
+
+# Verify installation
+mc --version
+```
+
+For detailed installation instructions covering development, UAT, and production workflows, see [INSTALL.md](INSTALL.md).
+
 ## Features
 
 - **Case Workspace Management**: Automatically creates organized directory structures for support cases
@@ -22,37 +39,29 @@ MC is a CLI tool for managing Red Hat support case workspaces and container envi
 - `mc go <case_number>` - Print or launch Salesforce case URL
 - `mc ls <uid>` - Search for user in LDAP
 
-## Installation
+## Configuration
 
 ### Prerequisites
-- Python 3.8 or higher
-- Red Hat API offline token
+- Python 3.11 or higher (automatically managed by uv)
+- Red Hat API offline token (for Salesforce integration)
+- Podman (for container orchestration features)
 - LDAP access (for `ls` command)
 
 ### Setup
 
-1. Clone the repository:
-```bash
-git clone <repository_url>
-cd mc-con
+Configure your Red Hat API offline token in `~/.mc/config.toml`:
+
+```toml
+[api]
+offline_token = "your_token_here"
 ```
 
-2. Install the package:
+Or export temporarily:
 ```bash
-pip install -e .
-```
-
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env and add your RH_API_OFFLINE_TOKEN
 export RH_API_OFFLINE_TOKEN="your_token_here"
 ```
 
-4. Create base directory for cases:
-```bash
-mkdir -p ~/Cases
-```
+Case workspaces are created automatically in the configured base directory (default: `~/Cases`).
 
 ## Usage Examples
 
@@ -78,16 +87,43 @@ mc go 12345678 --launch
 
 ## Development
 
-### Running Tests
+For developers working on MC CLI, see [INSTALL.md](INSTALL.md) for the complete development workflow.
 
-Run all tests:
+### Quick Start
+
 ```bash
-./tests/run_all_tests.sh
+# Clone and run
+git clone <repository_url>
+cd mc
+uv run mc --help
 ```
 
-Run individual test:
+### Running Tests
+
 ```bash
-./tests/test_check.sh
+# Run all tests
+uv run pytest
+
+# Run specific tests
+uv run pytest tests/unit/
+uv run pytest tests/integration/
+
+# Run with coverage
+uv run pytest --cov=mc --cov-report=html
+```
+
+### Code Quality
+
+```bash
+# Type checking
+uv run mypy src/
+
+# Linting
+uv run black src/ tests/
+uv run flake8 src/ tests/
+
+# Security scanning
+uv run bandit -r src/
 ```
 
 ### Project Structure
