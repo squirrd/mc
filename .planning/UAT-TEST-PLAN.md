@@ -58,8 +58,25 @@ uv tool install -e .
 which mc
 mc --version
 
-# Make a trivial change to verify editable mode
-# (Optional - skip if already validated)
+# 4. Test editable mode (optional - skip if already validated)
+# This verifies code changes appear instantly without reinstalling
+
+# Step 4a: Make a trivial change to the help text
+# Edit src/mc/cli/main.py line 58
+# Change: description='MC CLI tool'
+# To:     description='MC CLI tool [EDITABLE MODE TEST]'
+sed -i.bak "s/description='MC CLI tool'/description='MC CLI tool [EDITABLE MODE TEST]'/" src/mc/cli/main.py
+
+# Step 4b: Verify change appears WITHOUT reinstalling
+mc --help | head -5
+# Should show: "MC CLI tool [EDITABLE MODE TEST]"
+
+# Step 4c: Revert the change
+mv src/mc/cli/main.py.bak src/mc/cli/main.py
+
+# Step 4d: Verify revert
+mc --help | head -5
+# Should show original: "MC CLI tool"
 
 # Uninstall
 uv tool uninstall mc-cli
@@ -74,33 +91,17 @@ uv tool uninstall mc-cli
 
 ---
 
-**Understanding "Editable Mode":**
+**Understanding "Editable Mode" (for Step 4):**
 
-Step 4 tests that code changes are reflected immediately without reinstalling. Here's what to do:
+Editable mode (`-e`) means code changes appear instantly without reinstalling. This is different from production installs where you'd need to run `uv tool install` again after every code change.
 
-1. **Make a trivial change:**
-   ```bash
-   # Edit the version description
-   # Change line 8 in src/mc/version.py
-   # From: description="MC CLI - Multi-case Container Management Tool"
-   # To:   description="MC CLI - Multi-case Container Management Tool [TESTING EDITABLE MODE]"
-   ```
+The test above modifies `src/mc/cli/main.py` line 58 to change the help text from `"MC CLI tool"` to `"MC CLI tool [EDITABLE MODE TEST]"`. When you run `mc --help` without reinstalling, you should see the change immediately.
 
-2. **Test without reinstalling:**
-   ```bash
-   mc --help
-   # Should show "[TESTING EDITABLE MODE]" in the description
-   ```
+**Why this matters:**
+- **Editable mode (`-e`)**: Change code → run `mc` → see changes instantly
+- **Production mode**: Change code → reinstall → run `mc` → see changes
 
-3. **Revert the change:**
-   ```bash
-   git checkout src/mc/version.py
-   mc --help  # Should show original description
-   ```
-
-If the description changes appear immediately without running `uv tool install -e .` again, editable mode is working correctly.
-
-**Why this matters:** In production installs (`uv tool install git+...`), you'd need to reinstall to see changes. With editable mode (`-e`), developers/testers see changes instantly.
+This makes UAT testing much faster since testers can tweak code and test immediately without waiting for reinstalls.
 
 ---
 
