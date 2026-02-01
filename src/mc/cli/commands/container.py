@@ -1,4 +1,10 @@
-"""Container lifecycle commands."""
+"""Container lifecycle commands.
+
+Authentication Architecture:
+- Container lifecycle commands (create, list, stop, delete, exec): No Salesforce required
+- Terminal attachment (case_terminal, quick_access): Salesforce required for metadata
+- Salesforce credentials only validated at terminal attachment time
+"""
 
 import argparse
 import os
