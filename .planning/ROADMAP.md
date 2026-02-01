@@ -176,14 +176,18 @@ Three distinct workflows enabled by uv tool:
 - UAT: `uv tool install -e .` for temporary testing from local directory
 - Production: `uv tool install git+...` for global installation from git or PyPI
 
-### Phase 14.1: UAT Bug Fixes (INSERTED)
+### Phase 14.1: UAT Bug Fixes
 
 **Goal:** Fix all bugs discovered during UAT testing before milestone completion
 **Depends on:** Phase 14
-**Plans:** 0 plans
+**Plans:** 5 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 14.1 to break down)
+- [ ] 14.1-01-PLAN.md — Fix Podman URI scheme error (byte string vs decoded string)
+- [ ] 14.1-02-PLAN.md — Unify authentication - remove Salesforce dependency from container commands
+- [ ] 14.1-03-PLAN.md — Validate case number format before credential/API checks
+- [ ] 14.1-04-PLAN.md — Rename offline_token config to rh_api_offline_token
+- [ ] 14.1-05-PLAN.md — Fix UAT test plan documentation (mc container list not ls)
 
 **Details:**
 Five bugs discovered during manual UAT testing:
@@ -196,7 +200,7 @@ Five bugs discovered during manual UAT testing:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14
+Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14 → 14.1
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -214,9 +218,10 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13 → 14
 | 12. Terminal Attachment & Exec | v2.0 | 3/3 | Complete | 2026-01-27 |
 | 13. Container Image & Backwards Compatibility | v2.0 | 2/2 | Complete | 2026-01-27 |
 | 14. Installation & Distribution | v2.0 | 2/2 | Complete | 2026-02-01 |
+| 14.1. UAT Bug Fixes | v2.0 | 0/5 | Planned | - |
 
 **Note:** OpenShift tools (oc, ocm, backplane) deferred to v2.1+ milestones. Each tool will be its own milestone to handle tool-specific configuration mounting requirements.
 
 ---
 *Roadmap created: 2026-01-26*
-*Last updated: 2026-02-01 (Phase 14 complete: v2.0 milestone finished)*
+*Last updated: 2026-02-01 (Phase 14.1 planned: 5 bug fix plans created)*
