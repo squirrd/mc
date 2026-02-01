@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -16,7 +16,7 @@ from platformdirs import user_config_dir
 class ConfigManager:
     """Manage application configuration file."""
 
-    def __init__(self, app_name: str = "mc"):
+    def __init__(self, app_name: str = "mc") -> None:
         """Initialize config manager.
 
         Args:
@@ -45,7 +45,7 @@ class ConfigManager:
         """
         return self.get_config_path().exists()
 
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         """Load configuration from file.
 
         Returns:
@@ -87,7 +87,7 @@ class ConfigManager:
         except (FileNotFoundError, KeyError, TypeError):
             return default
 
-    def save(self, config: Dict[str, Any]) -> None:
+    def save(self, config: dict[str, Any]) -> None:
         """Save configuration to file.
 
         Args:

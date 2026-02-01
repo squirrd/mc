@@ -2,12 +2,12 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def run_setup_wizard() -> Dict[str, Any]:
+def run_setup_wizard() -> dict[str, Any]:
     """Run interactive configuration wizard.
 
     Returns:

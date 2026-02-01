@@ -1,9 +1,9 @@
 """Configuration data models and schema."""
 
-from typing import Dict, Any
+from typing import Any
 
 
-def get_default_config() -> Dict[str, Any]:
+def get_default_config() -> dict[str, Any]:
     """Get default configuration values.
 
     Returns:
@@ -27,7 +27,7 @@ def get_default_config() -> Dict[str, Any]:
     }
 
 
-def validate_config(config: Dict[str, Any]) -> bool:
+def validate_config(config: dict[str, Any]) -> bool:
     """Validate configuration structure.
 
     Args:
