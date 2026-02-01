@@ -11,7 +11,7 @@ def test_mc_version(script_runner: ScriptRunner) -> None:
     result = script_runner.run(['mc', '--version'])
     assert result.returncode == 0
     assert 'mc' in result.stdout
-    assert '0.1.0' in result.stdout
+    assert '2.0.0' in result.stdout
 
 
 def test_mc_help(script_runner: ScriptRunner) -> None:
