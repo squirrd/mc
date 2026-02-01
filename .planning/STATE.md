@@ -2,68 +2,47 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-26)
+See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
-**Current focus:** Phase 14 - Installation & Distribution
 
 ## Current Position
 
-Milestone: v2.0 Containerization + Distribution
-Phase: 14.1 of 14.1 (UAT Bug Fixes)
-Plan: 5 of 5
-Status: Phase complete - ALL v2.0 PHASES COMPLETE
-Last activity: 2026-02-01 - Completed Phase 14.1 (all 5 UAT bug fix plans executed and verified)
-
-Progress: [████████████████████] 100% (22 of 22 plans complete)
-
-## Performance Metrics
-
-**v1.0 Milestone (SHIPPED 2026-01-22):**
-- Total plans completed: 21
-- Average duration: 4.0 min
-- Total execution time: 1.32 hours
-- Timeline: 2 days (2026-01-20 → 2026-01-22)
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1 (Test Foundation) | 1 | 4min | 4min |
-| 2 (Critical Path Testing) | 3 | 8min | 2.7min |
-| 3 (Code Cleanup) | 3 | 18min | 6min |
-| 4 (Security Hardening) | 3 | 12min | 4min |
-| 5 (Error Handling) | 3 | 11min | 3.7min |
-| 6 (Infrastructure & Observability) | 4 | 11min | 2.8min |
-| 7 (Performance Optimization) | 3 | 16min | 5.3min |
-| 8 (Type Safety & Modernization) | 1 | 12min | 12min |
-
-**v2.0 Status:**
-- Roadmap created: 6 phases (9-14) + Phase 14.1 (UAT Bug Fixes)
-- Plans completed: 22 of 22
-- Phase 9 complete (2/2 plans)
-- Phase 10 complete (3/3 plans)
-- Phase 11 complete (5/5 plans)
-- Phase 12 complete (3/3 plans)
-- Phase 13 complete (2/2 plans)
-- Phase 14 complete (2/2 plans)
-- Phase 14.1 complete (5/5 plans)
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 9 (Container Architecture & Podman Integration) | 2 | 11min | 5.5min |
-| 10 (Salesforce Integration & Case Resolution) | 3 | 18min | 6min |
-| 11 (Container Lifecycle & State Management) | 5 | 32min | 6.4min |
-| 12 (Terminal Attachment & Exec) | 3 | 10min | 3.3min |
-| 13 (Container Image & Backwards Compatibility) | 2 | 12min | 6min |
-| 14 (Installation & Distribution) | 2 | 9min | 4.5min |
-| 14.1 (UAT Bug Fixes) | 5 | 13min | 2.6min |
+**Milestone:** Ready for next milestone definition
+**Status:** v2.0 shipped (2026-02-01)
+**Last activity:** 2026-02-01 - Completed and archived v2.0 milestone
 
 ## Accumulated Context
 
-### v1.0 Shipped (2026-01-22)
+### v2.0 Containerization + Distribution (SHIPPED 2026-02-01)
+
+**Delivered:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
+
+**Phases completed:** 9-14.1 (7 phases, 22 plans total)
+
+**Key accomplishments:**
+- Container orchestration with full lifecycle management (create, list, stop, delete, exec) using podman-py and SQLite state persistence
+- Platform detection for macOS/Linux with automatic Podman machine handling, lazy connection, and retry logic with exponential backoff
+- Salesforce integration for case metadata querying with 5-minute cache TTL, automatic token refresh, and workspace path resolution
+- Terminal automation across iTerm2, Terminal.app, gnome-terminal, and konsole with custom bashrc and welcome banners
+- RHEL 10 UBI container image (549 MB) with MC CLI, essential bash tools, and runtime mode detection preserving v1.0 backwards compatibility
+- Modern distribution via uv tool supporting development (uv run), UAT (uv tool install -e .), and production (uv tool install git+) workflows
+
+**Stats:**
+- 6,056 lines of Python (cumulative)
+- 7 phases, 22 plans
+- 6 days from start to ship (2026-01-26 → 2026-02-01)
+
+**Known issues shipped (v2.0.1 backlog):**
+- Terminal attachment broken due to Salesforce API method name mismatch (get_case vs query_case) — **CRITICAL BUG**
+- Podman URI byte string errors still occurring despite Phase 14.1-01 fix attempt
+- Cache database initialization failures on second `mc create` command run
+- Runtime mode detection created but not integrated into decision logic
+- Phase 13 missing VERIFICATION.md (deliverables present and verified functional)
+
+See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
+
+### v1.0 Hardening (SHIPPED 2026-01-22)
 
 **Major Accomplishments:**
 - 100+ tests with 80%+ coverage on critical modules
@@ -78,233 +57,27 @@ Progress: [████████████████████] 100% (2
 - 2,590 lines of production code
 - 110 files modified
 
-### v2.0 Containerization
-
-**Architecture:** Host-controller + container-agent pattern with shared codebase (80% code reuse)
-
-**Stack:** podman-py 5.7.0, simple-salesforce 1.12.9, SQLite for state, platform-specific terminal launchers
-
-**Phase 9 Complete (2/2 plans) — VERIFIED:**
-- ✅ Plan 01: Platform detection with macOS/Linux support, Podman availability checking, socket path resolution (224 lines, 100% test coverage)
-- ✅ Plan 02: PodmanClient wrapper with lazy connection, retry logic (3 attempts, exponential backoff), platform-specific error messages (187 lines, 91% test coverage)
-- All success criteria met, 8/8 must-haves verified, INFRA-01/03/04 requirements complete
-
-**Phase 10 Complete (3/3 plans) — VERIFIED:**
-- ✅ Plan 01: SalesforceAPIClient with SOQL queries, automatic token refresh, rate limiting (71 lines, 97% test coverage, 16 tests)
-- ✅ Plan 02: SQLite cache with WAL mode, background refresh worker (4-minute intervals), CacheManager (292 lines, 88%/72% coverage, 12 tests)
-- ✅ Plan 03: CaseResolver with workspace path resolution, WorkspaceManager.from_case_number() integration (137 lines, 95% test coverage, 15 tests)
-
-**Phase 11 Complete (5/5 plans) — VERIFIED:**
-- ✅ Plan 01: StateDatabase with WAL mode, CRUD operations, reconciliation for orphaned state cleanup (244 lines, 96% test coverage, 28 tests)
-- ✅ Plan 02: ContainerManager with create() orchestration, auto-restart pattern, workspace auto-creation, userns_mode=keep-id (259 lines, 85%+ coverage, 14 tests)
-- ✅ Plan 03: ContainerManager.list() with state reconciliation, metadata enrichment, uptime calculation (260 lines, 63% coverage, 13 tests)
-- ✅ Plan 04: Container lifecycle operations (stop, delete, status, logs) with 10s graceful shutdown, workspace preservation (98 lines, excellent coverage, 30 tests)
-- ✅ Plan 05: exec() with auto-restart, complete CLI commands (create/list/stop/delete/exec), mc <case_number> quick access (193 lines CLI, 100% CLI coverage, 31 tests)
-
-**Phase 12 Complete (3/3 plans) — VERIFIED:**
-- ✅ Plan 01: Terminal launcher abstraction with macOS (iTerm2, Terminal.app) and Linux (gnome-terminal, konsole, xfce4-terminal) support, AppleScript automation, non-blocking subprocess execution (140 lines, 93-97% coverage, 45 tests)
-- ✅ Plan 02: Custom bashrc and welcome banner with case metadata, PS1 prompt [MC-{case_number}], helper aliases/functions (50 lines, 100% test coverage, 25 tests)
-- ✅ Plan 03: Terminal attachment orchestration with TTY detection, auto-create/auto-start workflow, CLI integration for mc case <number> command (244 lines attach.py, 90% coverage, 21 tests)
-
-**Phase 13 Complete (2/2 plans) — VERIFIED:**
-- ✅ Plan 01: RHEL 10 UBI container image (391 MB) with MC CLI, Python 3.12, essential tools (vim, nano, curl, openssl, wget), runtime mode detection via MC_RUNTIME_MODE environment variable (12 lines runtime.py, 100% test coverage, 13 tests)
-- ✅ Plan 02: ContainerManager updated to use mc-rhel10:latest with environment variables (CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE=agent), image verification with build instructions, comprehensive integration tests (8 tests, 13 unit tests updated)
-
-**Phase Overview:**
-- Phase 9: Podman integration, platform detection, UID/GID mapping
-- Phase 10: Salesforce API integration, caching, token refresh
-- Phase 11: Container lifecycle orchestration, state management with SQLite
-- Phase 12: Terminal automation (iTerm2/gnome-terminal), auto-attach workflow
-- Phase 13: RHEL 10 container image with tools, backwards compatibility
-- Phase 14: uv-based installation workflows (dev/UAT/prod), entry point testing
-
-**Key Decisions (Phase 9):**
-
-**Plan 01:**
-- Lazy platform detection (no import-time overhead, testable without Podman)
-- Sliding window version compatibility (warn at 3 versions, fail at 7+)
-- Socket path priority: CONTAINER_HOST → XDG_RUNTIME_DIR → UID-based → rootful fallback
-- macOS Podman machine: interactive prompt to start (no silent auto-start)
-
-**Plan 02:**
-- Lazy connection: Defer Podman socket connection until first .client property access (fast CLI startup, graceful degradation)
-- Integrated retry: Wrap podman.PodmanClient() in retry_podman_operation for transparent transient error handling
-- Platform-specific remediation: Error messages suggest 'podman machine start' (macOS) or 'dnf install podman' (Linux)
-- Type safety: Added type: ignore for podman-py untyped methods while maintaining strict mypy compliance
-
-**Key Decisions (Phase 10):**
-
-**Plan 01:**
-- Proactive token refresh: Refresh 5 minutes before 2-hour expiry (prevents mid-operation auth failures)
-- Read-only config mount: Containers access host config via read-only mount (prevents corruption)
-- Retry rate limits only: Retry 429 errors but fail fast on 401/403 (auth errors are permanent)
-- simple-salesforce library: Use simple-salesforce for OAuth2 session management (don't hand-roll token requests)
-
-**Plan 02:**
-- Separate cache database: ~/.mc/cache/case_metadata.db (not integrated into state.db) - different access patterns
-- 5-minute TTL: Reduced from 30 minutes to balance freshness with API rate limiting
-- 4-minute refresh interval: Refresh before 5-minute TTL expires to ensure cache stays fresh
-- Error handling: Log refresh failures but continue worker (one case failure shouldn't block all refreshes)
-- WAL mode: Enable Write-Ahead Logging for concurrent readers while background worker writes
-
-**Plan 03:**
-- Metadata validation with fallbacks: case_summary falls back to Subject, account_name falls back to account_data.name
-- Workspace path pinning: Pass metadata to WorkspaceManager constructor (no re-queries, stable paths)
-- Circular import avoidance: Import CaseResolver inside WorkspaceManager.from_case_number() method, use TYPE_CHECKING for type hints
-
-**Key Decisions (Phase 11):**
-
-**Plan 01:**
-- Platform-appropriate database location: Use platformdirs.user_data_dir("mc", "redhat") for state database (~/Library/Application Support/mc/containers.db on macOS, ~/.local/share/mc/containers.db on Linux)
-- WAL mode configuration: Enable Write-Ahead Logging with PRAGMA synchronous=NORMAL and cache_size=10000 for concurrent read/write
-- :memory: database handling: Maintain persistent connection with check_same_thread=False for testing (file-based databases create new connections per operation)
-- Reconciliation pattern: Accept set of container IDs from Podman, delete state entries NOT in set (detects external deletions without background polling)
-- Timestamp storage: Store as Unix integers (int(time.time())) for simplicity and cross-platform consistency
-- Connection timeout: 30-second timeout for SQLite connections (conservative for single-user CLI)
-
-**Plan 02:**
-- Auto-restart pattern: Existing stopped/exited containers restart instead of creating duplicates (prevents container proliferation)
-- Workspace auto-creation: Create workspace directory before mount with exist_ok=True (prevents mount failures when directory missing)
-- Non-fatal reconciliation: Reconciliation failures print warning but don't block operations (degraded mode for offline scenarios)
-- Cleanup on state failure: If state persistence fails, stop and remove container to prevent orphaned containers (all-or-nothing consistency)
-
-**Plan 03:**
-- Reconcile before listing: Call _reconcile() before querying containers to detect external deletions (ensures list accuracy)
-- Sort by created_at: Sort containers newest-first by state database timestamp (better UX for developers working on recent cases)
-- Missing metadata handling: Return "N/A" for workspace_path and "Unknown" for created_at when container not in state (edge case - shouldn't happen with proper create flow)
-- Uptime format: Human-readable format prioritizes larger units (days > hours > minutes > seconds) for readability
-- Empty uptime for stopped: Only running containers show uptime (stopped/exited containers have empty string)
-
-**Plan 04:**
-- Workspace preserved by default: delete() requires explicit remove_workspace=True flag (safety measure prevents accidental data loss)
-- 10-second graceful shutdown: Podman standard timeout (SIGTERM → 10s wait → SIGKILL if still running)
-- Auto-reconciliation on status: status() auto-reconciles state when container deleted externally (no manual reconciliation needed)
-- Non-fatal workspace deletion: Workspace deletion failures log warning but don't block container deletion (state cleanup succeeds regardless)
-
-**Plan 05:**
-- Auto-restart helper extraction: _get_or_restart(case_number) extracted as standalone method for reusability across operations (attach, logs streaming)
-- Quick access pattern: Implemented via sys.argv manipulation before argument parsing (detects 8-digit case number and inserts 'quick_access' command)
-- Workspace resolution strategy: Quick access uses ConfigManager base_directory + case_number (Phase 11 baseline, Phase 10 will enhance with Salesforce customer data)
-- CLI commands helper: _get_manager() helper avoids duplication across command functions (instantiates ContainerManager with correct dependencies)
-
-**Key Decisions (Phase 12):**
-
-**Plan 01:**
-- Protocol-based launcher abstraction: Python Protocol enables static type checking while allowing platform-specific implementations without inheritance overhead
-- Non-blocking subprocess execution: subprocess.Popen() with background threading.Thread cleanup to return control immediately while preventing zombie processes
-- AppleScript string escaping: Escape backslashes first, then quotes for injection safety on macOS terminal automation
-- Priority-based terminal detection: macOS (iTerm2 > Terminal.app), Linux (gnome-terminal > konsole > xfce4-terminal > xterm) for predictable selection
-
-**Plan 02:**
-- BASH_ENV over --rcfile: Use BASH_ENV environment variable for bashrc injection (works in both interactive and non-interactive contexts)
-- Conditional sections: Summary and next steps sections only displayed if metadata present (cleaner banner for minimal metadata)
-- Comments excluded: Comments field stored in metadata but NOT displayed in banner per CONTEXT.md requirements
-- Prefix alignment: Text wrapping includes prefix length calculation for multi-line field alignment
-
-**Plan 03:**
-- TTY detection mandatory: sys.stdout.isatty() prevents terminal launch when stdout piped/redirected (protects scripting use cases)
-- Case number validation at attachment layer: Enforce 8-digit format before Salesforce call for early failure detection
-- Metadata fallbacks for robustness: account_name defaults to "Unknown", description uses subject if case_summary missing
-- Error messages brief with fix hints: "Terminal launch failed. Run: mc --check-terminal" per CONTEXT.md requirements
-- CLI routing via lazy import: case_terminal() imported inside main.py command routing to avoid circular dependency
-
-**Key Decisions (Phase 13):**
-
-**Plan 01:**
-- Python 3.12 in RHEL 10 UBI: Pre-installed in ubi10/ubi:10.1, compatible with pyproject.toml requirement (>=3.11)
-- jq exclusion: Not available in UBI repos without EPEL, excluded from base image to avoid dependency complexity, documented for runtime install if needed
-- Runtime mode detection: MC_RUNTIME_MODE environment variable instead of /.dockerenv file check (reliable across Docker/Podman/BuildKit)
-- Editable install with --no-build-isolation: Requires setuptools/wheel pre-installed, prevents runtime import errors
-- Non-root mcuser: Created for security, works with Phase 11 --userns=keep-id pattern for permission mapping
-
-**Plan 02:**
-- Image verification before creation: Explicit check for mc-rhel10:latest with build command in error message (prevents cryptic Podman errors)
-- Environment variables over entrypoint args: Set CASE_NUMBER, CUSTOMER_NAME, WORKSPACE_PATH, MC_RUNTIME_MODE via environment dict (simpler than command args, accessible to all processes)
-- Integration test skip strategy: MC_TEST_INTEGRATION environment variable required (prevents false failures on systems without Podman/image)
-
-**Phase 14 Complete (2/2 plans) — VERIFIED:**
-- ✅ Plan 01: uv-based project management with .python-version (3.11), uv.lock lockfile (1219 lines, 30 packages), comprehensive INSTALL.md (306 lines) documenting three workflows, README.md updated with modern installation instructions (4 minutes)
-- ✅ Plan 02: Entry point integration tests with pytest-console-scripts (3 tests), UAT workflow validation confirming editable install functionality, version assertion bug fix (5 minutes)
-
-**Key Decisions (Phase 14):**
-
-**Plan 01:**
-- uv unified tooling: Chosen for 10-100x faster workflow than pip/pipx/virtualenv, modern approach aligned with Python packaging evolution
-- Python 3.11 version pin: Matches pyproject.toml requires-python >=3.11, ensures uv uses correct Python version automatically via .python-version file
-- Three distinct workflows: Development (uv run), UAT (uv tool install -e .), Production (uv tool install git+https://...)
-- Comprehensive troubleshooting: Document common issues (PATH configuration, conda interference, Podman integration) to reduce support burden
-- PyPI publishing deferred: Focus on git-based distribution for now, PyPI publishing workflow to be addressed in future phase if needed
-
-**Plan 02:**
-- pytest-console-scripts over subprocess: More reliable entry point testing with ScriptRunner fixture, supports in-process and subprocess modes
-- Three test scenarios: Version check, help display, invalid command handling (covers basic entry point verification)
-- UAT validation checkpoint: Manual verification required for real-world installation testing (PATH config, terminal behavior, editable mode)
-- Version assertion fix: Bug detected during verification, test expected 0.1.0 but version bumped to 2.0.0 in prior commit
-
-**Phase 14.1 Complete (5/5 plans) — VERIFIED:**
-- ✅ Plan 01: Fixed Podman URI scheme parsing - byte string detection and UTF-8 decoding in get_socket_path() (2.4 minutes, 33 tests passing)
-- ✅ Plan 02: Unified authentication - added ConfigManager.get() with defaults, removed Salesforce dependency from container lifecycle commands (3 minutes)
-- ✅ Plan 03: Early case number validation - fails in <0.3s instead of 5+ seconds, validation before credential checks (4 minutes, 29 tests passing)
-- ✅ Plan 04: Renamed offline_token to rh_api_offline_token with backwards compatibility, fixed socket_path TOML serialization bug (4 minutes)
-- ✅ Plan 05: Fixed UAT test plan documentation - corrected 4 instances of "mc container ls" to "mc container list" (<1 minute)
-
-**Key Decisions (Phase 14.1):**
-
-**Plan 01:**
-- Byte string detection in CONTAINER_HOST parsing: Added isinstance(container_host, bytes) check to decode byte strings before URI parsing (prevents Podman connection errors)
-
-**Plan 02:**
-- ConfigManager.get() uses dotted key paths (e.g., 'workspace.base_directory') for nested config access with default fallback
-- Container lifecycle commands never initialize SalesforceAPIClient (only terminal attachment requires Salesforce)
-- Authentication boundaries documented in module docstring instead of inline comments (survives linter/formatter changes)
-
-**Plan 03:**
-- Validation moved to earliest point in call chain (before config loading, credential checks, API calls)
-- Early validation pattern: validate_case_number() called as first operation after basic checks
-- Fail-fast UX: Invalid format errors appear in <1s instead of 5+ seconds
-- Test regex pattern updated to match exact validation error message format
-
-**Plan 04:**
-- Use rh_api_offline_token instead of offline_token for clarity (indicates Red Hat API, not generic token)
-- Maintain backwards compatibility: validation accepts both keys, code tries new key first with fallback
-- Log deprecation warning when old key detected (helps users migrate gradually)
-- Fixed socket_path None → empty string for TOML compatibility (discovered during testing)
-
-### Roadmap Evolution
-
-- Phase 14 added: Installation & Distribution - Support dev/UAT/prod workflows with uv tool
-- Phase 14 complete: Modern distribution approach established
-- Phase 14.1 inserted after Phase 14: UAT Critical Fixes (URGENT) - blocking bugs discovered during manual UAT testing
+See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
 ### Pending Todos
 
+**P0 (Critical):**
+- [2026-02-01] Fix terminal attachment Salesforce API call - change get_case to query_case in attach.py line 136 (area: api, milestone: v2.0.1)
+
+**Other:**
 - [2026-01-22] Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- ~~[2026-02-01] Rename offline_token config to rh_api_offline_token (area: config)~~ — COMPLETE (Phase 14.1-04)
-- ~~[2026-02-01] Unify authentication - remove direct Salesforce dependency from container commands (area: auth)~~ — COMPLETE (Phase 14.1-02)
-- ~~[2026-02-01] Fix UAT test plan - mc container ls should be mc container list (area: docs)~~ — COMPLETE (Phase 14.1-05)
-- ~~[2026-02-01] Fix Podman URI scheme error - byte string passed instead of decoded string (area: api)~~ — COMPLETE (Phase 14.1-01)
-- ~~[2026-02-01] Validate case number format before credential/API checks (area: general)~~ — COMPLETE (Phase 14.1-03)
-- ~~[2026-01-27] Migrate mc-cli distribution to use pipx/uv tool for portable isolated installation (area: tooling)~~ — COMPLETE (Phase 14-01)
-
-### Blockers/Concerns
-
-**From research (critical for v2.0):**
-- Phase 9: UID/GID mapping must use `--userns=keep-id` and `:U` suffix (prevent permission errors)
-- Phase 10: Salesforce tokens expire after 2 hours (proactive refresh 5 min before expiry)
-- Phase 11: State reconciliation required (orphaned containers from crashes)
-- Phase 12: Terminal launcher needs cross-platform testing (macOS vs Linux)
-
-**Tech debt from v1.0:**
-- 2 cosmetic type annotation gaps in config module (not blocking)
-- 20 test failures from Path vs string type changes (deferred)
+- [2026-02-01] Consolidate config directory under ~/mc workspace (area: config)
+- [2026-02-01] Fix cache database initialization in mc create (area: database)
+- [2026-02-01] Fix Podman URI scheme byte string error (area: api)
+- [2026-02-01] Fix container create image detection failure (area: containers)
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed Phase 14.1 execution and verification
-Resume: ALL v2.0 PHASES COMPLETE - Ready for milestone audit
+Stopped at: v2.0 milestone archived and tagged
+Resume: Ready for `/gsd:new-milestone` to define next milestone
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-01 (Phase 14.1 complete - ALL v2.0 phases verified)*
+*Last updated: 2026-02-01 (v2.0 milestone complete and archived)*
