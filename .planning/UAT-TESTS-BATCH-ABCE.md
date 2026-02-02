@@ -76,21 +76,21 @@
      ```bash
      mkdir -p ~/Library/Application\ Support/mc
      cat > ~/Library/Application\ Support/mc/config.toml <<EOF
-[api]
-rh_api_offline_token = "test_token_12345"
+     [api]
+     rh_api_offline_token = "test_token_12345"
 
-base_directory = "$HOME/mc"
-EOF
+     base_directory = "$HOME/mc"
+     EOF
      ```
    - **Linux:**
      ```bash
      mkdir -p ~/.config/mc
      cat > ~/.config/mc/config.toml <<EOF
-[api]
-rh_api_offline_token = "test_token_12345"
+     [api]
+     rh_api_offline_token = "test_token_12345"
 
-base_directory = "$HOME/mc"
-EOF
+     base_directory = "$HOME/mc"
+     EOF
      ```
 
 3. Create old-style state database in platformdirs location (if exists):

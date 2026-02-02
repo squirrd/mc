@@ -128,7 +128,12 @@ class PodmanClient:
             # Construct URI
             uri: Optional[str]
             if socket_path:
-                uri = f"unix://{socket_path}"
+                # If socket_path is already a full URI (SSH), use it directly
+                if socket_path.startswith(('ssh://', 'unix://', 'http+unix://', 'tcp://', 'http://')):
+                    uri = socket_path
+                else:
+                    # It's a plain socket path - prefix with unix://
+                    uri = f"unix://{socket_path}"
             else:
                 uri = None
 
@@ -139,6 +144,11 @@ class PodmanClient:
             # Connect with retry logic
             def _connect() -> podman.PodmanClient:
                 """Inner function to wrap connection in retry logic."""
+                # Debug logging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Connecting to Podman: uri={uri!r} (type={type(uri)}), timeout={self._timeout!r} (type={type(self._timeout)})")
+
                 # On macOS with Podman machine, pass base_url=None (let it auto-detect)
                 # On Linux, pass the socket path URI
                 if uri is not None:

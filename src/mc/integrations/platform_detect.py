@@ -93,6 +93,41 @@ def ensure_podman_ready(platform_type: str) -> None:
         )
 
 
+def get_podman_machine_uri() -> Optional[str]:
+    """
+    Get Podman machine SSH URI from connections config (macOS).
+
+    Returns:
+        Optional[str]: SSH URI for default Podman machine, or None if not found
+    """
+    try:
+        connections_file = Path.home() / '.config' / 'containers' / 'podman-connections.json'
+        if not connections_file.exists():
+            return None
+
+        import json
+        with open(connections_file) as f:
+            data = json.load(f)
+
+        # Get default connection name
+        default_name = data.get('Connection', {}).get('Default')
+        if not default_name:
+            return None
+
+        # Get URI for default connection
+        connections = data.get('Connection', {}).get('Connections', {})
+        default_conn = connections.get(default_name, {})
+        uri = default_conn.get('URI')
+
+        # Ensure string type (defensive)
+        if uri and isinstance(uri, bytes):
+            uri = uri.decode('utf-8')
+
+        return uri
+    except (json.JSONDecodeError, KeyError, OSError):
+        return None
+
+
 def get_socket_path(platform_type: str) -> Optional[str]:
     """
     Get Podman socket path for current platform.
@@ -101,7 +136,7 @@ def get_socket_path(platform_type: str) -> Optional[str]:
         platform_type: Platform type from detect_platform()
 
     Returns:
-        Optional[str]: Socket path or None for auto-detection
+        Optional[str]: Socket path or full URI (SSH on macOS), or None for auto-detection
     """
     # Check CONTAINER_HOST environment variable first
     container_host = os.getenv('CONTAINER_HOST')
@@ -138,7 +173,16 @@ def get_socket_path(platform_type: str) -> Optional[str]:
         return str(socket_path)
 
     elif platform_type == 'macos':
-        # macOS: podman-py will auto-detect from machine config
+        # macOS: Use local Podman machine API socket
+        # This works around podman-py 5.7.0 bug where base_url=None fails with empty bytes
+        # The socket is created by Podman machine and proxies to the VM
+        machine_socket = Path.home() / '.local' / 'share' / 'containers' / 'podman' / 'machine' / 'podman.sock'
+
+        if machine_socket.exists():
+            return str(machine_socket)
+
+        # Fallback: try to read from podman connections (less reliable)
+        # Note: SSH URIs don't work without explicit identity file configuration
         return None
 
     else:
