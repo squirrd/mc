@@ -45,19 +45,20 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
         case_number: Case number for PS1 prompt
 
     Returns:
-        Complete podman exec command string
+        Complete podman exec command string with auto-close on exit
 
     Example:
         >>> build_exec_command("mc-12345678", "/path/to/bashrc", "12345678")
-        'podman exec -it --env BASH_ENV=/path/to/bashrc --env PS1=[MC-12345678] \\w\\$ mc-12345678 /bin/bash'
+        'podman exec -it --env BASH_ENV=/path/to/bashrc --env PS1=[MC-12345678] \\w\\$ mc-12345678 /bin/bash; exit'
     """
     # Build command with BASH_ENV for custom config and PS1 for prompt
     # Use single quotes to prevent shell glob expansion of brackets and handle paths with spaces
+    # Append '; exit' to auto-close terminal when shell exits
     return (
         f"podman exec -it "
         f"--env 'BASH_ENV={bashrc_path}' "
         f"--env 'PS1=[MC-{case_number}] \\w\\$ ' "
-        f"{container_id} /bin/bash"
+        f"{container_id} /bin/bash; exit"
     )
 
 
