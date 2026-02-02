@@ -1,6 +1,7 @@
 """Integration test for container creation with real Podman."""
 
 import os
+import subprocess
 import tempfile
 
 import pytest
@@ -114,6 +115,10 @@ def test_reconciliation_with_real_podman():
     Verifies that state reconciliation correctly detects when a container
     is deleted outside the ContainerManager (e.g., via 'podman rm').
     """
+    # PRE-TEST CLEANUP: Remove any stale containers from previous runs
+    subprocess.run(["podman", "rm", "-f", "mc-77777777"], capture_output=True)
+    subprocess.run(["podman", "rm", "-f", "mc-88888888"], capture_output=True)
+
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         workspace_path = os.path.join(tmpdir, "workspace")
@@ -153,10 +158,14 @@ def test_reconciliation_with_real_podman():
             state_db.delete_container("77777777")
 
         finally:
-            # Cleanup if container still exists
-            if container:
-                try:
-                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
-                    container.remove()  # type: ignore[no-untyped-call]
-                except Exception:
-                    pass
+            # Cleanup: Force remove containers even if test failed
+            subprocess.run(["podman", "rm", "-f", "mc-77777777"], capture_output=True)
+            subprocess.run(["podman", "rm", "-f", "mc-88888888"], capture_output=True)
+
+            # Also remove from state DB
+            try:
+                if state_db:
+                    state_db.delete_container("77777777")
+                    state_db.delete_container("88888888")
+            except Exception:
+                pass
