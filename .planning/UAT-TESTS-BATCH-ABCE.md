@@ -75,12 +75,22 @@
    - **macOS:**
      ```bash
      mkdir -p ~/Library/Application\ Support/mc
-     echo -e '[api]\nrh_api_offline_token = "test_token_12345"' > ~/Library/Application\ Support/mc/config.toml
+     cat > ~/Library/Application\ Support/mc/config.toml <<EOF
+[api]
+rh_api_offline_token = "test_token_12345"
+
+base_directory = "$HOME/mc"
+EOF
      ```
    - **Linux:**
      ```bash
      mkdir -p ~/.config/mc
-     echo -e '[api]\nrh_api_offline_token = "test_token_12345"' > ~/.config/mc/config.toml
+     cat > ~/.config/mc/config.toml <<EOF
+[api]
+rh_api_offline_token = "test_token_12345"
+
+base_directory = "$HOME/mc"
+EOF
      ```
 
 3. Create old-style state database in platformdirs location (if exists):
@@ -115,8 +125,9 @@
 **Expected Result:**
 - Config migrated to `~/mc/config/config.toml`
 - Token preserved: `rh_api_offline_token = "test_token_12345"`
+- Base directory preserved: `base_directory = "/Users/username/mc"` (or `/home/username/mc` on Linux)
 - State directory created: `~/mc/state/containers.db`
-- Migration messages displayed (optional, may be silent)
+- Migration messages displayed: "Migrated config from ..."
 - No errors or warnings
 
 **Actual Result:** ☐ Pass ☐ Fail
