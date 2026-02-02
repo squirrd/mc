@@ -8,39 +8,21 @@ A production-ready Python CLI tool and container orchestrator for Red Hat suppor
 
 Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality.
 
-## Current Milestone: v2.0.1 Cleanup & Hardening
+## Current Status
 
-**Status:** v2.0 shipped (2026-02-01), v2.0.1 cleanup complete! (13/13 todos complete - ready for UAT)
+**Latest Release:** v2.0.1 (2026-02-02)
 
-**v2.0 Delivered:**
+**What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
 - ✓ Automatic Red Hat API integration for case metadata resolution
 - ✓ Container lifecycle management (create, list, stop, delete, exec)
 - ✓ New terminal window attachment for seamless multi-case workflow
 - ✓ Container image with essential tools (mc, RHEL 10 UBI base)
-- ✓ Mounted case workspace at /case in containers
+- ✓ Quay.io registry integration with auto-pull and local fallback
 - ✓ Modern distribution via uv tool (pipx/uv tool install git+)
+- ✓ Production-ready test suite: 503 tests passing with 77% coverage
 
-**v2.0.1 Cleanup Progress:**
-- ✅ Batch A: Configuration cleanup (2/2 todos complete)
-  - Config consolidated under ~/mc/config/
-  - Auto-migration from old platformdirs locations
-- ✅ Batch B: Container Management (5/5 todos complete)
-  - Structured workspace paths: cases/<customer>/<case>-<description>
-  - Quay.io auto-pull with local fallback
-  - Duplicate terminal prevention
-  - Auto-close terminal on shell exit
-  - Improved error messaging
-- ✅ Batch C: UI Improvements (1/1 todo complete)
-  - Container list shows description instead of workspace path
-- ✅ Batch D: Authentication & API cleanup (3/3 todos complete)
-- ✅ Batch E: Testing (6/6 test suites fixed, complete!)
-  - ✅ Test dependencies and imports fixed (513 tests collect, 13/13 cache tests pass)
-  - ✅ HTTP error handling tests (14 failures → all passing)
-  - ✅ Container management tests (6 failures → all passing)
-  - ✅ Terminal attachment tests (17 failures → all passing)
-  - ✅ Validation and integration tests (5 failures → all passing/skipping gracefully)
-  - ✅ Workspace and metadata tests (5 failures → all passing)
+**Ready For:** Next milestone planning via `/gsd:new-milestone`
 
 ## Requirements
 
@@ -190,4 +172,4 @@ No active requirements. Ready for next milestone definition via `/gsd:new-milest
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-02 after completing Batch A (Configuration)*
+*Last updated: 2026-02-02 after v2.0.1 patch release*
