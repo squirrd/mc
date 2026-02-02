@@ -60,8 +60,11 @@
   ```
 - Directories created only when needed (lazy initialization)
 
-**Actual Result:** ☐ Pass ☐ Fail
-**Notes:**
+**Actual Result:** ☒ Fail → ☑ Automated
+**Automated Test:** `test_fresh_install_missing_config_base_directory_regression()` in `tests/integration/test_case_terminal.py`
+**Created:** 2026-02-02
+**Status:** Failing (reproduces bug - will pass once bug is fixed)
+**Notes:** Bug reproduced: "Podman error: 'base_directory'" when config file missing base_directory key
 
 ---
 
