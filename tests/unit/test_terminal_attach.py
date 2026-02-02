@@ -11,6 +11,7 @@ from mc.terminal.attach import (
     build_window_title,
     should_launch_terminal,
 )
+from mc.utils.validation import validate_case_number
 
 
 class TestShouldLaunchTerminal:
@@ -46,9 +47,9 @@ class TestBuildExecCommand:
 
         # Verify command structure
         assert result.startswith("podman exec -it")
-        assert f"--env BASH_ENV={bashrc_path}" in result
-        assert f"--env PS1=[MC-{case_number}]" in result
-        assert result.endswith(f"{container_id} /bin/bash")
+        assert f"--env 'BASH_ENV={bashrc_path}'" in result
+        assert f"--env 'PS1=[MC-{case_number}" in result
+        assert result.endswith(f"{container_id} /bin/bash; exit")
 
     def test_build_exec_command_special_chars(self) -> None:
         """Test exec command handles special characters in paths."""
@@ -112,13 +113,21 @@ class TestAttachTerminal:
         config_manager = MagicMock()
         config_manager.load.return_value = {"base_directory": "/tmp/mc"}
 
-        salesforce_client = MagicMock()
-        salesforce_client.get_case.return_value = {
-            "account_name": "Test Customer",
-            "case_summary": "Test case",
-            "subject": "Fallback subject",
-            "next_steps": "Run diagnostics",
-        }
+        # Mock get_case_metadata to return (case_details, account_details, was_cached)
+        mock_get_case_metadata = mocker.patch("mc.terminal.attach.get_case_metadata")
+        mock_get_case_metadata.return_value = (
+            {
+                "summary": "Test case",
+                "status": "Open",
+                "severity": "High",
+            },
+            {
+                "name": "Test Customer",
+            },
+            False  # was_cached
+        )
+
+        api_client = MagicMock()
 
         container_manager = MagicMock()
         container_manager.status.return_value = {
@@ -136,11 +145,18 @@ class TestAttachTerminal:
         # Mock bashrc writer
         mocker.patch("mc.terminal.attach.write_bashrc", return_value="/tmp/bashrc")
 
+        # Mock validate_case_number to return the case number unchanged
+        mocker.patch("mc.terminal.attach.validate_case_number", side_effect=lambda x: x)
+
+        # Mock shorten_and_format to return simple formatted strings
+        mocker.patch("mc.terminal.attach.shorten_and_format", side_effect=lambda x: x.replace(" ", "_"))
+
         return {
             "config_manager": config_manager,
-            "salesforce_client": salesforce_client,
+            "api_client": api_client,
             "container_manager": container_manager,
             "launcher": mock_launcher,
+            "get_case_metadata": mock_get_case_metadata,
         }
 
     def test_attach_terminal_creates_container(self, mock_dependencies, mocker: Mock) -> None:
@@ -156,7 +172,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -178,7 +194,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -192,7 +208,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -218,7 +234,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -242,7 +258,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -260,7 +276,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -270,9 +286,9 @@ class TestAttachTerminal:
 
         command = launch_options.command
         assert command.startswith("podman exec -it")
-        assert "--env BASH_ENV=/tmp/bashrc" in command
-        assert "--env PS1=[MC-12345678]" in command
-        assert "mc-12345678 /bin/bash" in command
+        assert "--env 'BASH_ENV=/tmp/bashrc'" in command
+        assert "--env 'PS1=[MC-12345678]" in command
+        assert "mc-12345678 /bin/bash; exit" in command
 
     def test_attach_terminal_not_tty(self, mock_dependencies, mocker: Mock) -> None:
         """Test attach_terminal raises error when not in TTY."""
@@ -285,20 +301,23 @@ class TestAttachTerminal:
             attach_terminal(
                 case_number="12345678",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
-    def test_attach_terminal_invalid_case_number(self, mock_dependencies) -> None:
+    def test_attach_terminal_invalid_case_number(self, mock_dependencies, mocker: Mock) -> None:
         """Test attach_terminal rejects invalid case numbers."""
         deps = mock_dependencies
+
+        # Don't mock validate_case_number for this test - let it actually validate
+        mocker.patch("mc.terminal.attach.validate_case_number", side_effect=lambda x: validate_case_number(x))
 
         # Test 7 digits
         with pytest.raises(RuntimeError, match="Invalid case number.*must be exactly 8 digits"):
             attach_terminal(
                 case_number="1234567",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
@@ -307,22 +326,22 @@ class TestAttachTerminal:
             attach_terminal(
                 case_number="abcd1234",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
     def test_attach_terminal_salesforce_failure(self, mock_dependencies) -> None:
-        """Test attach_terminal handles Salesforce API failures."""
+        """Test attach_terminal handles Red Hat API failures."""
         deps = mock_dependencies
 
-        # Mock Salesforce API failure
-        deps["salesforce_client"].get_case.side_effect = Exception("Network error")
+        # Mock Red Hat API failure
+        deps["get_case_metadata"].side_effect = Exception("Network error")
 
         with pytest.raises(RuntimeError, match="Failed to fetch case metadata.*Check network and credentials"):
             attach_terminal(
                 case_number="12345678",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
@@ -340,7 +359,7 @@ class TestAttachTerminal:
             attach_terminal(
                 case_number="12345678",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
@@ -355,7 +374,7 @@ class TestAttachTerminal:
             attach_terminal(
                 case_number="12345678",
                 config_manager=deps["config_manager"],
-                salesforce_client=deps["salesforce_client"],
+                api_client=deps["api_client"],
                 container_manager=deps["container_manager"],
             )
 
@@ -363,15 +382,17 @@ class TestAttachTerminal:
         """Test attach_terminal uses metadata fallbacks correctly."""
         deps = mock_dependencies
 
-        # Return minimal metadata (no case_summary, use subject fallback)
-        deps["salesforce_client"].get_case.return_value = {
-            "subject": "Fallback subject",
-        }
+        # Return minimal metadata (no summary, empty account name)
+        deps["get_case_metadata"].return_value = (
+            {},  # Empty case_details
+            {},  # Empty account_details
+            False
+        )
 
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 
@@ -379,10 +400,10 @@ class TestAttachTerminal:
         call_args = deps["launcher"].launch.call_args
         launch_options = call_args[0][0]
 
-        # account_name falls back to "Unknown"
+        # account name falls back to "Unknown"
         assert "Unknown" in launch_options.title
-        # description uses subject fallback
-        assert "Fallback subject" in launch_options.title
+        # description defaults to empty string
+        assert "12345678 - Unknown - " == launch_options.title
 
     def test_attach_terminal_workspace_path_fallback(self, mock_dependencies) -> None:
         """Test attach_terminal constructs workspace path when not in status."""
@@ -396,7 +417,7 @@ class TestAttachTerminal:
         attach_terminal(
             case_number="12345678",
             config_manager=deps["config_manager"],
-            salesforce_client=deps["salesforce_client"],
+            api_client=deps["api_client"],
             container_manager=deps["container_manager"],
         )
 

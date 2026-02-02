@@ -34,15 +34,15 @@ def mock_access_token():
 @pytest.fixture
 def api_client(mock_access_token):
     """
-    RedHatAPIClient instance with fake token.
+    RedHatAPIClient instance with fake token and no retries.
 
     Args:
         mock_access_token: Fixture providing fake token
 
     Returns:
-        RedHatAPIClient: Client instance for testing
+        RedHatAPIClient: Client instance for testing with retries disabled
     """
-    return RedHatAPIClient(access_token=mock_access_token)
+    return RedHatAPIClient(access_token=mock_access_token, max_retries=0)
 
 
 @pytest.fixture

@@ -1,7 +1,5 @@
 """Unit tests for WorkspaceManager."""
 
-import io
-import sys
 from pathlib import Path
 import pytest
 from mc.controller.workspace import WorkspaceManager
@@ -71,46 +69,41 @@ def test_workspace_create_files_structure(tmp_path):
     assert str(base_case_path).endswith("Red_Hat_Inc/12345678-Test_Summary")
 
 
-def test_workspace_check_status_ok(tmp_path):
+def test_workspace_check_status_ok(tmp_path, caplog):
     """Test check() returns OK when all files exist."""
+    import logging
+    caplog.set_level(logging.INFO)
+
     ws = create_workspace(tmp_path)
     ws.create_files()
 
-    # Capture stdout
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-
     status = ws.check()
-
-    sys.stdout = sys.__stdout__
-    output = captured_output.getvalue()
 
     # Verify status
     assert status == "OK"
-    assert "CheckStatus: OK" in output
+    assert "CheckStatus: OK" in caplog.text
 
 
-def test_workspace_check_status_warn(tmp_path):
+def test_workspace_check_status_warn(tmp_path, caplog):
     """Test check() returns WARN when files don't exist."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
     ws = create_workspace(tmp_path)
     # Don't call create_files() - files won't exist
 
-    # Capture stdout
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-
     status = ws.check()
-
-    sys.stdout = sys.__stdout__
-    output = captured_output.getvalue()
 
     # Verify status
     assert status == "WARN"
-    assert "does not exist" in output
+    assert "does not exist" in caplog.text
 
 
-def test_workspace_check_status_fatal(tmp_path):
+def test_workspace_check_status_fatal(tmp_path, caplog):
     """Test check() returns FATAL when file type is wrong."""
+    import logging
+    caplog.set_level(logging.ERROR)
+
     ws = create_workspace(tmp_path)
     ws.create_files()
 
@@ -120,18 +113,11 @@ def test_workspace_check_status_fatal(tmp_path):
     file_path.unlink()  # Remove file
     file_path.mkdir()   # Create directory at file path
 
-    # Capture stdout
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-
     status = ws.check()
-
-    sys.stdout = sys.__stdout__
-    output = captured_output.getvalue()
 
     # Verify status
     assert status == "FATAL"
-    assert "Wrong file type" in output
+    assert "Expected file, found directory" in caplog.text
 
 
 def test_get_attachment_dir(tmp_path):
@@ -140,11 +126,12 @@ def test_get_attachment_dir(tmp_path):
 
     attach_dir = ws.get_attachment_dir()
 
-    # Verify path ends with /attach
-    assert attach_dir.endswith('/attach')
+    # Verify it's a Path object
+    assert attach_dir is not None
+    assert attach_dir.name == 'attach'
 
     # Verify path structure
-    assert "Red_Hat_Inc/12345678-Test_Summary/files/attach" in attach_dir
+    assert "Red_Hat_Inc/12345678-Test_Summary/files/attach" in str(attach_dir)
 
 
 def test_workspace_with_special_characters_in_names(tmp_path):

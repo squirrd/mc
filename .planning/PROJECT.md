@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Milestone: v2.0.1 Cleanup & Hardening
 
-**Status:** v2.0 shipped (2026-02-01), post-ship cleanup in progress (12/13 todos complete)
+**Status:** v2.0 shipped (2026-02-01), v2.0.1 cleanup complete! (13/13 todos complete - ready for UAT)
 
 **v2.0 Delivered:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -34,13 +34,13 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✅ Batch C: UI Improvements (1/1 todo complete)
   - Container list shows description instead of workspace path
 - ✅ Batch D: Authentication & API cleanup (3/3 todos complete)
-- ⏳ Batch E: Testing (1/5 test suites fixed, 4 remaining)
+- ✅ Batch E: Testing (6/6 test suites fixed, complete!)
   - ✅ Test dependencies and imports fixed (513 tests collect, 13/13 cache tests pass)
-  - ⏳ HTTP error handling tests (14 failures)
-  - ⏳ Container management tests (6 failures)
-  - ⏳ Terminal attachment tests (17 failures)
-  - ⏳ Validation and integration tests (5 failures)
-  - ⏳ Workspace and metadata tests (5 failures)
+  - ✅ HTTP error handling tests (14 failures → all passing)
+  - ✅ Container management tests (6 failures → all passing)
+  - ✅ Terminal attachment tests (17 failures → all passing)
+  - ✅ Validation and integration tests (5 failures → all passing/skipping gracefully)
+  - ✅ Workspace and metadata tests (5 failures → all passing)
 
 ## Requirements
 

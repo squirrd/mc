@@ -132,12 +132,15 @@ class RedHatAPIClient:
         """
         session = requests.Session()
 
+        # Only enable status-based retries if max_retries > 0
+        status_forcelist = [429, 500, 502, 503, 504] if max_retries > 0 else []
+
         retry_strategy = Retry(
             total=max_retries,
             connect=max_retries,
             read=max_retries,
             status=max_retries,
-            status_forcelist=[429, 500, 502, 503, 504],
+            status_forcelist=status_forcelist,
             allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS"],
             backoff_factor=0.3,
             respect_retry_after_header=True
@@ -180,6 +183,12 @@ class RedHatAPIClient:
             return cast(CaseDetails, response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.RetryError as e:
+            # RetryError wraps the original exception after max retries exhausted
+            # Extract HTTP response if available
+            if hasattr(e, 'response') and e.response:
+                raise HTTPAPIError.from_response(e.response)
+            raise APIError(f"API request failed for case {case_number} after retries: {str(e)}")
         except requests.exceptions.Timeout:
             raise APITimeoutError(
                 f"Request timed out while fetching case {case_number}",
@@ -219,6 +228,12 @@ class RedHatAPIClient:
             return cast(dict[str, Any], response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.RetryError as e:
+            # RetryError wraps the original exception after max retries exhausted
+            # Extract HTTP response if available
+            if hasattr(e, 'response') and e.response:
+                raise HTTPAPIError.from_response(e.response)
+            raise APIError(f"API request failed for account {account_number} after retries: {str(e)}")
         except requests.exceptions.Timeout:
             raise APITimeoutError(
                 f"Request timed out while fetching account {account_number}",
@@ -258,6 +273,12 @@ class RedHatAPIClient:
             return cast(list[AttachmentMetadata], response.json())
         except requests.exceptions.HTTPError as e:
             raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.RetryError as e:
+            # RetryError wraps the original exception after max retries exhausted
+            # Extract HTTP response if available
+            if hasattr(e, 'response') and e.response:
+                raise HTTPAPIError.from_response(e.response)
+            raise APIError(f"API request failed for case {case_number} attachments after retries: {str(e)}")
         except requests.exceptions.Timeout:
             raise APITimeoutError(
                 f"Request timed out while listing attachments for case {case_number}",

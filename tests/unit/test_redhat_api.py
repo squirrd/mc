@@ -5,6 +5,7 @@ import requests
 import responses
 from unittest.mock import Mock, patch
 from mc.integrations.redhat_api import RedHatAPIClient, check_download_safety
+from mc.exceptions import HTTPAPIError
 
 
 @responses.activate
@@ -134,11 +135,11 @@ def test_fetch_case_details_http_errors(api_client, mock_api_base_url, status_co
         status=status_code
     )
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(HTTPAPIError) as exc_info:
         api_client.fetch_case_details(case_number)
 
     # Verify status code matches expected
-    assert exc_info.value.response.status_code == status_code
+    assert exc_info.value.status_code == status_code
 
 
 @pytest.mark.parametrize("status_code,error_msg", [
@@ -159,11 +160,11 @@ def test_fetch_account_details_http_errors(api_client, mock_api_base_url, status
         status=status_code
     )
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(HTTPAPIError) as exc_info:
         api_client.fetch_account_details(account_number)
 
     # Verify status code matches expected
-    assert exc_info.value.response.status_code == status_code
+    assert exc_info.value.status_code == status_code
 
 
 @pytest.mark.parametrize("status_code,error_msg", [
@@ -184,11 +185,11 @@ def test_list_attachments_http_errors(api_client, mock_api_base_url, status_code
         status=status_code
     )
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(HTTPAPIError) as exc_info:
         api_client.list_attachments(case_number)
 
     # Verify status code matches expected
-    assert exc_info.value.response.status_code == status_code
+    assert exc_info.value.status_code == status_code
 
 
 def test_check_download_safety_small_file():

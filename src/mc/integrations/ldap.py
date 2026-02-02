@@ -4,8 +4,6 @@ import logging
 import re
 import subprocess
 
-from mc.exceptions import ValidationError
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,10 +20,7 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
     """
     # Validate search term length
     if not (4 <= len(uid) <= 15):
-        raise ValidationError(
-            f"Search term '{uid}' must be between 4 and 15 characters",
-            "Try: Use a more specific search term"
-        )
+        return False, f"Search term '{uid}' must be between 4 and 15 characters"
 
     # Determine search pattern
     if not (5 <= len(uid) < 15):

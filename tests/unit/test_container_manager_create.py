@@ -78,7 +78,7 @@ class TestCreateNewContainer:
         create_call = podman_client.client.containers.create.call_args
         assert create_call.kwargs["image"] == "mc-rhel10:latest"
         assert create_call.kwargs["name"] == "mc-12345678"
-        assert create_call.kwargs["command"] == ["/bin/bash", "-l"]
+        assert create_call.kwargs["command"] == ["/bin/bash", "-c", "tail -f /dev/null"]
         assert create_call.kwargs["detach"] is True
         assert create_call.kwargs["tty"] is True
         assert create_call.kwargs["stdin_open"] is True

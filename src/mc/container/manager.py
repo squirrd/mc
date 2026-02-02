@@ -138,6 +138,13 @@ class ContainerManager:
                 f"Failed to start container for case {case_number}: {e}"
             ) from e
 
+        # 6b. Reload container to update status attribute
+        try:
+            container.reload()  # type: ignore[no-untyped-call]
+        except Exception:
+            # Reload is best-effort - if it fails, continue
+            pass
+
         # 7. Record in state database
         try:
             self.state.add_container(case_number, container.id, workspace_path)  # type: ignore[attr-defined]

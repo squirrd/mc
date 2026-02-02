@@ -5,6 +5,7 @@ import pytest
 import responses
 import requests
 from mc.utils.auth import get_access_token, TOKEN_CACHE_PATH
+from mc.exceptions import AuthenticationError
 
 
 @pytest.fixture(autouse=True)
@@ -51,11 +52,11 @@ def test_get_access_token_http_401_unauthorized(mock_sso_url):
         status=401
     )
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(AuthenticationError) as exc_info:
         get_access_token(offline_token)
 
-    # Verify status code
-    assert exc_info.value.response.status_code == 401
+    # Verify error message
+    assert "Invalid offline token" in str(exc_info.value)
 
 
 @responses.activate
@@ -70,8 +71,8 @@ def test_get_access_token_http_500_server_error(mock_sso_url):
         status=500
     )
 
-    with pytest.raises(requests.HTTPError) as exc_info:
+    with pytest.raises(AuthenticationError) as exc_info:
         get_access_token(offline_token)
 
-    # Verify status code
-    assert exc_info.value.response.status_code == 500
+    # Verify error message contains status code
+    assert "HTTP 500" in str(exc_info.value)

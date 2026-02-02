@@ -500,6 +500,318 @@
 
 ---
 
+## Test 9: Error Handling and Validation
+
+**Feature:** Robust error handling and input validation across all components
+**Related Todos:** Fixed HTTP error handling, validation, workspace, and metadata tests
+
+### Prerequisites
+- MC installed with valid configuration
+- Internet connectivity for API tests
+- Podman running
+
+### Test Steps
+
+#### 9.1 Authentication Error Handling - Invalid Token
+1. Backup current config:
+   ```bash
+   cp ~/mc/config/config.toml ~/mc/config/config.toml.backup
+   ```
+2. Set invalid offline token:
+   ```bash
+   mc config set rh_api_offline_token "invalid_token_12345"
+   ```
+3. Attempt to create container:
+   ```bash
+   mc case 04347611
+   ```
+4. Restore config:
+   ```bash
+   mv ~/mc/config/config.toml.backup ~/mc/config/config.toml
+   ```
+
+**Expected Result:**
+- Clear error message: `Authentication failed: Invalid or expired offline token`
+- Error type: `AuthenticationError` (visible in debug mode)
+- Suggests checking token validity
+- No crash or stack trace shown to user
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.2 API Error Handling - Invalid Case Number
+1. Attempt to access non-existent case:
+   ```bash
+   mc case 99999999
+   ```
+
+**Expected Result:**
+- Error message indicates case not found or access denied
+- Error type: `HTTPAPIError` with status code 404 or 403
+- Clean error presentation (no raw stack trace)
+- Helpful suggestion (check case number, verify access permissions)
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.3 API Error Handling - Network/Server Errors
+1. Simulate network failure (optional - disconnect network temporarily):
+   ```bash
+   # Turn off WiFi or run while offline
+   mc case 04347611
+   ```
+
+**Expected Result:**
+- Error message indicates network connectivity issue or API unavailable
+- Suggests checking network connection and Red Hat API status
+- No confusing error messages
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (cannot test offline)
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.4 LDAP Input Validation - Search String Too Short
+1. Test short search string (requires LDAP configuration):
+   ```bash
+   # If LDAP search command exists
+   mc ldap search "ab"
+   ```
+
+**Expected Result:**
+- Validation error: Input too short (minimum 3 characters)
+- Returns error tuple: `(False, "Search string too short")`
+- No exception raised
+- Clean user-facing error message
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (no LDAP configured)
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.5 LDAP Input Validation - Search String Too Long
+1. Test overly long search string:
+   ```bash
+   # Create 257+ character string
+   mc ldap search "$(python3 -c 'print("a" * 300)')"
+   ```
+
+**Expected Result:**
+- Validation error: Input too long (maximum 256 characters)
+- Returns error tuple: `(False, "Search string too long")`
+- No exception raised
+- Clean user-facing error message
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (no LDAP configured)
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.6 Container State Management - Start Stopped Container
+1. Create and stop a container:
+   ```bash
+   mc case 04347611
+   # In container terminal:
+   exit
+   # Wait for terminal to close
+   ```
+2. Stop the container explicitly:
+   ```bash
+   podman stop mc-04347611
+   ```
+3. Verify container is stopped:
+   ```bash
+   mc container list
+   ```
+4. Relaunch container:
+   ```bash
+   mc case 04347611
+   ```
+
+**Expected Result:**
+- Container list shows `STATUS: stopped` before relaunch
+- `mc case 04347611` starts the stopped container
+- Container status updates to `running` after start
+- Terminal opens successfully
+- Container object status reflects actual Podman state
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Notes:**
+
+---
+
+#### 9.7 Container Uptime Calculation - Multi-Day Containers
+1. Check container list with uptime:
+   ```bash
+   mc container list
+   ```
+2. Verify uptime calculation for containers created 1+ days ago (if available)
+
+**Expected Result:**
+- Uptime shows days correctly (e.g., "2d 5h" for 2 days, 5 hours)
+- No calculation errors for multi-day uptimes
+- Consistent formatting across all containers
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (no multi-day containers)
+**Uptime Format Examples:**
+**Notes:**
+
+---
+
+#### 9.8 Workspace Status Check - Missing Directory
+1. Create container and workspace:
+   ```bash
+   mc case 04347611
+   exit
+   ```
+2. Manually delete workspace directory:
+   ```bash
+   rm -rf ~/mc/cases/*/04347611-*/
+   ```
+3. Check workspace status:
+   ```bash
+   mc workspace check
+   ```
+
+**Expected Result:**
+- Warning logged: Workspace directory missing for container
+- Status level: WARNING
+- Suggests reconciliation or recreation
+- No crash
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (no workspace check command)
+**Warning Message:**
+**Notes:**
+
+---
+
+#### 9.9 Workspace Status Check - File/Directory Conflict
+1. Create file with container name:
+   ```bash
+   mkdir -p ~/mc/cases/TestCustomer/
+   touch ~/mc/cases/TestCustomer/12345678-Test_Case
+   ```
+2. Check workspace status or attempt container creation
+
+**Expected Result:**
+- Error logged: Expected directory, found file
+- Status level: ERROR
+- Clear error message indicating conflict
+- No crash or confusing state
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A
+**Error Message:**
+**Notes:**
+
+---
+
+#### 9.10 Version Detection - Installed Package
+1. Check MC version:
+   ```bash
+   mc --version
+   ```
+
+**Expected Result:**
+- Shows version in format: `mc version X.Y.Z`
+- Version matches package metadata
+- No errors or fallbacks
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Version Output:**
+**Notes:**
+
+---
+
+#### 9.11 Version Detection - Editable Install Fallback
+1. If running from source with editable install:
+   ```bash
+   # From project directory
+   uv pip install -e .
+   mc --version
+   ```
+
+**Expected Result:**
+- Falls back to pyproject.toml version
+- Shows version: `2.0.0` (or current pyproject.toml version)
+- No errors or "unknown version"
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (not editable install)
+**Version Output:**
+**Notes:**
+
+---
+
+#### 9.12 Terminal Attachment - Metadata Fallbacks
+1. Create container with valid case:
+   ```bash
+   mc case 04347611
+   ```
+2. Observe terminal window title and shell prompt
+
+**Expected Result:**
+- Window title shows: `04347611 - <customer> - <description>`
+- If metadata unavailable, graceful fallback to case number only
+- Shell prompt: `[MC-04347611] /case$`
+- No crashes due to missing metadata
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Window Title:**
+**Shell Prompt:**
+**Notes:**
+
+---
+
+#### 9.13 Container Creation - Validation Before Launch
+1. Attempt container creation with various scenarios:
+   ```bash
+   # Valid case
+   mc case 04347611
+
+   # Invalid case number format (if validation exists)
+   mc case abc12345
+
+   # Empty case number
+   mc case ""
+   ```
+
+**Expected Result:**
+- Valid case: Container created successfully
+- Invalid format: Validation error before API call
+- Empty case: Error message, no crash
+- All errors handled gracefully
+
+**Actual Result:** ☐ Pass ☐ Fail
+**Notes:**
+
+---
+
+#### 9.14 Podman Platform Integration - macOS Detection
+1. On macOS, verify platform-specific behavior:
+   ```bash
+   mc case 04347611
+   ```
+
+**Expected Result:**
+- Podman client correctly detects macOS platform
+- Uses appropriate Podman machine socket
+- Container creation succeeds
+- No platform-related errors
+
+**Actual Result:** ☐ Pass ☐ Fail ☐ N/A (not macOS)
+**Platform Detected:**
+**Notes:**
+
+---
+
 ## Integration Test: End-to-End Workflow
 
 **Test complete workflow combining all features**
@@ -591,9 +903,23 @@
 | 8.1 | All tests collect (513 items) | ☐ Pass ☐ Fail | |
 | 8.2 | Cache tests pass (13/13) | ☐ Pass ☐ Fail | |
 | 8.3 | Entry point tests collect (3 items) | ☐ Pass ☐ Fail | |
+| 9.1 | Authentication error - invalid token | ☐ Pass ☐ Fail | |
+| 9.2 | API error - invalid case number | ☐ Pass ☐ Fail | |
+| 9.3 | API error - network/server errors | ☐ Pass ☐ Fail | |
+| 9.4 | LDAP validation - too short | ☐ Pass ☐ Fail | |
+| 9.5 | LDAP validation - too long | ☐ Pass ☐ Fail | |
+| 9.6 | Container state - start stopped | ☐ Pass ☐ Fail | |
+| 9.7 | Container uptime - multi-day | ☐ Pass ☐ Fail | |
+| 9.8 | Workspace status - missing dir | ☐ Pass ☐ Fail | |
+| 9.9 | Workspace status - file conflict | ☐ Pass ☐ Fail | |
+| 9.10 | Version detection - installed | ☐ Pass ☐ Fail | |
+| 9.11 | Version detection - editable install | ☐ Pass ☐ Fail | |
+| 9.12 | Terminal attachment - metadata fallbacks | ☐ Pass ☐ Fail | |
+| 9.13 | Container creation - validation | ☐ Pass ☐ Fail | |
+| 9.14 | Podman platform - macOS detection | ☐ Pass ☐ Fail | |
 | E2E | Integration workflow | ☐ Pass ☐ Fail | |
 
-**Total Pass Rate:** _____ / 20 tests
+**Total Pass Rate:** _____ / 34 tests
 
 ---
 

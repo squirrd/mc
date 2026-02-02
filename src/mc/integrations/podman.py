@@ -139,12 +139,12 @@ class PodmanClient:
             # Connect with retry logic
             def _connect() -> podman.PodmanClient:
                 """Inner function to wrap connection in retry logic."""
-                # On macOS with Podman machine, don't pass base_url (let it auto-detect)
+                # On macOS with Podman machine, pass base_url=None (let it auto-detect)
                 # On Linux, pass the socket path URI
                 if uri is not None:
                     return podman.PodmanClient(base_url=uri, timeout=self._timeout)
                 else:
-                    return podman.PodmanClient(timeout=self._timeout)
+                    return podman.PodmanClient(base_url=None, timeout=self._timeout)
 
             # Use retry_podman_operation to handle transient errors
             self._client = retry_podman_operation(_connect)

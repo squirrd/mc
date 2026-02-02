@@ -48,6 +48,16 @@ def docker_ldap_server():
     # Get repository root directory
     repo_root = Path(__file__).parent.parent.parent
 
+    # Check Docker availability before starting services
+    try:
+        subprocess.run(
+            ["docker-compose", "--version"],
+            check=True,
+            capture_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pytest.skip("Docker not available - skipping LDAP integration tests")
+
     try:
         # Start Docker Compose
         subprocess.run(

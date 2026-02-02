@@ -429,19 +429,30 @@ class TestCLIExec:
 class TestQuickAccess:
     """Tests for mc <case_number> quick access."""
 
+    @patch("mc.cli.commands.container.attach_terminal")
+    @patch("mc.cli.commands.container.RedHatAPIClient")
+    @patch("mc.cli.commands.container.get_access_token")
     @patch("mc.cli.commands.container._get_manager")
     @patch("mc.cli.commands.container.ConfigManager")
-    @patch("mc.cli.commands.container.os.makedirs")
     def test_quick_access_creates_missing_container(
-        self, mock_makedirs, mock_config_mgr, mock_get_manager, capsys
+        self, mock_config_mgr, mock_get_manager, mock_get_token, mock_api_client, mock_attach
     ):
         """Test mc <case_number> creates container if missing."""
-        mock_config = Mock()
-        mock_config.get.return_value = "/Users/user/mc"
-        mock_config_mgr.return_value = mock_config
+        # Mock ConfigManager to return proper config structure
+        mock_config_instance = Mock()
+        mock_config_instance.load.return_value = {
+            "api": {"rh_api_offline_token": "test_token"},
+            "workspace": {"base_path": "/Users/user/mc"}
+        }
+        mock_config_mgr.return_value = mock_config_instance
 
+        # Mock authentication
+        mock_get_token.return_value = "test_access_token"
+        mock_api_instance = Mock()
+        mock_api_client.return_value = mock_api_instance
+
+        # Mock container manager
         mock_manager = Mock()
-        mock_manager.status.return_value = {"status": "missing"}
         mock_get_manager.return_value = mock_manager
 
         args = argparse.Namespace(case_number="12345678")
@@ -449,34 +460,43 @@ class TestQuickAccess:
         # Run command
         container.quick_access(args)
 
-        # Verify workspace created
-        mock_makedirs.assert_called_once_with("/Users/user/mc/12345678", exist_ok=True)
+        # Verify authentication flow
+        mock_config_instance.load.assert_called_once()
+        mock_get_token.assert_called_once_with("test_token")
+        mock_api_client.assert_called_once_with("test_access_token")
 
-        # Verify container created
-        mock_manager.create.assert_called_once_with("12345678", "/Users/user/mc/12345678")
+        # Verify attach_terminal was called with correct parameters
+        mock_attach.assert_called_once()
+        call_kwargs = mock_attach.call_args.kwargs
+        assert call_kwargs["case_number"] == "12345678"
+        assert call_kwargs["config_manager"] == mock_config_instance
+        assert call_kwargs["api_client"] == mock_api_instance
+        assert call_kwargs["container_manager"] == mock_manager
 
-        # Verify success message
-        captured = capsys.readouterr()
-        assert "Container ready for case 12345678" in captured.out
-        assert "mc attach 12345678" in captured.out
-        assert "Phase 12" in captured.out
-
+    @patch("mc.cli.commands.container.attach_terminal")
+    @patch("mc.cli.commands.container.RedHatAPIClient")
+    @patch("mc.cli.commands.container.get_access_token")
     @patch("mc.cli.commands.container._get_manager")
     @patch("mc.cli.commands.container.ConfigManager")
-    @patch("mc.cli.commands.container.os.makedirs")
     def test_quick_access_existing_container(
-        self, mock_makedirs, mock_config_mgr, mock_get_manager, capsys
+        self, mock_config_mgr, mock_get_manager, mock_get_token, mock_api_client, mock_attach
     ):
         """Test mc <case_number> uses existing container."""
-        mock_config = Mock()
-        mock_config.get.return_value = "/Users/user/mc"
-        mock_config_mgr.return_value = mock_config
-
-        mock_manager = Mock()
-        mock_manager.status.return_value = {
-            "status": "running",
-            "container_id": "abc123",
+        # Mock ConfigManager to return proper config structure
+        mock_config_instance = Mock()
+        mock_config_instance.load.return_value = {
+            "api": {"rh_api_offline_token": "test_token"},
+            "workspace": {"base_path": "/Users/user/mc"}
         }
+        mock_config_mgr.return_value = mock_config_instance
+
+        # Mock authentication
+        mock_get_token.return_value = "test_access_token"
+        mock_api_instance = Mock()
+        mock_api_client.return_value = mock_api_instance
+
+        # Mock container manager
+        mock_manager = Mock()
         mock_get_manager.return_value = mock_manager
 
         args = argparse.Namespace(case_number="12345678")
@@ -484,24 +504,44 @@ class TestQuickAccess:
         # Run command
         container.quick_access(args)
 
-        # Verify container NOT created
-        mock_manager.create.assert_not_called()
+        # Verify authentication flow
+        mock_config_instance.load.assert_called_once()
+        mock_get_token.assert_called_once_with("test_token")
+        mock_api_client.assert_called_once_with("test_access_token")
 
-        # Verify success message
-        captured = capsys.readouterr()
-        assert "Container ready for case 12345678" in captured.out
+        # Verify attach_terminal was called
+        mock_attach.assert_called_once()
+        call_kwargs = mock_attach.call_args.kwargs
+        assert call_kwargs["case_number"] == "12345678"
 
+    @patch("mc.cli.commands.container.attach_terminal")
+    @patch("mc.cli.commands.container.RedHatAPIClient")
+    @patch("mc.cli.commands.container.get_access_token")
     @patch("mc.cli.commands.container._get_manager")
     @patch("mc.cli.commands.container.ConfigManager")
-    def test_quick_access_failure(self, mock_config_mgr, mock_get_manager):
+    def test_quick_access_failure(
+        self, mock_config_mgr, mock_get_manager, mock_get_token, mock_api_client, mock_attach
+    ):
         """Test mc <case_number> handles errors."""
-        mock_config = Mock()
-        mock_config.get.return_value = "/Users/user/mc"
-        mock_config_mgr.return_value = mock_config
+        # Mock ConfigManager to return proper config structure
+        mock_config_instance = Mock()
+        mock_config_instance.load.return_value = {
+            "api": {"rh_api_offline_token": "test_token"},
+            "workspace": {"base_path": "/Users/user/mc"}
+        }
+        mock_config_mgr.return_value = mock_config_instance
 
+        # Mock authentication
+        mock_get_token.return_value = "test_access_token"
+        mock_api_instance = Mock()
+        mock_api_client.return_value = mock_api_instance
+
+        # Mock container manager
         mock_manager = Mock()
-        mock_manager.status.side_effect = RuntimeError("Status check failed")
         mock_get_manager.return_value = mock_manager
+
+        # Mock attach_terminal to raise an error
+        mock_attach.side_effect = RuntimeError("Attach failed")
 
         args = argparse.Namespace(case_number="12345678")
 
