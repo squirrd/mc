@@ -96,7 +96,7 @@ def list_containers(args: argparse.Namespace) -> None:
 
         # Format as ASCII table
         # Header
-        print(f"{'CASE':<12} {'STATUS':<10} {'CUSTOMER':<20} {'WORKSPACE PATH':<40} {'CREATED':<20}")
+        print(f"{'CASE':<12} {'STATUS':<10} {'CUSTOMER':<20} {'DESCRIPTION':<40} {'CREATED':<20}")
         print("-" * 102)
 
         # Rows
@@ -111,11 +111,29 @@ def list_containers(args: argparse.Namespace) -> None:
             if len(customer) > 20:
                 customer = customer[:17] + "..."
 
-            # Truncate long workspace paths
-            if len(workspace_path) > 40:
-                workspace_path = "..." + workspace_path[-37:]
+            # Extract description from workspace path
+            # New structure: {base_dir}/cases/{customer}/{case_number}-{description}
+            # Old structure: {base_dir}/{case_number}
+            description = "N/A"
+            if workspace_path and workspace_path != "N/A":
+                # Try to extract description from new path structure
+                # Split by '/' and get last component, then split by '-' after case number
+                path_parts = workspace_path.split('/')
+                if path_parts:
+                    last_part = path_parts[-1]  # e.g., "04347611-Server_Down_Critica_Pr"
+                    # Split on first hyphen after 8-digit case number
+                    if '-' in last_part and len(last_part) > 9:
+                        # Extract everything after the case number and hyphen
+                        desc_part = last_part.split('-', 1)[1] if '-' in last_part else ""
+                        if desc_part:
+                            # Replace underscores with spaces for readability
+                            description = desc_part.replace('_', ' ')
 
-            print(f"{case_number:<12} {status:<10} {customer:<20} {workspace_path:<40} {created_at:<20}")
+            # Truncate long descriptions
+            if len(description) > 40:
+                description = description[:37] + "..."
+
+            print(f"{case_number:<12} {status:<10} {customer:<20} {description:<40} {created_at:<20}")
 
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
