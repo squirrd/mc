@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Milestone: v2.0.1 Cleanup & Hardening
 
-**Status:** v2.0 shipped (2026-02-01), now working through post-ship cleanup batches
+**Status:** v2.0 shipped (2026-02-01), post-ship cleanup in progress (12/13 todos complete)
 
 **v2.0 Delivered:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -21,12 +21,26 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Mounted case workspace at /case in containers
 - ✓ Modern distribution via uv tool (pipx/uv tool install git+)
 
-**v2.0.1 Cleanup (In Progress):**
-- ✅ Batch D: Authentication & API cleanup (3 todos complete)
-- ✅ Batch A: Configuration cleanup (2 todos complete)
-- ⏳ Batch B: Container Management (5 todos pending)
-- ⏳ Batch C: User Interface (1 todo pending)
-- ⏳ Batch E: Testing (5 todos pending - 49 test failures to fix)
+**v2.0.1 Cleanup Progress:**
+- ✅ Batch A: Configuration cleanup (2/2 todos complete)
+  - Config consolidated under ~/mc/config/
+  - Auto-migration from old platformdirs locations
+- ✅ Batch B: Container Management (5/5 todos complete)
+  - Structured workspace paths: cases/<customer>/<case>-<description>
+  - Quay.io auto-pull with local fallback
+  - Duplicate terminal prevention
+  - Auto-close terminal on shell exit
+  - Improved error messaging
+- ✅ Batch C: UI Improvements (1/1 todo complete)
+  - Container list shows description instead of workspace path
+- ✅ Batch D: Authentication & API cleanup (3/3 todos complete)
+- ⏳ Batch E: Testing (1/5 test suites fixed, 4 remaining)
+  - ✅ Test dependencies and imports fixed (513 tests collect, 13/13 cache tests pass)
+  - ⏳ HTTP error handling tests (14 failures)
+  - ⏳ Container management tests (6 failures)
+  - ⏳ Terminal attachment tests (17 failures)
+  - ⏳ Validation and integration tests (5 failures)
+  - ⏳ Workspace and metadata tests (5 failures)
 
 ## Requirements
 

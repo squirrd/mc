@@ -1,5 +1,43 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.1 Cleanup & Hardening (In Progress: 2026-02-02)
+
+**Goal:** Fix critical bugs from v2.0 release and complete post-ship cleanup
+
+**Progress:** 12/13 todos complete (92% complete)
+
+**Batches completed:**
+- ✅ Batch A: Configuration cleanup (2 todos)
+  - Consolidated config under ~/mc/config/ with auto-migration
+  - Fixed type annotations in config module
+- ✅ Batch B: Container Management (5 todos)
+  - Structured workspace paths: cases/<customer>/<case>-<description>
+  - Quay.io auto-pull with local fallback
+  - Duplicate terminal prevention via window detection
+  - Auto-close terminal on shell exit
+  - Improved error messaging (connection vs missing image)
+- ✅ Batch C: UI Improvements (1 todo)
+  - Container list output shows description instead of workspace path
+- ✅ Batch D: Authentication & API cleanup (3 todos)
+  - Fixed terminal attachment Salesforce API method call
+  - Unified authentication removing direct Salesforce dependencies
+  - Fixed Podman URI byte string errors
+- ⏳ Batch E: Testing (1/5 test suites fixed)
+  - ✅ Test dependencies and imports (513 tests collect, 13/13 cache tests pass)
+  - ⏳ 4 test suites remaining (47 test failures total)
+
+**Key fixes delivered:**
+- ✅ Terminal attachment bug (Salesforce API method mismatch)
+- ✅ Cache database initialization failures
+- ✅ Podman URI byte string errors
+- ✅ Workspace path structure improvements
+- ✅ Container image auto-pull from quay.io
+- ✅ Config directory consolidation
+
+**What's next:** Complete Batch E testing fixes, then release v2.0.1
+
+---
+
 ## v2.0 Containerization + Distribution (Shipped: 2026-02-01)
 
 **Delivered:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
