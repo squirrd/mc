@@ -18,33 +18,47 @@
 
 ### Test Steps
 
-#### 1.1 Fresh Install - Verify Directory Structure
+#### 1.1 Fresh Install - Lazy Initialization
 1. Delete existing MC directories (if present):
    ```bash
    rm -rf ~/mc
    rm -rf ~/Library/Application\ Support/mc  # macOS only
    rm -rf ~/.config/mc  # Linux only
+   rm -rf ~/.local/share/mc  # Linux only
    ```
-2. Run any MC command to trigger initialization:
+2. Verify `--version` creates NO directories (fast, no side effects):
    ```bash
    mc --version
+   ls ~/mc 2>&1
    ```
-3. Verify directory structure:
+   - **Expected:** `ls: ~/mc: No such file or directory` (or empty)
+
+3. Create first container to trigger full initialization:
    ```bash
-   ls -la ~/mc/
+   mc case 04347611
+   ```
+
+4. Verify complete directory structure created:
+   ```bash
+   ls -R ~/mc/
    ```
 
 **Expected Result:**
-```
-~/mc/
-├── config/
-│   ├── config.toml
-│   └── cache/
-│       └── case_metadata.db
-├── state/
-│   └── containers.db
-└── cases/
-```
+- `mc --version` creates no directories (instant, no side effects)
+- `mc case <number>` creates complete structure on first use:
+  ```
+  ~/mc/
+  ├── config/
+  │   ├── config.toml
+  │   └── cache/
+  │       └── case_metadata.db
+  ├── state/
+  │   └── containers.db
+  └── cases/
+      └── <Customer_Name>/
+          └── <case>-<description>/
+  ```
+- Directories created only when needed (lazy initialization)
 
 **Actual Result:** ☐ Pass ☐ Fail
 **Notes:**
@@ -52,23 +66,58 @@
 ---
 
 #### 1.2 Auto-Migration from Old Locations
-1. Create old-style config in platform-specific location:
-   - **macOS:** `mkdir -p ~/Library/Application\ Support/mc && echo '[api]\nrh_api_offline_token = "test_token"' > ~/Library/Application\ Support/mc/config.toml`
-   - **Linux:** `mkdir -p ~/.config/mc && echo '[api]\nrh_api_offline_token = "test_token"' > ~/.config/mc/config.toml`
-2. Run MC command:
+1. Clean slate:
    ```bash
-   mc --version
+   rm -rf ~/mc
    ```
-3. Verify auto-migration:
+
+2. Create old-style config in platform-specific location:
+   - **macOS:**
+     ```bash
+     mkdir -p ~/Library/Application\ Support/mc
+     echo -e '[api]\nrh_api_offline_token = "test_token_12345"' > ~/Library/Application\ Support/mc/config.toml
+     ```
+   - **Linux:**
+     ```bash
+     mkdir -p ~/.config/mc
+     echo -e '[api]\nrh_api_offline_token = "test_token_12345"' > ~/.config/mc/config.toml
+     ```
+
+3. Create old-style state database in platformdirs location (if exists):
+   - **macOS:**
+     ```bash
+     mkdir -p ~/Library/Application\ Support/mc
+     touch ~/Library/Application\ Support/mc/containers.db
+     ```
+   - **Linux:**
+     ```bash
+     mkdir -p ~/.local/share/mc
+     touch ~/.local/share/mc/containers.db
+     ```
+
+4. Run a command that needs state database (triggers migration):
    ```bash
-   cat ~/mc/config/config.toml | grep test_token
-   ls ~/mc/config/
+   mc container list
+   ```
+
+5. Verify auto-migration of config and state:
+   ```bash
+   # Check config migrated
+   cat ~/mc/config/config.toml | grep test_token_12345
+
+   # Check state directory exists
+   ls -la ~/mc/state/
+
+   # Verify migration message in output
+   echo "Look for migration messages in output above"
    ```
 
 **Expected Result:**
 - Config migrated to `~/mc/config/config.toml`
-- Token preserved: `rh_api_offline_token = "test_token"`
-- Cache directory exists: `~/mc/config/cache/`
+- Token preserved: `rh_api_offline_token = "test_token_12345"`
+- State directory created: `~/mc/state/containers.db`
+- Migration messages displayed (optional, may be silent)
+- No errors or warnings
 
 **Actual Result:** ☐ Pass ☐ Fail
 **Notes:**
@@ -110,17 +159,33 @@
 ---
 
 #### 2.2 Workspace Path in Container Mount
-1. Inside the container terminal, verify mount point:
+1. Inside the container terminal (from test 2.1), verify mount point:
    ```bash
-   # In container
+   # In container terminal
    pwd
    ls -la /case
    ```
 
+2. Create a test file in the container:
+   ```bash
+   # In container terminal
+   echo "Test from container" > /case/test_file.txt
+   cat /case/test_file.txt
+   ```
+
+3. From host terminal (in a different window), verify file appears on host:
+   ```bash
+   # In host terminal
+   ls ~/mc/cases/*/04347611-*/
+   cat ~/mc/cases/*/04347611-*/test_file.txt
+   ```
+
 **Expected Result:**
-- Working directory: `/case`
-- Contents match host workspace path
-- Files created in container appear in `~/mc/cases/<customer>/<case>-<description>/`
+- Container working directory: `/case`
+- Container `/case` directory is empty initially (or contains any existing files)
+- File created in container immediately visible on host
+- File contents match: "Test from container"
+- Bidirectional sync works (files created on host visible in container)
 
 **Actual Result:** ☐ Pass ☐ Fail
 **Notes:**
