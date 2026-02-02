@@ -5,6 +5,7 @@ provide seamless terminal attachment via 'mc case <number>' command with
 auto-create, auto-start, and TTY detection.
 """
 
+import os
 import sys
 import logging
 from typing import Any
@@ -162,7 +163,7 @@ def attach_terminal(
 
         try:
             # Get workspace path from config
-            base_dir = config_manager.load()["base_directory"]
+            base_dir = config_manager.get("base_directory", os.path.expanduser("~/mc"))
 
             # Format customer and description for path
             customer_formatted = shorten_and_format(customer_name)
@@ -197,7 +198,7 @@ def attach_terminal(
         description_formatted = shorten_and_format(description)
 
         # Construct workspace path: {base_dir}/cases/{customer}/{case}-{description}
-        base_dir = config_manager.load()["base_directory"]
+        base_dir = config_manager.get("base_directory", os.path.expanduser("~/mc"))
         workspace_path = f"{base_dir}/cases/{customer_formatted}/{case_number}-{description_formatted}"
 
     # 6. Build case metadata dict for bashrc
