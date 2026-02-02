@@ -60,7 +60,7 @@ See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
 See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
-### Pending Todos (9 remaining)
+### Pending Todos (8 remaining)
 
 **Completed (moved to done/):**
 - [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
@@ -78,10 +78,10 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-02] ✅ Fix container create image detection failure (area: containers)
 - [2026-02-02] ✅ Prevent duplicate terminal launches and focus existing terminals (area: containers)
 - [2026-02-02] ✅ Auto-close terminal when shell exits (area: containers)
+- [2026-02-02] ✅ Use pre-built container images from quay.io instead of local builds (area: containers)
 
 **Still pending:**
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Use pre-built container images from quay.io instead of local builds (area: containers)
 - [2026-02-01] Improve container list output - replace workspace path with description (area: ui)
 - [2026-02-01] Fix test dependencies and imports (area: testing) - 2 import errors
 - [2026-02-01] Fix HTTP error handling tests (area: testing) - 14 test failures
@@ -93,20 +93,22 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Batch B (Container Management) - Task 4 complete, 1 task remaining
-Resume: Continue with Task 5 (quay.io setup) to complete Batch B
+Stopped at: Batch B (Container Management) - COMPLETE (5/5 tasks done)
+Resume: Ready for next batch (Batch C: UI Improvements or Batch E: Testing)
 
 **Recent work (2026-02-02):**
 - ✅ Batch D complete: Authentication & API cleanup (3 todos)
 - ✅ Batch A complete: Configuration cleanup (2 todos)
-- ✅ Batch B Task 1: Workspace path structure fixed (cases/<customer>/<case>-<description>)
-- ✅ Batch B Task 2: Container image detection error messaging improved
-- ✅ Batch B Task 3: Duplicate terminal prevention via AppleScript window detection
-- ✅ Batch B Task 4: Auto-close terminal on shell exit ('; exit' appended to command)
+- ✅ Batch B complete: Container Management (5 todos)
+  - Task 1: Workspace path structure fixed (cases/<customer>/<case>-<description>)
+  - Task 2: Container image detection error messaging improved
+  - Task 3: Duplicate terminal prevention via AppleScript window detection
+  - Task 4: Auto-close terminal on shell exit ('; exit' appended to command)
+  - Task 5: Quay.io auto-pull with local fallback (pull-first strategy)
 - Python 3.11+ type coverage: 100% (64/64 functions)
 - Directory structure: Consolidated under ~/mc/ for better UX
 - Auto-migration: Seamless upgrade from old platformdirs locations
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-02 (Batch B Task 4 complete, 9 todos remaining)*
+*Last updated: 2026-02-02 (Batch B complete, 8 todos remaining)*
