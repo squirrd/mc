@@ -94,11 +94,22 @@ class ContainerManager:
         try:
             self.podman.client.images.get("mc-rhel10:latest")
         except Exception as e:
-            raise RuntimeError(
-                f"Image mc-rhel10:latest not found. "
-                f"Run 'podman build -t mc-rhel10:latest -f container/Containerfile .' first. "
-                f"Error: {e}"
-            ) from e
+            # Distinguish between connection failures and missing images
+            error_str = str(e).lower()
+            if "connection" in error_str or "socket" in error_str or "scheme" in error_str:
+                # Connection failure - can't reach Podman
+                raise RuntimeError(
+                    f"Failed to connect to Podman: {e}\n"
+                    f"Unable to verify image mc-rhel10:latest exists. "
+                    f"Check that Podman is running and accessible."
+                ) from e
+            else:
+                # Image genuinely not found
+                raise RuntimeError(
+                    f"Image mc-rhel10:latest not found. "
+                    f"Run 'podman build -t mc-rhel10:latest -f container/Containerfile .' first. "
+                    f"Error: {e}"
+                ) from e
 
         # 5. Create new container via Podman API
         try:
