@@ -96,21 +96,28 @@ MC CLI v2.0.1+ uses a unified directory structure across all platforms:
 
 For complete platform path documentation, see [.planning/PLATFORM-PATHS.md](.planning/PLATFORM-PATHS.md).
 
-### Building the Container Image
+### Container Image
 
-Before using container features, build the image:
+MC automatically pulls pre-built container images from quay.io on first use. No manual build required!
 
+**Automatic pull (default):**
+```bash
+# Just run mc case - image pulls automatically if needed
+mc case 12345678
+```
+
+**Manual pull (optional):**
+```bash
+podman pull quay.io/rhn_support_dsquirre/mc-container:latest
+```
+
+**Local build (for development):**
 ```bash
 # From project root
 podman build -t mc-rhel10:latest -f container/Containerfile .
 
 # Or use the build script
 ./container/build.sh
-```
-
-Verify:
-```bash
-podman images | grep mc-rhel10
 ```
 
 ## Usage Examples

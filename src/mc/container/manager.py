@@ -90,26 +90,15 @@ class ContainerManager:
         # 3. Create workspace directory if missing (prevents mount failures)
         os.makedirs(workspace_path, exist_ok=True)
 
-        # 4. Verify mc-rhel10:latest image exists
+        # 4. Ensure image exists (pull from registry or use local)
         try:
-            self.podman.client.images.get("mc-rhel10:latest")
-        except Exception as e:
-            # Distinguish between connection failures and missing images
-            error_str = str(e).lower()
-            if "connection" in error_str or "socket" in error_str or "scheme" in error_str:
-                # Connection failure - can't reach Podman
-                raise RuntimeError(
-                    f"Failed to connect to Podman: {e}\n"
-                    f"Unable to verify image mc-rhel10:latest exists. "
-                    f"Check that Podman is running and accessible."
-                ) from e
-            else:
-                # Image genuinely not found
-                raise RuntimeError(
-                    f"Image mc-rhel10:latest not found. "
-                    f"Run 'podman build -t mc-rhel10:latest -f container/Containerfile .' first. "
-                    f"Error: {e}"
-                ) from e
+            self._ensure_image(
+                image_name="mc-rhel10:latest",
+                registry_image="quay.io/rhn_support_dsquirre/mc-container:latest"
+            )
+        except RuntimeError:
+            # Re-raise with context preserved
+            raise
 
         # 5. Create new container via Podman API
         try:
@@ -164,6 +153,60 @@ class ContainerManager:
             ) from e
 
         return container
+
+    def _ensure_image(self, image_name: str, registry_image: str) -> None:
+        """Ensure container image is available (pull from registry or use local).
+
+        Args:
+            image_name: Local image name (e.g., "mc-rhel10:latest")
+            registry_image: Full registry path (e.g., "quay.io/rhn_support_dsquirre/mc-container:latest")
+
+        Raises:
+            RuntimeError: If image cannot be found locally or pulled from registry
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 1. Check if image exists locally first (fast path)
+        try:
+            self.podman.client.images.get(image_name)
+            logger.debug(f"Using local image: {image_name}")
+            return
+        except Exception as e:
+            # Check if this is a connection error
+            error_str = str(e).lower()
+            if "connection" in error_str or "socket" in error_str or "scheme" in error_str:
+                raise RuntimeError(
+                    f"Failed to connect to Podman: {e}\n"
+                    f"Unable to verify image {image_name} exists. "
+                    f"Check that Podman is running and accessible."
+                ) from e
+            # Image not found locally - try pulling from registry
+            logger.debug(f"Image {image_name} not found locally, attempting pull from {registry_image}")
+
+        # 2. Try pulling from registry
+        try:
+            print(f"Pulling container image from {registry_image}...")
+            self.podman.client.images.pull(registry_image)
+
+            # Tag the pulled image with local name for consistency
+            pulled_image = self.podman.client.images.get(registry_image)
+            pulled_image.tag(image_name)  # type: ignore[no-untyped-call]
+
+            logger.info(f"Successfully pulled and tagged {registry_image} as {image_name}")
+            print(f"Successfully pulled image from registry")
+            return
+        except Exception as pull_error:
+            # Pull failed - provide helpful error with local build instructions
+            logger.debug(f"Failed to pull from registry: {pull_error}")
+
+            raise RuntimeError(
+                f"Container image {image_name} not available.\n"
+                f"Attempted to pull from {registry_image} but failed: {pull_error}\n\n"
+                f"To build locally:\n"
+                f"  podman build -t {image_name} -f container/Containerfile .\n\n"
+                f"Or wait for the image to be published to the registry."
+            ) from pull_error
 
     def _reconcile(self) -> None:
         """Reconcile state with Podman reality.
