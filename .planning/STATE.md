@@ -60,7 +60,7 @@ See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
 
 See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 
-### Pending Todos (12 remaining)
+### Pending Todos (11 remaining)
 
 **Completed (moved to done/):**
 - [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
@@ -75,10 +75,10 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
 - [2026-02-02] ✅ Fix Phase 8 type annotation cosmetic gaps (area: config)
 - [2026-02-02] ✅ Consolidate config directory under ~/mc workspace (area: config)
 - [2026-02-02] ✅ Fix workspace path structure to use cases/<customer>/<case>-<description> (area: containers)
+- [2026-02-02] ✅ Fix container create image detection failure (area: containers)
 
 **Still pending:**
 - [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Fix container create image detection failure (area: containers)
 - [2026-02-01] Use pre-built container images from quay.io instead of local builds (area: containers)
 - [2026-02-01] Improve container list output - replace workspace path with description (area: ui)
 - [2026-02-01] Prevent duplicate terminal launches and focus existing terminals (area: containers)
