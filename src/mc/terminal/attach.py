@@ -236,26 +236,43 @@ def attach_terminal(
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # 11. Launch terminal with command and title
-    try:
-        logger.info(
-            "Launching terminal for case %s with title: %s",
-            case_number, window_title
-        )
-        launch_options = LaunchOptions(
-            title=window_title,
-            command=exec_command,
-            auto_focus=True
-        )
-        launcher.launch(launch_options)
-        logger.info("Terminal launched successfully for case %s", case_number)
-    except Exception as e:
-        error_msg = (
-            f"Terminal launch failed for case {case_number}. "
-            f"Run: mc --check-terminal. Error: {e}"
-        )
-        logger.error(error_msg)
-        raise RuntimeError(error_msg) from e
+    # 11. Check for existing terminal window and focus if found
+    from mc.terminal.macos import MacOSLauncher
+    from mc.terminal.linux import LinuxLauncher
+
+    window_exists = False
+    if isinstance(launcher, MacOSLauncher):
+        # Check if window with this title already exists
+        if launcher.find_window_by_title(window_title):
+            logger.info("Found existing terminal for case %s, focusing window", case_number)
+            if launcher.focus_window_by_title(window_title):
+                print(f"Focused existing terminal for case {case_number}")
+                window_exists = True
+            else:
+                logger.warning("Failed to focus existing window, will launch new one")
+    # TODO: Add Linux duplicate detection when implementing LinuxLauncher enhancements
+
+    # 12. Launch terminal with command and title if no existing window
+    if not window_exists:
+        try:
+            logger.info(
+                "Launching terminal for case %s with title: %s",
+                case_number, window_title
+            )
+            launch_options = LaunchOptions(
+                title=window_title,
+                command=exec_command,
+                auto_focus=True
+            )
+            launcher.launch(launch_options)
+            logger.info("Terminal launched successfully for case %s", case_number)
+        except Exception as e:
+            error_msg = (
+                f"Terminal launch failed for case {case_number}. "
+                f"Run: mc --check-terminal. Error: {e}"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     # 12. Return immediately (non-blocking - host terminal returns to prompt)
     logger.debug("Terminal attachment complete, returning to host prompt")

@@ -66,6 +66,112 @@ class MacOSLauncher:
         text = text.replace('"', '\\"')  # Escape quotes
         return text
 
+    def find_window_by_title(self, title: str) -> bool:
+        """Check if a window with matching title exists.
+
+        Args:
+            title: Window title to search for
+
+        Returns:
+            True if window found, False otherwise
+        """
+        if not shutil.which("osascript"):
+            return False
+
+        escaped_title = self._escape_applescript(title)
+
+        if self.terminal == "iTerm2":
+            script = f'''
+tell application "iTerm"
+    repeat with theWindow in windows
+        repeat with theTab in tabs of theWindow
+            if name of current session of theTab contains "{escaped_title}" then
+                return true
+            end if
+        end repeat
+    end repeat
+    return false
+end tell
+'''
+        else:  # Terminal.app
+            script = f'''
+tell application "Terminal"
+    repeat with theWindow in windows
+        if custom title of theWindow contains "{escaped_title}" then
+            return true
+        end if
+    end repeat
+    return false
+end tell
+'''
+
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.stdout.strip() == "true"
+        except Exception:
+            return False
+
+    def focus_window_by_title(self, title: str) -> bool:
+        """Focus window with matching title.
+
+        Args:
+            title: Window title to search for
+
+        Returns:
+            True if window found and focused, False otherwise
+        """
+        if not shutil.which("osascript"):
+            return False
+
+        escaped_title = self._escape_applescript(title)
+
+        if self.terminal == "iTerm2":
+            script = f'''
+tell application "iTerm"
+    activate
+    repeat with theWindow in windows
+        repeat with theTab in tabs of theWindow
+            if name of current session of theTab contains "{escaped_title}" then
+                select theWindow
+                select theTab
+                return true
+            end if
+        end repeat
+    end repeat
+    return false
+end tell
+'''
+        else:  # Terminal.app
+            script = f'''
+tell application "Terminal"
+    activate
+    repeat with theWindow in windows
+        if custom title of theWindow contains "{escaped_title}" then
+            set frontmost of theWindow to true
+            set index of theWindow to 1
+            return true
+        end if
+    end repeat
+    return false
+end tell
+'''
+
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.stdout.strip() == "true"
+        except Exception:
+            return False
+
     def _build_iterm_script(self, options: LaunchOptions) -> str:
         """Build AppleScript for launching iTerm2.
 
