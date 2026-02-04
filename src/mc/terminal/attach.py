@@ -63,7 +63,7 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
     )
 
 
-def build_window_title(case_number: str, customer_name: str, description: str) -> str:
+def build_window_title(case_number: str, customer_name: str, description: str, vm_path: str = "/case") -> str:
     """Format window title per CONTEXT.md requirements.
 
     Truncates description if total length exceeds 100 characters to keep
@@ -73,24 +73,27 @@ def build_window_title(case_number: str, customer_name: str, description: str) -
         case_number: Case number (e.g., "12345678")
         customer_name: Customer name
         description: Case description/summary
+        vm_path: Virtual machine path (default: "/case")
 
     Returns:
         Formatted window title string
 
     Example:
         >>> build_window_title("12345678", "ACME Corp", "Server down")
-        "12345678 - ACME Corp - Server down"
+        "12345678:ACME Corp:Server down:/case"
     """
-    # Build base title
-    base = f"{case_number} - {customer_name} - "
-    base_len = len(base)
+    # Build base title with colon separators
+    # Format: {case}:{customer}:{description}:/{vm-path}
+    base = f"{case_number}:{customer_name}:"
+    suffix = f":/{vm_path}"
+    base_len = len(base) + len(suffix)
 
     # Truncate description if needed to keep under 100 chars total
     max_desc_len = 100 - base_len
     if len(description) > max_desc_len and max_desc_len > 3:
         description = description[:max_desc_len - 3] + "..."
 
-    return base + description
+    return base + description + suffix
 
 
 def attach_terminal(
