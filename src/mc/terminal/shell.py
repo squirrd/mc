@@ -78,15 +78,15 @@ def get_bashrc_path(case_number: str) -> str:
         case_number: Case number (e.g., "12345678")
 
     Returns:
-        Absolute path to bashrc file (e.g., ~/.mc/bashrc/mc-12345678.bashrc)
+        Absolute path to bashrc file (e.g., ~/mc/config/bashrc/mc-12345678.bashrc)
     """
-    # Use platformdirs for cross-platform data directory
-    data_dir = user_data_dir("mc", "redhat")
-    bashrc_dir = Path(data_dir) / "bashrc"
-    
+    # Use consolidated directory structure: ~/mc/config/bashrc/
+    # (instead of platform-specific platformdirs locations)
+    bashrc_dir = Path.home() / "mc" / "config" / "bashrc"
+
     # Create directory if it doesn't exist
     bashrc_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Return absolute path to case-specific bashrc
     return str(bashrc_dir / f"mc-{case_number}.bashrc")
 

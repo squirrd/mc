@@ -422,7 +422,7 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
     This test ensures fresh installs only create directories in consolidated ~/mc/ location.
 
     UAT Test: 1.1 Fresh Install - Lazy Initialization
-    Fixed in: TBD (test currently reproduces the bug)
+    Fixed in: 2026-02-04 (shell.py updated to use consolidated directory structure)
     """
     import platform
     import shutil

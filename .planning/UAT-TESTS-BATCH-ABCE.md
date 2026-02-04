@@ -84,11 +84,12 @@
 
 2. `test_fresh_install_no_old_directories_created_regression()` in `tests/integration/test_case_terminal.py`
    - **Created:** 2026-02-04
-   - **Status:** Failing (reproduces bug - will pass once bug is fixed)
+   - **Status:** ✅ Passing (bug fixed!)
+   - **Fixed:** 2026-02-04
    - **Bug:** Directories created in old platformdirs locations during fresh install
    - **Details:** `~/Library/Application Support/mc/bashrc` created on macOS (should be `~/mc/config/bashrc`)
-   - **Root cause:** `src/mc/terminal/shell.py:84` uses `platformdirs.user_data_dir()` instead of consolidated location
-   - **Fix needed:** Update `get_bashrc_path()` to use `~/mc/config/bashrc/` instead
+   - **Root cause:** `src/mc/terminal/shell.py:84` used `platformdirs.user_data_dir()` instead of consolidated location
+   - **Fix applied:** Updated `get_bashrc_path()` to use `~/mc/config/bashrc/` instead
 
 ---
 
