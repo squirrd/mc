@@ -1,7 +1,11 @@
 # Integration Test Best Practices
 
-**Last Updated:** 2026-02-02
-**Based on:** Real experience with UAT 1.1 regression test creation
+**Last Updated:** 2026-02-04
+**Based on:** Real experience with regression tests from UAT 1.1 (2026-02-02), UAT 3.1 (2026-02-04)
+
+**Latest Updates:**
+- **2026-02-04:** Added guidance on testing image pull/tag operations (UAT 3.1)
+- **2026-02-02:** Initial best practices from UAT 1.1
 
 ---
 
@@ -72,7 +76,26 @@ def test_fresh_install_real_components(tmp_path):
    - Real containers (clean up in `finally` block)
    - **Benefit:** Catches container runtime issues, mount problems
 
-5. **Shell Commands**
+5. **Image Operations** (NEW - from UAT 3.1)
+   - Image pulling from registries
+   - Image tagging operations
+   - Real registry connections and pulls
+   - **Benefit:** Catches registry connectivity issues, tagging bugs, SDK API changes
+   - **Example from UAT 3.1:** Caught `image.tag()` requiring two arguments instead of one
+   ```python
+   # Remove images to test auto-pull
+   podman_client.client.images.remove("mc-rhel10:latest", force=True)
+   podman_client.client.images.remove("quay.io/.../mc-container:latest", force=True)
+
+   # Create container - triggers real pull from quay.io
+   container = container_manager.create(...)
+
+   # Verify image pulled and tagged correctly
+   local_image = podman_client.client.images.get("mc-rhel10:latest")
+   assert "mc-rhel10:latest" in local_image.tags
+   ```
+
+6. **Shell Commands**
    - Bash execution
    - Git commands
    - Terminal operations

@@ -254,33 +254,37 @@
 
 ---
 
-## Test 3: Container Image Detection
+## Test 3: Container Image Auto-Pull from Quay.io
 
-**Feature:** Improved error messaging for missing images
-**Related Todo:** Fix container create image detection failure
+**Feature:** Automatic image pull and tag from quay.io registry
+**Related Todo:** Use pre-built container images from quay.io instead of local builds
 
 ### Prerequisites
-- Podman installed
-- No `mc-rhel10:latest` image present locally
+- Podman running
+- Internet connection
+- No local `mc-rhel10:latest` image present
 
 ### Test Steps
 
-#### 3.1 Missing Image - Clear Error Message
-1. Remove local image if present:
+#### 3.1 First-Time Container Creation - Auto Pull and Tag
+1. Remove local images if present:
    ```bash
    podman rmi mc-rhel10:latest 2>/dev/null || true
    podman rmi quay.io/rhn_support_dsquirre/mc-container:latest 2>/dev/null || true
    ```
-2. Attempt to create container with Podman running:
+2. Create container (triggers auto-pull):
    ```bash
-   mc case 12345678
+   mc case 04347611
    ```
+3. Observe output for pull messages
 
 **Expected Result:**
+- Message: `Pulling container image from quay.io/rhn_support_dsquirre/mc-container:latest...`
+- Message: `Successfully pulled image from registry`
 - Image automatically pulled from `quay.io/rhn_support_dsquirre/mc-container:latest`
-- Image tagged as `mc-rhel10:latest`
+- Image tagged as `mc-rhel10:latest` locally
 - Container created successfully
-- NO error messages (should just work!)
+- Terminal launched
 
 **Actual Result:** ☒ Fail → ☑ Automated
 
@@ -291,7 +295,7 @@
 **Root cause:** `src/mc/container/manager.py:201` calls `pulled_image.tag(image_name)` but should split image_name into repository and tag
 **Fix needed:** Split `"mc-rhel10:latest"` into `("mc-rhel10", "latest")` before calling `tag(repo, tag)`
 
-**Notes:** The image is successfully pulled from quay.io (visible in `podman images` as `quay.io/rhn_support_dsquirre/mc-container:latest`) but the code fails when trying to tag it with the local name `mc-rhel10:latest`. The UAT test description was misleading - it should pass by auto-pulling the image, not show an error message.
+**Notes:** The image is successfully pulled from quay.io (visible in `podman images` as `quay.io/rhn_support_dsquirre/mc-container:latest`) but the code fails when trying to tag it with the local name `mc-rhel10:latest`. Once fixed, this test validates the complete first-time container creation workflow with auto-pull.
 
 ---
 
@@ -318,58 +322,42 @@
 
 ---
 
-## Test 4: Quay.io Auto-Pull
+## Test 4: Image Caching and Performance
 
-**Feature:** Automatic image pull from quay.io registry
-**Related Todo:** Use pre-built container images from quay.io instead of local builds
+**Feature:** Local image caching after first pull
+**Related Todo:** Verify image caching works correctly after auto-pull
+
+**Note:** Test 3.1 validates the initial auto-pull. This test validates caching behavior.
 
 ### Prerequisites
 - Podman running
-- Internet connection
-- No local `mc-rhel10:latest` image
+- `mc-rhel10:latest` image already pulled (run Test 3.1 first)
 
 ### Test Steps
 
-#### 4.1 First-Time Container Creation - Auto Pull
-1. Remove local image:
+#### 4.1 Second Container Creation - Use Local Cache
+1. Ensure image is already cached from Test 3.1:
    ```bash
-   podman rmi mc-rhel10:latest 2>/dev/null || true
+   podman images | grep mc-rhel10
    ```
-2. Create container:
-   ```bash
-   mc case 04347611
-   ```
-3. Observe output
-
-**Expected Result:**
-- Message: `Pulling container image from quay.io/rhn_support_dsquirre/mc-container:latest...`
-- Message: `Successfully pulled image from registry`
-- Container created and terminal launched
-- Image tagged as `mc-rhel10:latest` locally
-
-**Actual Result:** ☐ Pass ☐ Fail
-**Pull Duration:** _____ seconds
-**Notes:**
-
----
-
-#### 4.2 Second Container Creation - Use Local Cache
-1. Create another container:
+2. Create another container:
    ```bash
    mc case 87654321
    ```
+3. Observe creation time
 
 **Expected Result:**
 - No pull message (uses local cached image)
 - Container created immediately
-- Much faster than first creation
+- Much faster than first creation (< 5 seconds vs 30-60 seconds for pull)
 
 **Actual Result:** ☐ Pass ☐ Fail
+**Creation Duration:** _____ seconds
 **Notes:**
 
 ---
 
-#### 4.3 Verify Image Details
+#### 4.2 Verify Image Details and Tagging
 1. Check image exists:
    ```bash
    podman images | grep mc-rhel10
@@ -1023,11 +1011,10 @@
 | 1.2 | Auto-migration from old locations | ☐ Pass ☐ Fail | |
 | 2.1 | Workspace path format | ☐ Pass ☐ Fail | |
 | 2.2 | Container mount verification | ☐ Pass ☐ Fail | |
-| 3.1 | Missing image error message | ☐ Pass ☐ Fail | |
+| 3.1 | Auto-pull and tag from quay.io | ☒ Automated | Covers initial image pull |
 | 3.2 | Podman connection error message | ☐ Pass ☐ Fail | |
-| 4.1 | Auto-pull from quay.io | ☐ Pass ☐ Fail | |
-| 4.2 | Second container uses cache | ☐ Pass ☐ Fail | |
-| 4.3 | Image details verification | ☐ Pass ☐ Fail | |
+| 4.1 | Image caching - second container | ☐ Pass ☐ Fail | |
+| 4.2 | Image details and tag verification | ☐ Pass ☐ Fail | |
 | 5.1 | Initial terminal launch | ☐ Pass ☐ Fail | |
 | 5.2 | Duplicate launch detection | ☐ Pass ☐ Fail | |
 | 5.3 | Multiple different cases | ☐ Pass ☐ Fail | |
@@ -1054,7 +1041,9 @@
 | 9.14 | Podman platform - macOS detection | ☐ Pass ☐ Fail | |
 | E2E | Integration workflow | ☐ Pass ☐ Fail | |
 
-**Total Pass Rate:** _____ / 34 tests
+**Total Pass Rate:** _____ / 33 tests
+
+**Note:** Test 3.1 is automated and covers both initial image pull (original 3.1) and image availability verification (original 4.1 merged in).
 
 ---
 

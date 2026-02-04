@@ -2,7 +2,11 @@
 
 **Purpose:** Convert UAT failures and production bugs into automated regression tests
 
-**Project-Specific Guidance:** Based on UAT 1.1 experience (2026-02-02)
+**Project-Specific Guidance:** Based on regression tests from UAT 1.1 (2026-02-02), UAT 3.1 (2026-02-04)
+
+**Latest Updates:**
+- **2026-02-04:** Added Pattern 4 (Image Pull and Tag) from UAT 3.1
+- **2026-02-02:** Initial patterns from UAT 1.1
 
 ---
 
@@ -152,6 +156,55 @@ def test_<feature>_container_lifecycle_regression(tmp_path):
             container.remove()
 ```
 
+### Pattern 4: Image Pull and Tag Scenario
+
+**Use Case:** Testing automatic image pull from registry and local tagging
+
+```python
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman required")
+def test_<feature>_image_pull_tag_regression(tmp_path, cleanup_containers):
+    """Regression test for <UAT 3.1> - Image pull and tag from registry."""
+
+    podman_client = PodmanClient()
+    state_db = StateDatabase(":memory:")
+    container_manager = ContainerManager(podman_client, state_db)
+
+    # Remove both local tag and registry image to simulate fresh install
+    try:
+        podman_client.client.images.remove("mc-rhel10:latest", force=True)
+        podman_client.client.images.remove("quay.io/.../mc-container:latest", force=True)
+    except Exception:
+        pass  # Images already removed
+
+    try:
+        # Verify images removed (clean slate)
+        with pytest.raises(Exception):
+            podman_client.client.images.get("mc-rhel10:latest")
+
+        # Create container - should trigger auto-pull and tag
+        container = container_manager.create(
+            case_number="99999998",
+            workspace_path=str(tmp_path / "workspace"),
+            customer_name="Test Customer"
+        )
+        cleanup_containers(container.id)  # Register for cleanup
+
+        # Verify image was pulled and tagged
+        local_image = podman_client.client.images.get("mc-rhel10:latest")
+        assert local_image is not None
+
+        # Verify tags include mc-rhel10:latest
+        tags = local_image.tags
+        assert any("mc-rhel10:latest" in tag for tag in tags)
+
+    except RuntimeError as e:
+        # Check if bug is reproduced
+        if "Image.tag() missing 1 required positional argument" in str(e):
+            pytest.fail("BUG REPRODUCED: Image pull succeeded but tag failed!")
+        raise
+```
+
 ---
 
 ## Checklist for /bug-to-test
@@ -206,18 +259,32 @@ minimal_config = {"api": {"rh_api_offline_token": token}}
 container = podman_client.client.containers.get(container_name)
 ```
 
-### UAT 3.x: Container Image Tests
+### UAT 3.x: Container Image Auto-Pull Tests
 ```python
-# Real image pull, verify error messages
-podman_client.pull_image("quay.io/...")
+# Real image pull from registry, verify tagging works
+# Remove both images to simulate fresh install
+podman_client.client.images.remove("mc-rhel10:latest", force=True)
+podman_client.client.images.remove("quay.io/.../mc-container:latest", force=True)
+
+# Create container - should trigger auto-pull and tag
+container = container_manager.create(...)
+
+# Verify image pulled and tagged correctly
+local_image = podman_client.client.images.get("mc-rhel10:latest")
+assert local_image.tags includes "mc-rhel10:latest"
 ```
 
-### UAT 4.x: Quay.io Auto-Pull Tests
+### UAT 4.x: Image Caching Tests
 ```python
-# Real image operations, measure pull time
+# Real image operations, verify caching behavior
+# Ensure image already pulled
+assert podman_client.client.images.get("mc-rhel10:latest") exists
+
+# Second container creation should use cache (no pull)
 start = time.time()
-result = container_manager.create(...)
+container = container_manager.create(...)
 duration = time.time() - start
+assert duration < 5  # Should be fast (no pull)
 ```
 
 ### UAT 5.x: Terminal Tests
