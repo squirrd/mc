@@ -632,3 +632,211 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
                 shutil.move(str(backup_dir), str(old_dir))
 
         print("Restore complete.")
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _podman_available(),
+    reason="Podman not available"
+)
+@pytest.mark.skipif(
+    not _redhat_api_configured(),
+    reason="Red Hat API credentials not configured"
+)
+def test_terminal_title_format_regression(mocker, tmp_path):
+    """Regression test for UAT 5.1 - Terminal window title format.
+
+    Bug discovered: 2026-02-04
+    Platform: macOS (reproduced)
+    Severity: Minor - Cosmetic issue affecting usability
+
+    Problem:
+    Terminal window title shows incorrect format. Instead of showing case metadata,
+    the title displays a pod/container reference like "@38d5d5580c057c/case".
+
+    Expected title format (updated requirement):
+    {case}:{customer}:{description}:/{vm-path}
+    Example: "04347611:IBM Corpora Limited:Server Down Critical Pr:/case"
+
+    Old UAT expected format (no longer desired):
+    {case} - {customer} - {description}
+    Example: "04347611 - IBM Corpora Limited - Server Down Critical Pr"
+
+    Actual (before fix):
+    "@38d5d5580c057c/case" (container hostname/pod reference)
+
+    Root cause:
+    The build_window_title() function in src/mc/terminal/attach.py:66-93 exists and
+    generates the correct format, but the title may not be properly set in the
+    terminal window, or the format needs updating to match new requirements.
+
+    Steps to reproduce:
+    1. Run: mc case 04347611
+    2. Observe terminal window title
+    3. See pod reference instead of case metadata
+
+    This test verifies:
+    1. Title is generated in correct format
+    2. Title includes case number, customer, description, and vm path
+    3. Title is properly passed to terminal launcher
+
+    UAT Test: 5.1 Initial Terminal Launch
+    Fixed in: TBD (test currently validates title generation)
+    """
+    # Setup: Create temporary directories for isolated test environment
+    test_base_dir = tmp_path / "mc"
+    test_state_dir = test_base_dir / "state"
+    test_state_dir.mkdir(parents=True)
+    test_config_dir = test_base_dir / "config"
+    test_config_dir.mkdir(parents=True)
+
+    db_path = test_state_dir / "containers.db"
+
+    # Create minimal config with API credentials
+    from mc.config.manager import ConfigManager as RealConfigManager
+    real_config = RealConfigManager()
+    real_cfg = real_config.load()
+
+    minimal_config = {
+        "api": {
+            "rh_api_offline_token": real_cfg["api"]["rh_api_offline_token"]
+        },
+        "base_directory": str(test_base_dir)
+    }
+
+    config_path = test_config_dir / "config.toml"
+
+    import tomli_w
+    with open(config_path, "wb") as f:
+        tomli_w.dump(minimal_config, f)
+
+    # Setup real components
+    config_manager = ConfigManager()
+    config_manager._config_path = config_path
+
+    from mc.integrations.redhat_api import RedHatAPIClient
+    from mc.utils.auth import get_access_token
+
+    access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
+    api_client = RedHatAPIClient(access_token)
+
+    # Mock TTY check (pytest doesn't run in TTY)
+    mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
+
+    # Mock terminal launcher to capture what title is passed
+    mock_launcher = mocker.MagicMock()
+    mocker.patch("mc.terminal.attach.get_launcher", return_value=mock_launcher)
+
+    # Initialize real Podman client
+    podman_client = PodmanClient()
+    state_db = StateDatabase(str(db_path))
+    container_manager = ContainerManager(podman_client, state_db)
+
+    # Use real case number
+    test_case_number = "04347611"
+    container_name = f"mc-{test_case_number}"
+
+    # Pre-cleanup: Remove any existing container
+    try:
+        existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        print(f"Removing pre-existing container {container_name}...")
+        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing_container.remove()  # type: ignore[no-untyped-call]
+    except Exception:
+        pass
+
+    container = None
+    try:
+        # Execute: Attach terminal (triggers title generation)
+        attach_terminal(
+            case_number=test_case_number,
+            config_manager=config_manager,
+            api_client=api_client,
+            container_manager=container_manager,
+        )
+
+        # Verify terminal launcher was called
+        mock_launcher.launch.assert_called_once()
+
+        # Extract the launch options that were passed
+        call_args = mock_launcher.launch.call_args
+        launch_options = call_args[0][0]
+
+        print(f"\nActual title passed to launcher: {launch_options.title}")
+
+        # Parse the title to verify format
+        # Expected format: {case}:{customer}:{description}:/{vm-path}
+        # Example: "04347611:IBM Corpora Limited:Server Down Critical Pr:/case"
+
+        # CRITICAL ASSERTIONS
+        # 1. Title must contain the case number
+        assert test_case_number in launch_options.title, (
+            f"Title must contain case number {test_case_number}\n"
+            f"Actual title: {launch_options.title}"
+        )
+
+        # 2. Title must contain customer name (from API)
+        # We don't assert exact customer name since it comes from API
+        # but we verify it's not a pod reference like "@38d5d5580c057c"
+        assert not launch_options.title.startswith("@"), (
+            f"Title should not start with '@' (pod reference)\n"
+            f"Actual title: {launch_options.title}\n"
+            f"Expected format: {{case}}:{{customer}}:{{description}}:/{{vm-path}}"
+        )
+
+        # 3. Title should use colon separators (new format requirement)
+        # If title still uses " - " separators, that's the bug we're tracking
+        if " - " in launch_options.title and ":" not in launch_options.title:
+            pytest.fail(
+                f"✗ BUG FOUND: Title uses old format with ' - ' separators\n"
+                f"Actual: {launch_options.title}\n"
+                f"Expected format: {{case}}:{{customer}}:{{description}}:/{{vm-path}}\n"
+                f"Example: 04347611:IBM Corpora Limited:Server Down Critical Pr:/case\n"
+                f"Fix needed in: src/mc/terminal/attach.py build_window_title()"
+            )
+
+        # 4. Title should include vm-path (:/case or similar)
+        if ":/case" not in launch_options.title and "/case" not in launch_options.title:
+            pytest.fail(
+                f"✗ BUG FOUND: Title missing vm-path component\n"
+                f"Actual: {launch_options.title}\n"
+                f"Expected to include: ':/case' or '/case'\n"
+                f"Fix needed in: src/mc/terminal/attach.py build_window_title()"
+            )
+
+        # 5. Verify title has colons (new separator format)
+        colon_count = launch_options.title.count(":")
+        if colon_count < 3:  # Should have at least 3 colons (case:customer:description:/path)
+            pytest.fail(
+                f"✗ BUG FOUND: Title missing colon separators (found {colon_count}, expected >= 3)\n"
+                f"Actual: {launch_options.title}\n"
+                f"Expected format: {{case}}:{{customer}}:{{description}}:/{{vm-path}}\n"
+                f"Fix needed in: src/mc/terminal/attach.py build_window_title()"
+            )
+
+        print("✓ Test PASSED: Terminal title format is correct")
+        print(f"✓ Title: {launch_options.title}")
+
+        # Get container for cleanup
+        try:
+            container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        except Exception:
+            pass
+
+    finally:
+        # Cleanup: Remove test container
+        if container:
+            try:
+                print(f"Cleaning up container {container_name}...")
+                container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                container.remove()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+        # Cleanup by name if container object not available
+        try:
+            cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup_container.remove()  # type: ignore[no-untyped-call]
+        except Exception:
+            pass

@@ -391,16 +391,24 @@
    ```bash
    mc case 04347611
    ```
-2. Observe: New terminal window opens with title `04347611 - <Customer> - <Description>`
+2. Observe: New terminal window opens with title `04347611:<Customer>:<Description>:/case`
 
 **Expected Result:**
 - New terminal window opened
-- Window title format: `<case> - <customer> - <description>`
+- Window title format: `<case>:<customer>:<description>:/<vm-path>`
 - Shell prompt: `[MC-04347611] /case$`
 
-**Actual Result:** ☐ Pass ☐ Fail
-**Window Title:**
-**Notes:**
+**Actual Result:** ☒ Fail → ☑ Automated
+
+**Automated Test:** `test_terminal_title_format_regression()` in `tests/integration/test_case_terminal.py`
+**Created:** 2026-02-04
+**Status:** Failing (reproduces bug - will pass once bug is fixed)
+**Bug:** Title uses old format with " - " separators instead of new colon-separated format
+**Root cause:** `src/mc/terminal/attach.py:66-93` build_window_title() generates old format `{case} - {customer} - {description}` instead of `{case}:{customer}:{description}:/{vm-path}`
+**Fix needed:** Update build_window_title() to use colon separators and include vm-path component
+
+**Notes:** Test shows actual title: "04347611 - IBM - Transfer Cluster ownership"
+         Expected: "04347611:IBM:Transfer Cluster ownership:/case"
 
 ---
 

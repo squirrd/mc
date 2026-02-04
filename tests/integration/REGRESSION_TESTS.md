@@ -13,6 +13,7 @@ This document tracks integration tests that were created in response to actual b
 | `test_fresh_install_missing_config_base_directory_regression` | UAT 1.1 | 2026-02-02 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_fresh_install_no_old_directories_created_regression` | UAT 1.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_image_pull_and_tag_regression` | UAT 3.1 | 2026-02-04 | Failing (reproduces bug) | `test_container_image.py` |
+| `test_terminal_title_format_regression` | UAT 5.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 
 ## Test Details
 
@@ -162,6 +163,77 @@ MC_TEST_INTEGRATION=1 uv run pytest tests/integration/test_container_image.py::T
 ```
 
 **Note:** This test pulls a real image from quay.io (~549 MB). It may take 30-60 seconds on first run.
+
+---
+
+### test_terminal_title_format_regression
+
+**Source:** UAT Test 5.1 - Initial Terminal Launch
+**Platform:** macOS (reproduced)
+**Severity:** Minor - Cosmetic issue affecting usability
+
+**Bug Description:**
+Terminal window title uses old format with hyphen separators instead of the new colon-separated format that includes the vm-path. When launching a container terminal with `mc case <number>`, the window title should be in the format `{case}:{customer}:{description}:/{vm-path}` but instead shows `{case} - {customer} - {description}`.
+
+Example:
+- **Expected:** `04347611:IBM:Transfer Cluster ownership:/case`
+- **Actual:** `04347611 - IBM - Transfer Cluster ownership`
+
+Additionally, users reported seeing a pod/container reference like `@38d5d5580c057c/case` as the window title in some cases, suggesting the title may not be properly set at all in certain terminal emulators.
+
+**Root Cause:**
+`src/mc/terminal/attach.py:66-93` in the `build_window_title()` function generates the old format:
+```python
+def build_window_title(case_number: str, customer_name: str, description: str) -> str:
+    # Build base title
+    base = f"{case_number} - {customer_name} - "
+    # ... truncation logic ...
+    return base + description
+```
+
+**Fix Required:**
+Update `build_window_title()` to:
+1. Use colon (`:`) separators instead of ` - `
+2. Include the vm-path component (typically `/case`)
+3. Format: `{case_number}:{customer_name}:{description}:/{vm_path}`
+
+Example implementation:
+```python
+def build_window_title(case_number: str, customer_name: str, description: str, vm_path: str = "/case") -> str:
+    # Build title with colon separators
+    base = f"{case_number}:{customer_name}:{description}:"
+    # Truncate if needed to keep under 100 chars total
+    max_total_len = 100
+    vm_path_component = f"{vm_path}"
+    # ... truncation logic ...
+    return base + vm_path_component
+```
+
+**Test Approach:**
+- Creates real container with Red Hat API metadata
+- Uses real Podman client and state database
+- Mocks only terminal launcher to capture title that would be passed
+- Verifies title format has:
+  - Case number present
+  - Colon separators (not " - ")
+  - VM path component (:/case)
+  - At least 3 colons in format
+  - Does not start with "@" (pod reference)
+- Currently fails with the old format bug (will pass once bug is fixed)
+
+**How to Run:**
+```bash
+uv run pytest tests/integration/test_case_terminal.py::test_terminal_title_format_regression -v -s
+```
+
+**Test Output When Bug Exists:**
+```
+✗ BUG FOUND: Title uses old format with ' - ' separators
+Actual: 04347611 - IBM - Transfer Cluster ownership
+Expected format: {case}:{customer}:{description}:/{vm-path}
+Example: 04347611:IBM Corpora Limited:Server Down Critical Pr:/case
+Fix needed in: src/mc/terminal/attach.py build_window_title()
+```
 
 ---
 
