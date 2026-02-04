@@ -840,3 +840,292 @@ def test_terminal_title_format_regression(mocker, tmp_path):
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _podman_available(),
+    reason="Podman not available"
+)
+@pytest.mark.skipif(
+    not _redhat_api_configured(),
+    reason="Red Hat API credentials not configured"
+)
+def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
+    """Regression test for UAT 5.2 - Duplicate Launch Detection.
+
+    Bug discovered: 2026-02-04
+    Platform: macOS with iTerm2 (reproduced)
+    Severity: Major - Affects usability, creates terminal clutter
+
+    Problem:
+    Running `mc case 04347611` multiple times incorrectly allows multiple
+    terminal windows to be spun up instead of focusing the existing window.
+
+    Expected behavior:
+    1. First call: Creates new terminal window
+    2. Second call: Finds existing window, focuses it, shows message
+       "Focused existing terminal for case 04347611"
+    3. No new terminal window created on second call
+
+    Actual behavior (before fix):
+    1. First call: Creates new terminal window
+    2. Second call: Creates ANOTHER new terminal window
+    3. No "Focused" message shown
+    4. Duplicate detection not working
+
+    Root cause:
+    The duplicate detection logic in src/mc/terminal/attach.py:241-257 exists
+    but the find_window_by_title() method may not be finding the existing window.
+
+    Possible issues:
+    1. Window title search in iTerm2 AppleScript not matching
+    2. Timing issue - window not fully created before second search
+    3. Title escaping causing mismatch between set and search
+    4. Session name vs window name mismatch in iTerm2
+
+    Steps to reproduce:
+    1. Run: mc case 04347611
+    2. Run: mc case 04347611 (again)
+    3. Observe: Two terminal windows exist instead of focusing first
+
+    This test verifies:
+    1. First attach_terminal creates a new window (launcher.launch called once)
+    2. Second attach_terminal finds existing window (find_window_by_title returns True)
+    3. Second attach_terminal does NOT create new window (launcher.launch not called again)
+    4. "Focused existing terminal" message shown on second call
+
+    UAT Test: 5.2 Duplicate Launch Detection
+    Fixed in: TBD (test currently reproduces the bug)
+    """
+    # Setup: Create temporary directories for isolated test environment
+    test_base_dir = tmp_path / "mc"
+    test_state_dir = test_base_dir / "state"
+    test_state_dir.mkdir(parents=True)
+    test_config_dir = test_base_dir / "config"
+    test_config_dir.mkdir(parents=True)
+
+    db_path = test_state_dir / "containers.db"
+
+    # Create minimal config with API credentials
+    from mc.config.manager import ConfigManager as RealConfigManager
+    real_config = RealConfigManager()
+    real_cfg = real_config.load()
+
+    minimal_config = {
+        "api": {
+            "rh_api_offline_token": real_cfg["api"]["rh_api_offline_token"]
+        },
+        "base_directory": str(test_base_dir)
+    }
+
+    config_path = test_config_dir / "config.toml"
+
+    import tomli_w
+    with open(config_path, "wb") as f:
+        tomli_w.dump(minimal_config, f)
+
+    # Setup real components
+    config_manager = ConfigManager()
+    config_manager._config_path = config_path
+
+    from mc.integrations.redhat_api import RedHatAPIClient
+    from mc.utils.auth import get_access_token
+
+    access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
+    api_client = RedHatAPIClient(access_token)
+
+    # Mock TTY check (pytest doesn't run in TTY)
+    mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
+
+    # Create mock launcher that simulates window creation and finding
+    mock_launcher = mocker.MagicMock()
+
+    # Track which titles have been "created" (simulates windows that exist)
+    created_windows = []
+
+    def mock_launch(options):
+        """Simulate launching a window - add its title to created_windows."""
+        created_windows.append(options.title)
+        print(f"Mock: Created window with title: {options.title}")
+
+    def mock_find(title):
+        """Simulate finding a window - check if title in created_windows."""
+        found = title in created_windows
+        print(f"Mock: Searching for window with title: {title}")
+        print(f"Mock: Created windows: {created_windows}")
+        print(f"Mock: Found: {found}")
+        return found
+
+    def mock_focus(title):
+        """Simulate focusing a window - return True if it exists."""
+        can_focus = title in created_windows
+        print(f"Mock: Attempting to focus window with title: {title}")
+        print(f"Mock: Can focus: {can_focus}")
+        return can_focus
+
+    mock_launcher.launch.side_effect = mock_launch
+    mock_launcher.find_window_by_title.side_effect = mock_find
+    mock_launcher.focus_window_by_title.side_effect = mock_focus
+
+    # Make launcher be a MacOSLauncher instance (for duplicate detection to run)
+    from mc.terminal.macos import MacOSLauncher
+    mock_launcher.__class__ = MacOSLauncher
+
+    mocker.patch("mc.terminal.attach.get_launcher", return_value=mock_launcher)
+
+    # Initialize real Podman client
+    podman_client = PodmanClient()
+    state_db = StateDatabase(str(db_path))
+    container_manager = ContainerManager(podman_client, state_db)
+
+    # Use real case number
+    test_case_number = "04347611"
+    container_name = f"mc-{test_case_number}"
+
+    # Pre-cleanup: Remove any existing container
+    try:
+        existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        print(f"Removing pre-existing container {container_name}...")
+        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing_container.remove()  # type: ignore[no-untyped-call]
+    except Exception:
+        pass
+
+    container = None
+    try:
+        # FIRST CALL: Attach terminal for the first time
+        print("\n=== FIRST CALL: mc case 04347611 ===")
+        attach_terminal(
+            case_number=test_case_number,
+            config_manager=config_manager,
+            api_client=api_client,
+            container_manager=container_manager,
+        )
+
+        # Verify: launcher.launch was called once (new window created)
+        assert mock_launcher.launch.call_count == 1, (
+            f"First call should launch new window\n"
+            f"Expected launch call count: 1\n"
+            f"Actual: {mock_launcher.launch.call_count}"
+        )
+
+        # Get the title that was used for the first window
+        first_call_args = mock_launcher.launch.call_args_list[0]
+        first_window_title = first_call_args[0][0].title
+        print(f"\n✓ First call created window with title: {first_window_title}")
+
+        # SECOND CALL: Attach terminal again (should focus existing, not create new)
+        print("\n=== SECOND CALL: mc case 04347611 ===")
+
+        # Capture stdout to check for "Focused" message
+        import io
+        import sys
+        captured_output = io.StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured_output
+
+        try:
+            attach_terminal(
+                case_number=test_case_number,
+                config_manager=config_manager,
+                api_client=api_client,
+                container_manager=container_manager,
+            )
+        finally:
+            sys.stdout = old_stdout
+
+        output = captured_output.getvalue()
+        print(f"\nCaptured output from second call:\n{output}")
+
+        # CRITICAL ASSERTIONS for duplicate prevention
+
+        # 1. find_window_by_title should have been called on second attach
+        if mock_launcher.find_window_by_title.call_count == 0:
+            pytest.fail(
+                f"✗ BUG FOUND: find_window_by_title was never called!\n"
+                f"Duplicate detection not running at all.\n"
+                f"Check: Is launcher instance being detected as MacOSLauncher?\n"
+                f"Launcher type: {type(mock_launcher)}\n"
+                f"Fix needed in: src/mc/terminal/attach.py:246 isinstance check"
+            )
+
+        # 2. find_window_by_title should return True (window exists)
+        # Get the result of the find call
+        find_calls = [call for call in mock_launcher.find_window_by_title.call_args_list]
+        if not find_calls:
+            pytest.fail("✗ BUG: find_window_by_title was never called")
+
+        # Check if find returned True (our mock tracks this)
+        find_title = find_calls[-1][0][0]  # Title used in last find call
+        window_was_found = find_title in created_windows
+
+        if not window_was_found:
+            pytest.fail(
+                f"✗ BUG FOUND: find_window_by_title returned False when window exists\n"
+                f"Searching for title: {find_title}\n"
+                f"Created windows: {created_windows}\n"
+                f"First window title: {first_window_title}\n"
+                f"Title mismatch? {find_title != first_window_title}\n"
+                f"Possible causes:\n"
+                f"1. Title format changed between calls\n"
+                f"2. Title escaping issues\n"
+                f"3. Case metadata changed causing different title\n"
+                f"Fix needed in: src/mc/terminal/macos.py find_window_by_title()"
+            )
+
+        # 3. launcher.launch should NOT be called a second time
+        if mock_launcher.launch.call_count > 1:
+            pytest.fail(
+                f"✗ BUG FOUND: launcher.launch called {mock_launcher.launch.call_count} times!\n"
+                f"Expected: 1 (create once, then focus)\n"
+                f"Actual: {mock_launcher.launch.call_count}\n"
+                f"Multiple terminals created instead of focusing existing one.\n"
+                f"Fix needed in: src/mc/terminal/attach.py duplicate detection logic"
+            )
+
+        # 4. "Focused existing terminal" message should be shown
+        if "Focused existing terminal" not in output:
+            pytest.fail(
+                f"✗ BUG FOUND: No 'Focused existing terminal' message shown\n"
+                f"Captured output: {output}\n"
+                f"Expected: 'Focused existing terminal for case {test_case_number}'\n"
+                f"User should see feedback that window was focused, not recreated."
+            )
+
+        # 5. focus_window_by_title should have been called
+        if mock_launcher.focus_window_by_title.call_count == 0:
+            pytest.fail(
+                f"✗ BUG FOUND: focus_window_by_title was never called\n"
+                f"Window found but not focused.\n"
+                f"Fix needed in: src/mc/terminal/attach.py:250 focus logic"
+            )
+
+        print("\n✓ Test PASSED: Duplicate prevention working correctly")
+        print(f"✓ First call: Created window")
+        print(f"✓ Second call: Found existing window and focused it")
+        print(f"✓ No duplicate window created")
+        print(f"✓ User message shown: 'Focused existing terminal for case {test_case_number}'")
+
+        # Get container for cleanup
+        try:
+            container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        except Exception:
+            pass
+
+    finally:
+        # Cleanup: Remove test container
+        if container:
+            try:
+                print(f"\nCleaning up container {container_name}...")
+                container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                container.remove()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+        # Cleanup by name if container object not available
+        try:
+            cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup_container.remove()  # type: ignore[no-untyped-call]
+        except Exception:
+            pass

@@ -424,8 +424,19 @@
 - Existing terminal window brought to front/focused
 - Message: `Focused existing terminal for case 04347611`
 
-**Actual Result:** ☐ Pass ☐ Fail
-**Notes:**
+**Actual Result:** ☒ Fail → ☑ Automated (Logic Test Passes, Real-world Integration Fails)
+
+**Automated Test:** `test_duplicate_terminal_prevention_regression()` in `tests/integration/test_case_terminal.py`
+**Created:** 2026-02-04
+**Status:** Passing (Python logic works) but bug exists in real iTerm2 integration
+**Bug:** Running `mc case 04347611` multiple times creates multiple terminal windows instead of focusing existing one
+**Root cause:** iTerm2 AppleScript `find_window_by_title()` not finding existing windows. The Python logic (lines 241-257 in attach.py) is correct, but the AppleScript search in `src/mc/terminal/macos.py:69-117` doesn't match real iTerm2 session names
+**Fix needed:** Investigate iTerm2 AppleScript - session name search may need adjustment. Test with real iTerm2 to debug why `name of current session` doesn't match what we set with `set name to "..."`
+
+**Notes:** Test validates logic works (mock passes all assertions) but real-world iTerm2 behavior differs. Possible issues:
+- Session name vs tab name vs window title confusion in iTerm2
+- Timing issue - title not set when search happens
+- AppleScript property mismatch
 
 ---
 

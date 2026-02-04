@@ -14,6 +14,7 @@ This document tracks integration tests that were created in response to actual b
 | `test_fresh_install_no_old_directories_created_regression` | UAT 1.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_image_pull_and_tag_regression` | UAT 3.1 | 2026-02-04 | Failing (reproduces bug) | `test_container_image.py` |
 | `test_terminal_title_format_regression` | UAT 5.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
+| `test_duplicate_terminal_prevention_regression` | UAT 5.2 | 2026-02-04 | Passing (logic OK, iTerm2 integration issue) | `test_case_terminal.py` |
 
 ## Test Details
 
@@ -234,6 +235,109 @@ Expected format: {case}:{customer}:{description}:/{vm-path}
 Example: 04347611:IBM Corpora Limited:Server Down Critical Pr:/case
 Fix needed in: src/mc/terminal/attach.py build_window_title()
 ```
+
+---
+
+### test_duplicate_terminal_prevention_regression
+
+**Source:** UAT Test 5.2 - Duplicate Launch Detection
+**Platform:** macOS with iTerm2 (reproduced)
+**Severity:** Major - Affects usability, creates terminal clutter
+
+**Bug Description:**
+Running `mc case 04347611` multiple times incorrectly allows multiple terminal windows to be created instead of focusing the existing window for the case.
+
+Expected behavior:
+1. First call: `mc case 04347611` creates new terminal window
+2. Second call: `mc case 04347611` finds existing window, focuses it, and shows message "Focused existing terminal for case 04347611"
+3. No new terminal window created on subsequent calls
+
+Actual behavior:
+1. First call: Creates new terminal window
+2. Second call: Creates ANOTHER new terminal window (duplicate)
+3. No "Focused existing terminal" message shown
+4. Multiple terminal windows accumulate for the same case
+
+**Root Cause:**
+The Python duplicate detection logic in `src/mc/terminal/attach.py:241-257` is **correct** (test validates this). The bug is in the iTerm2 AppleScript integration.
+
+The `find_window_by_title()` method in `src/mc/terminal/macos.py:69-117` uses AppleScript to search iTerm2 windows:
+```applescript
+tell application "iTerm"
+    repeat with theWindow in windows
+        repeat with theTab in tabs of theWindow
+            if name of current session of theTab contains "{title}" then
+                return true
+            end if
+        end repeat
+    end repeat
+    return false
+end tell
+```
+
+However, this search does not find windows that were created with:
+```applescript
+tell current session of current window
+    set name to "{title}"
+end tell
+```
+
+**Possible Causes:**
+1. **Property mismatch:** Setting `name` on session vs checking `name of current session` may access different properties
+2. **Timing issue:** Session name not immediately available after setting
+3. **iTerm2 behavior:** Session name vs tab name vs window title confusion
+4. **Escaping issues:** Title escaping causing mismatch (less likely, but possible)
+
+**Test Approach:**
+This test validates that the **Python logic** is correct:
+- Uses mock launcher that tracks created window titles
+- Simulates find/focus behavior correctly
+- Verifies attach_terminal calls the right methods in the right order
+- Test **passes** - proving the logic works
+
+However, the test **cannot catch the iTerm2 AppleScript integration bug** because:
+- We mock the launcher to avoid actually launching iTerm2 windows
+- The mock correctly simulates what *should* happen
+- The real iTerm2 AppleScript behaves differently
+
+**Fix Required:**
+Debug the iTerm2 AppleScript integration:
+1. Test setting and retrieving session names in iTerm2
+2. Try alternative properties: tab name, window title, etc.
+3. Add timing delays if needed
+4. Consider using AppleScript debugging to see actual property values
+
+Example debugging approach:
+```applescript
+# After setting name, immediately retrieve it to verify
+tell current session of current window
+    set name to "Test Title"
+    delay 0.5
+    get name
+end tell
+```
+
+**How to Run:**
+```bash
+uv run pytest tests/integration/test_case_terminal.py::test_duplicate_terminal_prevention_regression -v -s
+```
+
+**Test Output (Currently Passes):**
+```
+✓ Test PASSED: Duplicate prevention working correctly
+✓ First call: Created window
+✓ Second call: Found existing window and focused it
+✓ No duplicate window created
+✓ User message shown: 'Focused existing terminal for case 04347611'
+```
+
+**Important Note:**
+This test **passes** because it validates the Python logic layer is correct. The bug exists at the iTerm2 AppleScript integration layer, which the test mocks out. To fully test this bug, we would need:
+1. Real iTerm2 window creation (not feasible in CI)
+2. AppleScript integration test framework
+3. Manual testing on macOS with iTerm2
+
+For now, this test ensures the logic won't regress while the iTerm2 integration is fixed separately.
 
 ---
 
