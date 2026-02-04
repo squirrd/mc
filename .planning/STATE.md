@@ -2,122 +2,74 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-01)
+See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently
+**Current focus:** v2.0.2 Window Tracking - Phase 15 (Window Registry Foundation)
 
 ## Current Position
 
-**Milestone:** v2.0.2 Window Tracking
-**Phase:** Not started (defining requirements)
-**Status:** Defining requirements
-**Last activity:** 2026-02-04 - Milestone v2.0.2 started
+Phase: 15 of 19 (Window Registry Foundation)
+Plan: Ready to plan
+Status: Ready to plan
+Last activity: 2026-02-04 — Roadmap created for v2.0.2 milestone
+
+Progress: [███████████████████░░░░░] 78% (14.1/19 phases complete)
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 39 (across v1.0, v2.0, v2.0.1)
+- Previous milestones:
+  - v1.0: 18 plans (8 phases) — shipped 2026-01-22
+  - v2.0: 16 plans (6 phases) — shipped 2026-02-01
+  - v2.0.1: 5 plans (1 phase) — shipped 2026-02-02
+
+**By Recent Phase:**
+
+| Phase | Plans | Status |
+|-------|-------|--------|
+| 14.1 (Critical Fixes) | 5 | Complete (v2.0.1) |
+| 14 (Distribution) | 2 | Complete (v2.0) |
+| 13 (Container Image) | 3 | Complete (v2.0) |
+
+**Recent Trend:**
+- v2.0.1 delivered in 1 day (5 plans)
+- v2.0 delivered in 6 days (16 plans)
+- Trend: Fast iteration on focused milestones
+
+*Updated: 2026-02-04 after roadmap creation*
 
 ## Accumulated Context
 
-### v2.0 Containerization + Distribution (SHIPPED 2026-02-01)
+### Decisions
 
-**Delivered:** Transform MC into a container orchestrator providing isolated per-case workspaces with persistent containers
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
 
-**Phases completed:** 9-14.1 (7 phases, 22 plans total)
+- v2.0.2: Window ID tracking system chosen over title-based search (titles volatile in iTerm2)
+- v2.0.2: Extend existing StateDatabase with window_registry table (zero new dependencies)
+- v2.0.2: AppleScript window `id` property for macOS, wmctrl for Linux X11
 
-**Key accomplishments:**
-- Container orchestration with full lifecycle management (create, list, stop, delete, exec) using podman-py and SQLite state persistence
-- Platform detection for macOS/Linux with automatic Podman machine handling, lazy connection, and retry logic with exponential backoff
-- Salesforce integration for case metadata querying with 5-minute cache TTL, automatic token refresh, and workspace path resolution
-- Terminal automation across iTerm2, Terminal.app, gnome-terminal, and konsole with custom bashrc and welcome banners
-- RHEL 10 UBI container image (549 MB) with MC CLI, essential bash tools, and runtime mode detection preserving v1.0 backwards compatibility
-- Modern distribution via uv tool supporting development (uv run), UAT (uv tool install -e .), and production (uv tool install git+) workflows
+### Pending Todos
 
-**Stats:**
-- 6,056 lines of Python (cumulative)
-- 7 phases, 22 plans
-- 6 days from start to ship (2026-01-26 → 2026-02-01)
+6 remaining todos from v2.0.1 (all in testing area):
+- Fix HTTP error handling tests (14 test failures)
+- Fix container management tests (6 test failures)
+- Fix terminal attachment tests (17 test failures)
+- Fix validation and integration tests (5 test failures/errors)
+- Fix workspace and metadata tests (5 test failures)
+- v2.x deferred containerization features (planning)
 
-**Known issues shipped (v2.0.1 backlog):**
-- ✅ FIXED: Terminal attachment broken due to Salesforce API method name mismatch
-- ✅ FIXED: Cache database initialization failures on second `mc create` command run
-- ✅ FIXED: Podman URI byte string errors (byte string handling added)
-- Runtime mode detection created but not integrated into decision logic
-- Phase 13 missing VERIFICATION.md (deliverables present and verified functional)
-- Podman URI scheme error on macOS (still investigating - see pending todos)
+### Blockers/Concerns
 
-See `.planning/milestones/v2.0-ROADMAP.md` for full phase details.
-
-### v1.0 Hardening (SHIPPED 2026-01-22)
-
-**Major Accomplishments:**
-- 100+ tests with 80%+ coverage on critical modules
-- Python 3.11+ with 98% type coverage and mypy strict validation
-- Production-ready security (token caching, SSL verification, input validation)
-- Structured logging (74 print statements migrated, sensitive data redaction)
-- 8x faster downloads (parallel with rich progress bars, intelligent retry)
-- TOML configuration system replacing environment variables
-
-**Tech Stack:**
-- Python 3.11+, pytest, requests, rich, tqdm, tenacity, backoff, platformdirs
-- 2,590 lines of production code
-- 110 files modified
-
-See `.planning/milestones/v1.0-ROADMAP.md` for full phase details (if exists).
-
-### Pending Todos (6 remaining)
-
-**Completed (moved to done/):**
-- [2026-01-27] ✅ Migrate mc-cli distribution to use pipx/uv tool
-- [2026-02-01] ✅ Rename offline_token config to rh_api_offline_token
-- [2026-02-01] ✅ Fix UAT test plan - mc container ls → mc container list
-- [2026-02-01] ✅ Fix terminal attachment Salesforce API method call
-- [2026-02-01] ✅ Fix cache database initialization in mc create command
-- [2026-02-01] ✅ Fix Podman URI scheme byte string error in container commands
-- [2026-02-01] ✅ Unify authentication - remove direct Salesforce dependency from container commands
-- [2026-02-01] ✅ Fix Podman URI scheme error - byte string passed instead of decoded string
-- [2026-02-01] ✅ Validate case number format before credential/API checks
-- [2026-02-02] ✅ Fix Phase 8 type annotation cosmetic gaps (area: config)
-- [2026-02-02] ✅ Consolidate config directory under ~/mc workspace (area: config)
-- [2026-02-02] ✅ Fix workspace path structure to use cases/<customer>/<case>-<description> (area: containers)
-- [2026-02-02] ✅ Fix container create image detection failure (area: containers)
-- [2026-02-02] ✅ Prevent duplicate terminal launches and focus existing terminals (area: containers)
-- [2026-02-02] ✅ Auto-close terminal when shell exits (area: containers)
-- [2026-02-02] ✅ Use pre-built container images from quay.io instead of local builds (area: containers)
-- [2026-02-02] ✅ Improve container list output - replace workspace path with description (area: ui)
-- [2026-02-02] ✅ Fix test dependencies and imports (area: testing)
-
-**Still pending:**
-- [2026-01-26] v2.x deferred containerization features (area: planning)
-- [2026-02-01] Fix HTTP error handling tests (area: testing) - 14 test failures
-- [2026-02-01] Fix container management tests (area: testing) - 6 test failures
-- [2026-02-01] Fix terminal attachment tests (area: testing) - 17 test failures
-- [2026-02-01] Fix validation and integration tests (area: testing) - 5 test failures/errors
-- [2026-02-01] Fix workspace and metadata tests (area: testing) - 5 test failures
+**Phase 16 dependency:** Needs Phase 15 registry operational before macOS window tracking can work
+**Linux complexity:** X11 vs Wayland support requires platform detection and graceful fallback
+**Test coverage:** Integration test `test_duplicate_terminal_prevention_regression` currently fails - primary validation signal for success
 
 ## Session Continuity
 
-Last session: 2026-02-02
-Stopped at: Batch E (Testing) - 1/5 test suites fixed
-Resume: Ready for remaining Batch E test fixes (4 test suites remaining)
-
-**Recent work (2026-02-02):**
-- ✅ Batch D complete: Authentication & API cleanup (3 todos)
-- ✅ Batch A complete: Configuration cleanup (2 todos)
-- ✅ Batch B complete: Container Management (5 todos)
-  - Task 1: Workspace path structure fixed (cases/<customer>/<case>-<description>)
-  - Task 2: Container image detection error messaging improved
-  - Task 3: Duplicate terminal prevention via AppleScript window detection
-  - Task 4: Auto-close terminal on shell exit ('; exit' appended to command)
-  - Task 5: Quay.io auto-pull with local fallback (pull-first strategy)
-- ✅ Batch C complete: UI Improvements (1 todo)
-  - Container list output now shows case description instead of workspace path
-  - Description extracted from new workspace path structure
-  - Graceful fallback to "N/A" for legacy paths
-- ✅ Batch E started: Testing (1/5 test suites fixed)
-  - Test dependencies and imports fixed (test_cache.py updated to v2.0 API)
-  - All 513 tests now collect successfully (no import errors)
-  - test_cache.py: 13/13 tests pass
-- Python 3.11+ type coverage: 100% (64/64 functions)
-- Directory structure: Consolidated under ~/mc/ for better UX
-- Auto-migration: Seamless upgrade from old platformdirs locations
-
----
-*State initialized: 2026-01-20*
-*Last updated: 2026-02-04 (v2.0.2 milestone started)*
+Last session: 2026-02-04
+Stopped at: Roadmap created for v2.0.2 milestone (5 phases, 17 requirements)
+Resume file: None
+Next action: Run `/gsd:plan-phase 15` to plan Window Registry Foundation

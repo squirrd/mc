@@ -62,13 +62,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be populated by roadmapper) | | |
+| WR-01 | Phase 15 | Pending |
+| WR-02 | Phase 15 | Pending |
+| WR-03 | Phase 15 | Pending |
+| WR-04 | Phase 15 | Pending |
+| WR-05 | Phase 17 | Pending |
+| WR-06 | Phase 17 | Pending |
+| WR-07 | Phase 17 | Pending |
+| WM-01 | Phase 16 | Pending |
+| WM-02 | Phase 16 | Pending |
+| WM-03 | Phase 16 | Pending |
+| WM-04 | Phase 16 | Pending |
+| WM-05 | Phase 18 | Pending |
+| WM-06 | Phase 16 | Pending |
+| TEST-01 | Phase 19 | Pending |
+| TEST-02 | Phase 19 | Pending |
+| TEST-03 | Phase 19 | Pending |
+| TEST-04 | Phase 19 | Pending |
 
 **Coverage:**
 - v2.0.2 requirements: 17 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-04*
-*Last updated: 2026-02-04 after initial definition*
+*Last updated: 2026-02-04 after roadmap creation*
