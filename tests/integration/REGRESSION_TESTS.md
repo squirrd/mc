@@ -11,6 +11,7 @@ This document tracks integration tests that were created in response to actual b
 | Test | Bug Source | Date Added | Status | File |
 |------|------------|------------|--------|------|
 | `test_fresh_install_missing_config_base_directory_regression` | UAT 1.1 | 2026-02-02 | Failing (reproduces bug) | `test_case_terminal.py` |
+| `test_fresh_install_no_old_directories_created_regression` | UAT 1.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 
 ## Test Details
 
@@ -47,6 +48,52 @@ This raises `KeyError` when the config file exists but doesn't have the `base_di
 ```bash
 uv run pytest tests/integration/test_case_terminal.py::test_fresh_install_missing_config_base_directory_regression -v
 ```
+
+---
+
+### test_fresh_install_no_old_directories_created_regression
+
+**Source:** UAT Test 1.1 - Fresh Install - Lazy Initialization
+**Platform:** macOS (reproduced), likely affects Linux too
+**Severity:** Minor - Creates directories in wrong locations
+
+**Bug Description:**
+During fresh install, when running `mc case <number>`, directories are being created in OLD platform-specific locations instead of the new consolidated `~/mc/` structure:
+- **macOS:** `~/Library/Application Support/mc/bashrc/`
+- **Linux:** `~/.local/share/mc/bashrc/` or `~/.config/mc/`
+
+The directories should ONLY be created under `~/mc/config/bashrc/` according to the consolidated config design.
+
+**Root Cause:**
+`src/mc/terminal/shell.py:84` in the `get_bashrc_path()` function uses:
+```python
+data_dir = user_data_dir("mc", "redhat")
+bashrc_dir = Path(data_dir) / "bashrc"
+```
+
+This uses `platformdirs.user_data_dir()` which returns platform-specific paths like:
+- macOS: `~/Library/Application Support/mc`
+- Linux: `~/.local/share/mc`
+
+Instead, it should use the new consolidated location: `~/mc/config/bashrc/`
+
+**Fix:** Update `get_bashrc_path()` to use `Path.home() / "mc" / "config" / "bashrc"` instead of platformdirs.
+
+**Test Approach:**
+- Backs up and removes all existing MC directories (old and new locations)
+- Creates minimal config in NEW location with API credentials
+- Runs container creation workflow (which triggers bashrc generation)
+- Verifies NO directories created in old platformdirs locations
+- Verifies bashrc IS created in new `~/mc/config/bashrc/` location
+- Automatically restores backed-up directories after test completes
+- Currently fails with the bug (will pass once bug is fixed)
+
+**How to Run:**
+```bash
+uv run pytest tests/integration/test_case_terminal.py::test_fresh_install_no_old_directories_created_regression -v -s
+```
+
+**Note:** This test manipulates real directories in your home folder but automatically backs them up and restores them. Use `-s` flag to see backup/restore progress.
 
 ---
 

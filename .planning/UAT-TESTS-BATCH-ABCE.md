@@ -21,6 +21,20 @@
 #### 1.1 Fresh Install - Lazy Initialization
 1. Delete existing MC directories (if present):
    ```bash
+   ls -lad ~/.mc*; echo; ls -lad ~/mc*; echo; ls -lad ~/Library/Application\ Support/mc*
+
+   mv ~/.mc ~/.mc.$(date '+%y%m%d-%H%M')
+   mv ~/mc ~/mc.$(date '+%y%m%d-%H%M')
+
+   # macOS only
+   mv ~/Library/Application\ Support/mc ~/Library/Application\ Support/mc.$(date '+%y%m%d-%H%M')
+   
+   # Linux only
+   mv ~/.config/mc ~/.config/mc.$(date '+%y%m%d-%H%M')
+   mv ~/.local/share/mc ~/.config/mc.$(date '+%y%m%d-%H%M')
+
+   ---
+
    rm -rf ~/mc
    rm -rf ~/Library/Application\ Support/mc  # macOS only
    rm -rf ~/.config/mc  # Linux only
@@ -61,10 +75,20 @@
 - Directories created only when needed (lazy initialization)
 
 **Actual Result:** ☒ Fail → ☑ Automated
-**Automated Test:** `test_fresh_install_missing_config_base_directory_regression()` in `tests/integration/test_case_terminal.py`
-**Created:** 2026-02-02
-**Status:** Failing (reproduces bug - will pass once bug is fixed)
-**Notes:** Bug reproduced: "Podman error: 'base_directory'" when config file missing base_directory key
+
+**Automated Tests:**
+1. `test_fresh_install_missing_config_base_directory_regression()` in `tests/integration/test_case_terminal.py`
+   - **Created:** 2026-02-02
+   - **Status:** Failing (reproduces bug - will pass once bug is fixed)
+   - **Bug:** "Podman error: 'base_directory'" when config file missing base_directory key
+
+2. `test_fresh_install_no_old_directories_created_regression()` in `tests/integration/test_case_terminal.py`
+   - **Created:** 2026-02-04
+   - **Status:** Failing (reproduces bug - will pass once bug is fixed)
+   - **Bug:** Directories created in old platformdirs locations during fresh install
+   - **Details:** `~/Library/Application Support/mc/bashrc` created on macOS (should be `~/mc/config/bashrc`)
+   - **Root cause:** `src/mc/terminal/shell.py:84` uses `platformdirs.user_data_dir()` instead of consolidated location
+   - **Fix needed:** Update `get_bashrc_path()` to use `~/mc/config/bashrc/` instead
 
 ---
 

@@ -5,9 +5,16 @@ Skipped unless Podman and Salesforce are available.
 """
 
 import os
+import sys
 import tempfile
+from pathlib import Path
 
 import pytest
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
@@ -368,3 +375,260 @@ def test_fresh_install_missing_config_base_directory_regression(mocker, tmp_path
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _podman_available(),
+    reason="Podman not available"
+)
+@pytest.mark.skipif(
+    not _redhat_api_configured(),
+    reason="Red Hat API credentials not configured"
+)
+def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
+    """Regression test for UAT 1.1 - No directories created in old platformdirs locations.
+
+    Bug discovered: 2026-02-04
+    Platform: macOS (reproduced), likely affects Linux too
+    Severity: Minor - Creates directories in wrong locations
+
+    Problem:
+    During fresh install, when running `mc case <number>`, directories are being
+    created in OLD platform-specific locations instead of consolidated ~/mc/:
+    - macOS: ~/Library/Application Support/mc/bashrc
+    - Linux: ~/.local/share/mc/bashrc or ~/.config/mc
+
+    Root cause:
+    src/mc/terminal/shell.py:84 uses platformdirs.user_data_dir("mc", "redhat")
+    which creates directories in platform-specific locations. Should use the new
+    consolidated ~/mc/config/ structure instead.
+
+    Steps to reproduce:
+    1. Clean slate - remove/backup all MC directories
+    2. Run: mc case 04347611
+    3. Check directory creation
+
+    Expected:
+    - Directories ONLY created under ~/mc/
+    - NO directories in ~/.mc
+    - NO directories in ~/Library/Application Support/mc/ (macOS)
+    - NO directories in ~/.config/mc or ~/.local/share/mc (Linux)
+
+    Actual (before fix):
+    - ~/Library/Application Support/mc/bashrc created (macOS)
+    - ~/.local/share/mc/bashrc created (Linux)
+
+    This test ensures fresh installs only create directories in consolidated ~/mc/ location.
+
+    UAT Test: 1.1 Fresh Install - Lazy Initialization
+    Fixed in: TBD (test currently reproduces the bug)
+    """
+    import platform
+    import shutil
+    from datetime import datetime
+
+    # Detect platform for old directory paths
+    is_macos = platform.system() == "Darwin"
+    is_linux = platform.system() == "Linux"
+
+    # Define old directory paths that should NOT be created
+    old_dirs_to_check = []
+    old_dirs_backup_info = []
+
+    if is_macos:
+        old_dirs_to_check.extend([
+            Path.home() / ".mc",
+            Path.home() / "Library" / "Application Support" / "mc",
+        ])
+    elif is_linux:
+        old_dirs_to_check.extend([
+            Path.home() / ".mc",
+            Path.home() / ".config" / "mc",
+            Path.home() / ".local" / "share" / "mc",
+        ])
+
+    # Backup existing directories (move them with timestamp)
+    timestamp = datetime.now().strftime("%y%m%d-%H%M")
+    for old_dir in old_dirs_to_check:
+        if old_dir.exists():
+            backup_dir = old_dir.parent / f"{old_dir.name}.{timestamp}"
+            print(f"Backing up {old_dir} to {backup_dir}")
+            shutil.move(str(old_dir), str(backup_dir))
+            old_dirs_backup_info.append((old_dir, backup_dir))
+
+    # Also backup ~/mc if it exists (for complete fresh install test)
+    mc_home_dir = Path.home() / "mc"
+    mc_backup_dir = None
+    if mc_home_dir.exists():
+        mc_backup_dir = Path.home() / f"mc.{timestamp}"
+        print(f"Backing up {mc_home_dir} to {mc_backup_dir}")
+        shutil.move(str(mc_home_dir), str(mc_backup_dir))
+
+    try:
+        # Verify clean slate - no old directories exist
+        for old_dir in old_dirs_to_check:
+            assert not old_dir.exists(), f"Old directory should not exist after backup: {old_dir}"
+        assert not mc_home_dir.exists(), f"~/mc should not exist after backup: {mc_home_dir}"
+
+        # Setup: Create minimal config with API credentials in NEW location
+        # This simulates a fresh install after running config wizard
+        config_dir = Path.home() / "mc" / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "config.toml"
+
+        # Get real credentials for Red Hat API
+        from mc.config.manager import ConfigManager as RealConfigManager
+        real_config = RealConfigManager()
+
+        # Find the backed up config or load from current location
+        if mc_backup_dir and (mc_backup_dir / "config" / "config.toml").exists():
+            real_cfg = tomllib.load(open(mc_backup_dir / "config" / "config.toml", "rb"))
+        else:
+            real_cfg = real_config.load()
+
+        # Create minimal config
+        minimal_config = {
+            "api": {
+                "rh_api_offline_token": real_cfg["api"]["rh_api_offline_token"]
+            },
+            "base_directory": str(Path.home() / "mc")
+        }
+
+        import tomli_w
+        with open(config_path, "wb") as f:
+            tomli_w.dump(minimal_config, f)
+
+        # Setup real components
+        config_manager = ConfigManager()
+        config_manager._config_path = config_path
+
+        from mc.integrations.redhat_api import RedHatAPIClient
+        from mc.utils.auth import get_access_token
+
+        access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
+        api_client = RedHatAPIClient(access_token)
+
+        # Mock TTY check (pytest doesn't run in TTY)
+        mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
+
+        # Mock terminal launcher to avoid actually launching windows
+        mock_launcher = mocker.MagicMock()
+        mocker.patch("mc.terminal.attach.get_launcher", return_value=mock_launcher)
+
+        # Initialize real Podman client
+        podman_client = PodmanClient()
+
+        # Use real state database in new location
+        state_dir = Path.home() / "mc" / "state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_db = StateDatabase(str(state_dir / "containers.db"))
+
+        container_manager = ContainerManager(podman_client, state_db)
+
+        # Use real case number
+        test_case_number = "04347611"
+        container_name = f"mc-{test_case_number}"
+
+        # Pre-cleanup: Remove any existing container with this name
+        try:
+            existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            print(f"Removing pre-existing container {container_name}...")
+            existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            existing_container.remove()  # type: ignore[no-untyped-call]
+        except Exception:
+            pass  # No pre-existing container
+
+        container = None
+        try:
+            # Execute: Create container (triggers bashrc generation)
+            attach_terminal(
+                case_number=test_case_number,
+                config_manager=config_manager,
+                api_client=api_client,
+                container_manager=container_manager,
+            )
+
+            # Give system time to create any directories
+            import time
+            time.sleep(1)
+
+            # CRITICAL ASSERTIONS: Verify NO old directories were created
+            for old_dir in old_dirs_to_check:
+                if old_dir.exists():
+                    # Bug reproduced! Old directory was created
+                    dir_contents = list(old_dir.rglob("*"))
+                    pytest.fail(
+                        f"✗ BUG REPRODUCED: Old directory created during fresh install!\n"
+                        f"Directory: {old_dir}\n"
+                        f"Contents: {dir_contents}\n"
+                        f"Expected: No directories in old platformdirs locations\n"
+                        f"Fix: Update src/mc/terminal/shell.py to use ~/mc/config/ instead of platformdirs"
+                    )
+
+            # Verify directories WERE created in new consolidated location
+            assert mc_home_dir.exists(), "~/mc should be created"
+            assert config_dir.exists(), "~/mc/config should exist"
+            assert state_dir.exists(), "~/mc/state should exist"
+
+            # Verify bashrc was created in NEW location (not old platformdirs location)
+            bashrc_new_location = Path.home() / "mc" / "config" / "bashrc"
+            if not bashrc_new_location.exists():
+                # If bashrc isn't in new location, that's also a problem
+                # (means it might be in old location or not created at all)
+                pytest.fail(
+                    f"✗ Bashrc directory not found in new location: {bashrc_new_location}\n"
+                    f"Expected: ~/mc/config/bashrc/\n"
+                    f"This suggests bashrc is being created in old platformdirs location."
+                )
+
+            # Success! Bug is fixed
+            print("✓ Test PASSED: Fresh install creates directories ONLY in ~/mc/")
+            print(f"✓ Verified no directories in old locations: {old_dirs_to_check}")
+            print(f"✓ Verified bashrc in new location: {bashrc_new_location}")
+
+            # Get container for cleanup
+            try:
+                container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            except Exception:
+                pass
+
+        finally:
+            # Cleanup: Remove test container
+            if container:
+                try:
+                    print(f"Cleaning up container {container_name}...")
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+
+            # Cleanup by name if container object not available
+            try:
+                cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                cleanup_container.remove()  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+
+    finally:
+        # Restore backed up directories
+        print("\nRestoring backed up directories...")
+
+        # Remove test directories in ~/mc
+        if mc_home_dir.exists():
+            print(f"Removing test directory: {mc_home_dir}")
+            shutil.rmtree(mc_home_dir, ignore_errors=True)
+
+        # Restore ~/mc backup
+        if mc_backup_dir and mc_backup_dir.exists():
+            print(f"Restoring {mc_backup_dir} to {mc_home_dir}")
+            shutil.move(str(mc_backup_dir), str(mc_home_dir))
+
+        # Restore old directories
+        for old_dir, backup_dir in old_dirs_backup_info:
+            if backup_dir.exists():
+                print(f"Restoring {backup_dir} to {old_dir}")
+                shutil.move(str(backup_dir), str(old_dir))
+
+        print("Restore complete.")
