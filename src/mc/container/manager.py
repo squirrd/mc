@@ -198,7 +198,9 @@ class ContainerManager:
 
             # Tag the pulled image with local name for consistency
             pulled_image = self.podman.client.images.get(registry_image)
-            pulled_image.tag(image_name)  # type: ignore[no-untyped-call]
+            # Split image_name into repository and tag components
+            repo, tag = image_name.split(':', 1) if ':' in image_name else (image_name, 'latest')
+            pulled_image.tag(repo, tag)  # type: ignore[no-untyped-call]
 
             logger.info(f"Successfully pulled and tagged {registry_image} as {image_name}")
             print(f"Successfully pulled image from registry")
