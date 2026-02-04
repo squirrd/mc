@@ -367,3 +367,155 @@ base_directory = "/workspace"
         content = output.decode("utf-8")
         assert "base_directory" in content
         assert "/workspace" in content
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)"
+)
+class TestImagePullAndTag:
+    """Test automatic image pull from registry and tagging."""
+
+    def test_image_pull_and_tag_regression(
+        self, container_manager, temp_workspace, cleanup_containers, podman_client
+    ):
+        """Regression test for UAT 3.1 - Image pull and tag failure.
+
+        Bug discovered: 2026-02-04
+        Platform: macOS (reproduced), likely affects all platforms
+        Severity: Critical - Blocks core functionality when image not cached
+
+        Problem:
+        When mc-rhel10:latest image is not available locally, the code attempts
+        to pull from quay.io/rhn_support_dsquirre/mc-container:latest and tag it
+        as mc-rhel10:latest. However, the tagging fails with:
+
+        "Image.tag() missing 1 required positional argument: 'tag'"
+
+        Root cause:
+        src/mc/container/manager.py:201 calls:
+        ```python
+        pulled_image.tag(image_name)  # image_name = "mc-rhel10:latest"
+        ```
+
+        But the Podman SDK's image.tag() method requires TWO arguments:
+        ```python
+        image.tag(repository, tag)  # Should be: ("mc-rhel10", "latest")
+        ```
+
+        The image_name "mc-rhel10:latest" needs to be split into repository
+        and tag components before calling tag().
+
+        Steps to reproduce:
+        1. Remove both mc-rhel10:latest and quay.io/.../mc-container:latest
+        2. Run: mc case 04347611
+        3. Code pulls image successfully but fails to tag it
+        4. Error: "Image.tag() missing 1 required positional argument: 'tag'"
+
+        Expected:
+        - Image pulled from quay.io registry
+        - Image tagged as mc-rhel10:latest
+        - Container created successfully
+
+        Actual (before fix):
+        - Image pulled successfully (visible in `podman images`)
+        - Tagging fails with TypeError
+        - Container creation fails
+        - Confusing error message suggests building locally
+
+        This test ensures image pull and tag workflow works correctly.
+
+        UAT Test: 3.1 Missing Image - Clear Error Message
+        Fixed in: TBD (test currently reproduces the bug)
+        """
+        # Backup: Check if images exist and back them up by listing their IDs
+        local_image_id = None
+        registry_image_id = None
+
+        try:
+            local_img = podman_client.client.images.get("mc-rhel10:latest")
+            local_image_id = local_img.id  # type: ignore[attr-defined]
+        except Exception:
+            pass  # Image doesn't exist locally
+
+        try:
+            registry_img = podman_client.client.images.get(
+                "quay.io/rhn_support_dsquirre/mc-container:latest"
+            )
+            registry_image_id = registry_img.id  # type: ignore[attr-defined]
+        except Exception:
+            pass  # Registry image not pulled yet
+
+        # Remove both images to simulate fresh install scenario
+        print("\nRemoving existing images to simulate fresh install...")
+        try:
+            podman_client.client.images.remove("mc-rhel10:latest", force=True)
+            print("✓ Removed mc-rhel10:latest")
+        except Exception:
+            print("  (mc-rhel10:latest not found - already clean)")
+
+        try:
+            podman_client.client.images.remove(
+                "quay.io/rhn_support_dsquirre/mc-container:latest", force=True
+            )
+            print("✓ Removed quay.io/.../mc-container:latest")
+        except Exception:
+            print("  (registry image not found - already clean)")
+
+        try:
+            # Verify clean slate
+            with pytest.raises(Exception):
+                podman_client.client.images.get("mc-rhel10:latest")
+
+            # Execute: Create container (triggers _ensure_image which should pull and tag)
+            print("\nAttempting to create container (should trigger image pull and tag)...")
+            container = container_manager.create(
+                case_number="99999998",
+                workspace_path=temp_workspace,
+                customer_name="UAT Test Customer"
+            )
+            cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+            # If we reach here, the bug is FIXED! Verify expected behavior:
+            print("✓ Container created successfully!")
+
+            # Verify image was pulled and tagged correctly
+            local_image = podman_client.client.images.get("mc-rhel10:latest")
+            assert local_image is not None, "mc-rhel10:latest should be tagged after pull"
+
+            # Verify image tags include mc-rhel10:latest
+            tags = local_image.tags  # type: ignore[attr-defined]
+            assert any("mc-rhel10:latest" in tag for tag in tags), (
+                f"Expected mc-rhel10:latest in tags, got: {tags}"
+            )
+
+            print("✓ Test PASSED: Image pull and tag workflow working correctly")
+            print(f"  Image tags: {tags}")
+
+        except RuntimeError as e:
+            # If we get RuntimeError, check if it's the bug we're testing for
+            error_msg = str(e)
+
+            if "Image.tag() missing 1 required positional argument" in error_msg:
+                pytest.fail(
+                    f"✗ BUG REPRODUCED: Image pull succeeded but tag failed!\n"
+                    f"Error: {error_msg}\n\n"
+                    f"Root cause: src/mc/container/manager.py:201 calls:\n"
+                    f"  pulled_image.tag(image_name)\n"
+                    f"But should call:\n"
+                    f"  pulled_image.tag(repository, tag)\n\n"
+                    f"Fix: Split 'mc-rhel10:latest' into ('mc-rhel10', 'latest')\n"
+                    f"Example:\n"
+                    f"  repo, tag = image_name.split(':', 1) if ':' in image_name else (image_name, 'latest')\n"
+                    f"  pulled_image.tag(repo, tag)\n"
+                )
+            else:
+                # Some other error - re-raise for investigation
+                raise
+
+        finally:
+            # Restore images if they were backed up
+            # Note: We can't easily restore by ID without re-pulling
+            # So we'll leave the pulled image in place (it's useful for other tests)
+            print("\n[Test cleanup complete - pulled image left in place for other tests]")

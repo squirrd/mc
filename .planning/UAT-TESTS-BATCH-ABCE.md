@@ -95,12 +95,32 @@
 #### 1.2 Auto-Migration from Old Locations
 1. Clean slate:
    ```bash
+   ls -lad ~/.mc*; echo; ls -lad ~/mc*; echo; ls -lad ~/Library/Application\ Support/mc*
+
+   mv ~/.mc ~/.mc.$(date '+%y%m%d-%H%M')
+   mv ~/mc ~/mc.$(date '+%y%m%d-%H%M')
+
+   # macOS only
+   mv ~/Library/Application\ Support/mc ~/Library/Application\ Support/mc.$(date '+%y%m%d-%H%M')
+   
+   # Linux only
+   mv ~/.config/mc ~/.config/mc.$(date '+%y%m%d-%H%M')
+   mv ~/.local/share/mc ~/.config/mc.$(date '+%y%m%d-%H%M')
+
+   ---
+   XXXX
+
    rm -rf ~/mc
    ```
 
 2. Create old-style config in platform-specific location:
    - **macOS:**
      ```bash
+     cp -pr /Users/dsquirre/Library/Application\ Support/mc.20260202/ /Users/dsquirre/Library/Application\ Support/mc
+
+     ----
+     XXXX
+
      mkdir -p ~/Library/Application\ Support/mc
      cat > ~/Library/Application\ Support/mc/config.toml <<EOF
      [api]
@@ -123,11 +143,15 @@
 3. Create old-style state database in platformdirs location (if exists):
    - **macOS:**
      ```bash
+     ----
+     XXXX
      mkdir -p ~/Library/Application\ Support/mc
      touch ~/Library/Application\ Support/mc/containers.db
      ```
    - **Linux:**
      ```bash
+     ----
+     XXXX
      mkdir -p ~/.local/share/mc
      touch ~/.local/share/mc/containers.db
      ```
@@ -253,13 +277,21 @@
    ```
 
 **Expected Result:**
-- Error message indicates image pull attempted from `quay.io/rhn_support_dsquirre/mc-container:latest`
-- Provides fallback instructions for local build
-- Does NOT confuse with Podman connection errors
+- Image automatically pulled from `quay.io/rhn_support_dsquirre/mc-container:latest`
+- Image tagged as `mc-rhel10:latest`
+- Container created successfully
+- NO error messages (should just work!)
 
-**Actual Result:** ☐ Pass ☐ Fail
-**Error Message:**
-**Notes:**
+**Actual Result:** ☒ Fail → ☑ Automated
+
+**Automated Test:** `test_image_pull_and_tag_regression()` in `tests/integration/test_container_image.py`
+**Created:** 2026-02-04
+**Status:** Failing (reproduces bug - will pass once bug is fixed)
+**Bug:** Image pull succeeds but tagging fails with `Image.tag() missing 1 required positional argument: 'tag'`
+**Root cause:** `src/mc/container/manager.py:201` calls `pulled_image.tag(image_name)` but should split image_name into repository and tag
+**Fix needed:** Split `"mc-rhel10:latest"` into `("mc-rhel10", "latest")` before calling `tag(repo, tag)`
+
+**Notes:** The image is successfully pulled from quay.io (visible in `podman images` as `quay.io/rhn_support_dsquirre/mc-container:latest`) but the code fails when trying to tag it with the local name `mc-rhel10:latest`. The UAT test description was misleading - it should pass by auto-pulling the image, not show an error message.
 
 ---
 

@@ -12,6 +12,7 @@ This document tracks integration tests that were created in response to actual b
 |------|------------|------------|--------|------|
 | `test_fresh_install_missing_config_base_directory_regression` | UAT 1.1 | 2026-02-02 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_fresh_install_no_old_directories_created_regression` | UAT 1.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
+| `test_image_pull_and_tag_regression` | UAT 3.1 | 2026-02-04 | Failing (reproduces bug) | `test_container_image.py` |
 
 ## Test Details
 
@@ -94,6 +95,73 @@ uv run pytest tests/integration/test_case_terminal.py::test_fresh_install_no_old
 ```
 
 **Note:** This test manipulates real directories in your home folder but automatically backs them up and restores them. Use `-s` flag to see backup/restore progress.
+
+---
+
+### test_image_pull_and_tag_regression
+
+**Source:** UAT Test 3.1 - Missing Image - Clear Error Message
+**Platform:** macOS (reproduced), likely affects all platforms
+**Severity:** Critical - Blocks core functionality when image not cached locally
+
+**Bug Description:**
+When `mc-rhel10:latest` image is not available locally, the code attempts to automatically pull from `quay.io/rhn_support_dsquirre/mc-container:latest` and tag it as `mc-rhel10:latest`. However, the tagging step fails with:
+
+```
+TypeError: Image.tag() missing 1 required positional argument: 'tag'
+```
+
+The image is successfully pulled (visible in `podman images` as `quay.io/rhn_support_dsquirre/mc-container:latest`) but the container creation fails because the local tag cannot be created.
+
+**User Impact:**
+- Fresh installs fail when creating first container
+- Any user without cached `mc-rhel10:latest` image cannot create containers
+- Error message is confusing and suggests building locally even though pull succeeded
+- Blocks core "mc case" workflow
+
+**Root Cause:**
+`src/mc/container/manager.py:201` in the `_ensure_image()` method calls:
+```python
+pulled_image = self.podman.client.images.get(registry_image)
+pulled_image.tag(image_name)  # image_name = "mc-rhel10:latest"
+```
+
+But the Podman SDK's `image.tag()` method signature requires TWO arguments:
+```python
+def tag(self, repository: str, tag: str = None) -> bool:
+    ...
+```
+
+The code passes `"mc-rhel10:latest"` as a single argument, but it should be split into:
+- `repository = "mc-rhel10"`
+- `tag = "latest"`
+
+**Fix:**
+Update line 201 to split the image name before calling tag():
+```python
+# Split image_name into repository and tag
+if ':' in image_name:
+    repo, tag = image_name.split(':', 1)
+else:
+    repo, tag = image_name, 'latest'
+
+# Tag the pulled image with local name
+pulled_image.tag(repo, tag)
+```
+
+**Test Approach:**
+- Removes both `mc-rhel10:latest` and `quay.io/.../mc-container:latest` images
+- Attempts to create container (triggers `_ensure_image()`)
+- Verifies image is pulled, tagged, and container created successfully
+- Currently fails with the bug (will pass once bug is fixed)
+- Real Podman integration - no mocking of image operations
+
+**How to Run:**
+```bash
+MC_TEST_INTEGRATION=1 uv run pytest tests/integration/test_container_image.py::TestImagePullAndTag::test_image_pull_and_tag_regression -v -s
+```
+
+**Note:** This test pulls a real image from quay.io (~549 MB). It may take 30-60 seconds on first run.
 
 ---
 
