@@ -8,9 +8,10 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-**Milestone:** Ready for next milestone definition
-**Status:** v2.0 shipped (2026-02-01)
-**Last activity:** 2026-02-01 - Completed and archived v2.0 milestone
+**Milestone:** v2.0.2 Window Tracking
+**Phase:** Not started (defining requirements)
+**Status:** Defining requirements
+**Last activity:** 2026-02-04 - Milestone v2.0.2 started
 
 ## Accumulated Context
 
@@ -119,4 +120,4 @@ Resume: Ready for remaining Batch E test fixes (4 test suites remaining)
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-02 (Batch E started, 6 todos remaining)*
+*Last updated: 2026-02-04 (v2.0.2 milestone started)*

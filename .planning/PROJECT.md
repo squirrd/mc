@@ -22,7 +22,16 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Modern distribution via uv tool (pipx/uv tool install git+)
 - ✓ Production-ready test suite: 503 tests passing with 77% coverage
 
-**Ready For:** Next milestone planning via `/gsd:new-milestone`
+## Current Milestone: v2.0.2 Window Tracking
+
+**Goal:** Fix duplicate terminal prevention by implementing window ID tracking system
+
+**Target features:**
+- Window registry system using SQLite to track terminal window IDs
+- Capture window IDs at creation time via AppleScript/platform-specific APIs
+- Update search/focus functions to use ID lookup instead of title matching
+- Implement cleanup mechanism for stale window entries
+- Fix failing integration test: test_duplicate_terminal_prevention_regression
 
 ## Requirements
 
@@ -90,7 +99,16 @@ Shipped in v1.0 (2026-01-22):
 
 ### Active
 
-No active requirements. Ready for next milestone definition via `/gsd:new-milestone`.
+v2.0.2 Window Tracking milestone:
+
+- [ ] Design window registry schema (SQLite table structure)
+- [ ] Implement WindowRegistry class with store/lookup/cleanup methods
+- [ ] Capture window IDs on creation via platform-specific APIs
+- [ ] Update find_window_by_title() to use registry ID lookup
+- [ ] Update focus_window_by_title() to use registry ID lookup
+- [ ] Implement stale entry cleanup mechanism
+- [ ] Fix integration test: test_duplicate_terminal_prevention_regression
+- [ ] Verify no duplicate terminals created on repeated `mc case XXXXX` calls
 
 ### Out of Scope
 
@@ -172,4 +190,4 @@ No active requirements. Ready for next milestone definition via `/gsd:new-milest
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-02 after v2.0.1 patch release*
+*Last updated: 2026-02-04 after starting v2.0.2 milestone*
