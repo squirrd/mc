@@ -14,7 +14,7 @@ This document tracks integration tests that were created in response to actual b
 | `test_fresh_install_no_old_directories_created_regression` | UAT 1.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_image_pull_and_tag_regression` | UAT 3.1 | 2026-02-04 | Failing (reproduces bug) | `test_container_image.py` |
 | `test_terminal_title_format_regression` | UAT 5.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
-| `test_duplicate_terminal_prevention_regression` | UAT 5.2 | 2026-02-04 | Passing (logic OK, iTerm2 integration issue) | `test_case_terminal.py` |
+| `test_duplicate_terminal_prevention_regression` | UAT 5.2 | 2026-02-04 | Failing (reproduces real bug - no mocking!) | `test_case_terminal.py` |
 
 ## Test Details
 
@@ -259,14 +259,23 @@ Actual behavior:
 4. Multiple terminal windows accumulate for the same case
 
 **Root Cause:**
-The Python duplicate detection logic in `src/mc/terminal/attach.py:241-257` is **correct** (test validates this). The bug is in the iTerm2 AppleScript integration.
+The iTerm2 AppleScript integration in `src/mc/terminal/macos.py:69-117` cannot find windows immediately after creating them.
 
-The `find_window_by_title()` method in `src/mc/terminal/macos.py:69-117` uses AppleScript to search iTerm2 windows:
+**Verified with REAL integration test (no mocking):**
+
+The test creates a REAL iTerm2 window using REAL AppleScript:
+```applescript
+tell current session of current window
+    set name to "04347611 - IBM - Transfer Cluster ownership"
+end tell
+```
+
+Then immediately searches for it using REAL AppleScript:
 ```applescript
 tell application "iTerm"
     repeat with theWindow in windows
         repeat with theTab in tabs of theWindow
-            if name of current session of theTab contains "{title}" then
+            if name of current session of theTab contains "04347611 - IBM - Transfer Cluster ownership" then
                 return true
             end if
         end repeat
@@ -275,30 +284,32 @@ tell application "iTerm"
 end tell
 ```
 
-However, this search does not find windows that were created with:
-```applescript
-tell current session of current window
-    set name to "{title}"
-end tell
+**Result:** Search returns `False` even though window was just created.
+
+**Test output:**
+```
+iTerm2 windows before first call: 13
+Creating container...
+iTerm2 windows after first call: 14  (window WAS created)
+
+Searching for window with title: 04347611 - IBM - Transfer Cluster ownership
+find_window_by_title result: False  (BUG: cannot find it!)
 ```
 
 **Possible Causes:**
-1. **Property mismatch:** Setting `name` on session vs checking `name of current session` may access different properties
-2. **Timing issue:** Session name not immediately available after setting
-3. **iTerm2 behavior:** Session name vs tab name vs window title confusion
-4. **Escaping issues:** Title escaping causing mismatch (less likely, but possible)
+1. **Property mismatch:** `set name` and `name of current session` may access different properties
+2. **Timing issue:** Session name not queryable immediately after setting (need delay?)
+3. **iTerm2 AppleScript quirk:** Session name vs tab name vs window title confusion
 
-**Test Approach:**
-This test validates that the **Python logic** is correct:
-- Uses mock launcher that tracks created window titles
-- Simulates find/focus behavior correctly
-- Verifies attach_terminal calls the right methods in the right order
-- Test **passes** - proving the logic works
+**Test Approach - NO MOCKING:**
+This test uses REAL components to catch the REAL bug:
+- ✅ Real Podman client (creates actual containers)
+- ✅ Real Red Hat API client (makes actual HTTP calls)
+- ✅ Real MacOSLauncher (executes actual AppleScript)
+- ✅ Real iTerm2 windows (launches actual terminal windows)
+- ⚠️ Only mocks TTY detection (pytest limitation)
 
-However, the test **cannot catch the iTerm2 AppleScript integration bug** because:
-- We mock the launcher to avoid actually launching iTerm2 windows
-- The mock correctly simulates what *should* happen
-- The real iTerm2 AppleScript behaves differently
+The test FAILS when the bug exists and will PASS when the bug is fixed. No mocks hiding the issue.
 
 **Fix Required:**
 Debug the iTerm2 AppleScript integration:
@@ -322,22 +333,34 @@ end tell
 uv run pytest tests/integration/test_case_terminal.py::test_duplicate_terminal_prevention_regression -v -s
 ```
 
-**Test Output (Currently Passes):**
+**Test Output (Currently Fails - Catches Real Bug):**
 ```
-✓ Test PASSED: Duplicate prevention working correctly
-✓ First call: Created window
-✓ Second call: Found existing window and focused it
-✓ No duplicate window created
-✓ User message shown: 'Focused existing terminal for case 04347611'
+iTerm2 windows before first call: 13
+Creating container...
+iTerm2 windows after first call: 14
+
+✓ First call completed - iTerm2 window should be open
+
+Searching for window with title: 04347611 - IBM - Transfer Cluster ownership
+find_window_by_title result: False
+FAILED
+
+✗ BUG FOUND: find_window_by_title returned False immediately after creating window!
+Expected title: 04347611 - IBM - Transfer Cluster ownership
+Window was just created but AppleScript search cannot find it.
+This is the iTerm2 AppleScript integration bug.
+Root cause: Search uses 'name of current session' but create uses 'set name'
+Fix needed in: src/mc/terminal/macos.py find_window_by_title() and _build_iterm_script()
 ```
 
 **Important Note:**
-This test **passes** because it validates the Python logic layer is correct. The bug exists at the iTerm2 AppleScript integration layer, which the test mocks out. To fully test this bug, we would need:
-1. Real iTerm2 window creation (not feasible in CI)
-2. AppleScript integration test framework
-3. Manual testing on macOS with iTerm2
+This test uses REAL iTerm2 integration (no mocking!) and successfully reproduces the bug. When you run this test:
+- It will launch an actual iTerm2 window on your machine
+- The test will FAIL (expected - bug exists)
+- You'll need to manually close the iTerm2 window after the test
 
-For now, this test ensures the logic won't regress while the iTerm2 integration is fixed separately.
+**Why no mocking?**
+See `docs/INTEGRATION_TEST_NO_MOCKING.md` for the full explanation. In short: mocking hides bugs. We initially wrote this test with mocks - it passed while the bug existed. After removing mocks and using real iTerm2, the test immediately caught the bug.
 
 ---
 

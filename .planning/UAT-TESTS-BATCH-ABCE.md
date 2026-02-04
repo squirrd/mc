@@ -424,19 +424,33 @@
 - Existing terminal window brought to front/focused
 - Message: `Focused existing terminal for case 04347611`
 
-**Actual Result:** ☒ Fail → ☑ Automated (Logic Test Passes, Real-world Integration Fails)
+**Actual Result:** ☒ Fail → ☑ Automated (REAL Integration Test - Reproduces Bug)
 
 **Automated Test:** `test_duplicate_terminal_prevention_regression()` in `tests/integration/test_case_terminal.py`
 **Created:** 2026-02-04
-**Status:** Passing (Python logic works) but bug exists in real iTerm2 integration
+**Status:** Failing (reproduces the real bug using actual iTerm2 integration)
 **Bug:** Running `mc case 04347611` multiple times creates multiple terminal windows instead of focusing existing one
-**Root cause:** iTerm2 AppleScript `find_window_by_title()` not finding existing windows. The Python logic (lines 241-257 in attach.py) is correct, but the AppleScript search in `src/mc/terminal/macos.py:69-117` doesn't match real iTerm2 session names
-**Fix needed:** Investigate iTerm2 AppleScript - session name search may need adjustment. Test with real iTerm2 to debug why `name of current session` doesn't match what we set with `set name to "..."`
+**Root cause:** iTerm2 AppleScript `find_window_by_title()` cannot find windows immediately after creation. Test creates REAL iTerm2 window, then REAL AppleScript search returns False when it should return True.
+**Fix needed:** Debug why AppleScript `name of current session of theTab` doesn't match the value set with `set name to "..."` in the same session. Possible property mismatch or timing issue.
 
-**Notes:** Test validates logic works (mock passes all assertions) but real-world iTerm2 behavior differs. Possible issues:
-- Session name vs tab name vs window title confusion in iTerm2
-- Timing issue - title not set when search happens
-- AppleScript property mismatch
+**Test Details:** This is a TRUE integration test - no mocking! It uses:
+- Real Podman containers
+- Real Red Hat API calls
+- Real iTerm2 AppleScript execution (launches actual windows)
+- Real MacOSLauncher with real find_window_by_title()
+
+Only TTY detection is mocked (pytest limitation). Test FAILS when bug exists, will PASS when fixed.
+
+**Test Output:**
+```
+iTerm2 windows before first call: 13
+Creating container...
+iTerm2 windows after first call: 14  (✓ window created)
+
+Searching for window with title: 04347611 - IBM - Transfer Cluster ownership
+find_window_by_title result: False  (✗ bug! should be True)
+FAILED: BUG FOUND - Cannot find window we just created!
+```
 
 ---
 
