@@ -1,970 +1,721 @@
-# Architecture Research: Container Orchestrator CLI
+# Architecture Research: Window Tracking Integration
 
-**Domain:** Container orchestration CLI tool (host controller + container agent pattern)
-**Researched:** 2026-01-26
+**Domain:** Terminal automation with persistent window registry
+**Researched:** 2026-02-04
 **Confidence:** HIGH
 
-## Standard Architecture
+## Problem Context
+
+The existing terminal automation system needs window tracking to prevent duplicate terminal windows. Currently, `mc case 12345678` creates a new terminal window every time it's run, even if one already exists for that case. The root cause is an iTerm2 AppleScript limitation: session names get overwritten when commands execute, making title-based searching unreliable.
+
+**Key constraint:** Must integrate with existing architecture without breaking current functionality.
+
+## Current Architecture
 
 ### System Overview
 
-Container orchestrator CLIs follow a **host-controller + container-agent** pattern, where:
-- **Host CLI** manages container lifecycle (create, list, stop, exec)
-- **Container agent** runs inside containers (optional, for advanced features)
-- **State persistence** tracks running containers and metadata
-- **Integration layer** interfaces with container runtime (Podman, Docker)
-
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                    Host CLI Layer (mc)                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │  create  │  │   list   │  │   stop   │  │   exec   │        │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
-│       └──────────────┴──────────────┴─────────────┘             │
-├────────────────────────────────────────────────────────────────┤
-│                 Controller Layer                                │
-│  ┌──────────────────┐  ┌──────────────────┐                    │
-│  │ Container        │  │ State            │                    │
-│  │ Manager          │  │ Manager          │                    │
-│  └────────┬─────────┘  └────────┬─────────┘                    │
-│           │                      │                              │
-├───────────┴──────────────────────┴──────────────────────────────┤
-│                 Integration Layer                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │ Podman   │  │ Salesforce│ │ Terminal │  │ Image    │        │
-│  │ API      │  │ Client    │  │ Launcher │  │ Builder  │        │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
-│       │             │             │             │               │
-├───────┴─────────────┴─────────────┴─────────────┴───────────────┤
-│                 State Persistence Layer                         │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │  SQLite DB (container metadata)                      │       │
-│  │  - Running containers                                │       │
-│  │  - Case → Container mapping                          │       │
-│  │  - Created timestamps                                │       │
-│  │  - Mount points                                      │       │
-│  └──────────────────────────────────────────────────────┘       │
-└────────────────────────────────────────────────────────────────┘
-        │                    │                   │
-        ↓                    ↓                   ↓
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  Podman     │    │  Salesforce │    │  Terminal   │
-│  Runtime    │    │  API        │    │  Emulator   │
-└─────────────┘    └─────────────┘    └─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   CLI Entry Point (mc case)                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────┐    ┌──────────────────┐                 │
+│  │ attach.py      │───▶│ launcher.py      │                 │
+│  │ Orchestration  │    │ Platform detect  │                 │
+│  └────────┬───────┘    └────────┬─────────┘                 │
+│           │                     │                            │
+│           │          ┌──────────┴──────────┐                 │
+│           │          │                     │                 │
+│           │    ┌─────▼──────┐      ┌──────▼──────┐          │
+│           │    │ macos.py   │      │ linux.py    │          │
+│           │    │ iTerm2/    │      │ gnome-      │          │
+│           │    │ Terminal   │      │ terminal    │          │
+│           │    └────────────┘      └─────────────┘          │
+│           │                                                  │
+├───────────┴──────────────────────────────────────────────────┤
+│                   Container Management                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌────────────────┐    ┌──────────────────┐                 │
+│  │ manager.py     │───▶│ state.py         │                 │
+│  │ Lifecycle ops  │    │ StateDatabase    │                 │
+│  └────────────────┘    └──────────────────┘                 │
+│                                                               │
+├─────────────────────────────────────────────────────────────┤
+│                      Persistence Layer                        │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │   SQLite Database (containers.db)                    │    │
+│  │   - container metadata                                │    │
+│  │   - workspace paths                                   │    │
+│  │   - reconciliation with Podman                        │    │
+│  └──────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | Typical Implementation |
+| Component | Responsibility | Current Implementation |
 |-----------|----------------|------------------------|
-| Host CLI | User-facing commands, argument parsing, workflow orchestration | Click/Typer framework or argparse |
-| Container Manager | Container lifecycle (create, start, stop, exec, remove) | Podman Python library (podman-py) |
-| State Manager | Track container state, case→container mapping, metadata | SQLite database with simple schema |
-| Salesforce Client | Fetch case metadata, cache API responses | requests library with file-based cache |
-| Terminal Launcher | Open new terminal windows with container exec | Platform-specific commands (osascript for iTerm, gnome-terminal) |
-| Image Builder | Build and publish container images | Podman build API or subprocess calls |
+| `attach.py` | Orchestration workflow for terminal attachment | Python module with `attach_terminal()` function |
+| `launcher.py` | Platform detection and launcher selection | Protocol-based interface with `get_launcher()` factory |
+| `macos.py` | macOS terminal launching (iTerm2, Terminal.app) | AppleScript execution via `osascript` subprocess |
+| `linux.py` | Linux terminal launching (gnome-terminal, etc.) | Direct subprocess execution with CLI flags |
+| `manager.py` | Container lifecycle (create, start, stop, delete) | `ContainerManager` class with Podman client |
+| `state.py` | SQLite-based state persistence | `StateDatabase` class with WAL mode, connection pooling |
 
-## Recommended MC v2.0 Architecture
+## Existing State Management Pattern
 
-### Architectural Decision: Shared Codebase vs Separate Components
+### StateDatabase Architecture
 
-**Recommendation:** **Shared codebase with runtime mode detection**
+**Location:** `src/mc/container/state.py`
 
+**Key characteristics:**
+- SQLite with WAL (Write-Ahead Logging) mode for concurrency
+- Context manager pattern for connection lifecycle
+- Reconciliation pattern to detect external changes
+- Platform-aware database location (platformdirs)
+
+**Schema:**
+```sql
+CREATE TABLE containers (
+    case_number TEXT PRIMARY KEY,
+    container_id TEXT NOT NULL,
+    workspace_path TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+)
+CREATE INDEX idx_container_id ON containers(container_id)
+CREATE INDEX idx_created_at ON containers(created_at)
+```
+
+**Connection Management:**
 ```python
-# src/mc/cli/main.py
-import os
-
-def main():
-    runtime_mode = os.getenv("MC_RUNTIME_MODE", "host")
-
-    if runtime_mode == "container":
-        # Container mode - limited commands, no container orchestration
-        from mc.cli.commands.agent import agent_main
-        agent_main()
-    else:
-        # Host mode - full CLI including container orchestration
-        from mc.cli.commands.host import host_main
-        host_main()
+@contextmanager
+def _connection(self) -> Iterator[sqlite3.Connection]:
+    # Special handling for :memory: databases (persistent connection)
+    # File-based databases: new connection per operation
+    # Auto-commit on success, rollback on exception
 ```
 
-**Why shared codebase:**
-- Reuse all existing v1.0 code (auth, API clients, workspace manager)
-- Single version number, single deployment
-- Container inherits all bug fixes and features automatically
-- Simpler testing (one codebase, two modes)
-
-**Why not separate binaries:**
-- Code duplication for shared logic (auth, API, workspace)
-- Version skew between host and container
-- More complex release process
-
-### MC v2.0 Component Separation
-
-```
-src/mc/
-├── cli/
-│   ├── main.py              # Entry point with mode detection
-│   ├── commands/
-│   │   ├── host.py          # Host-mode commands (NEW)
-│   │   ├── agent.py         # Container-mode commands (NEW)
-│   │   ├── case.py          # Existing commands (MODIFY for container awareness)
-│   │   └── other.py         # Existing utility commands (KEEP)
-├── controller/
-│   ├── workspace.py         # Existing workspace manager (KEEP)
-│   ├── container.py         # Container lifecycle manager (NEW)
-│   └── state.py             # State persistence manager (NEW)
-├── integrations/
-│   ├── redhat_api.py        # Existing API client (KEEP)
-│   ├── ldap.py              # Existing LDAP (KEEP)
-│   ├── salesforce.py        # Salesforce API client (NEW)
-│   ├── podman.py            # Podman API wrapper (NEW)
-│   └── terminal.py          # Terminal launcher (NEW)
-├── config/
-│   ├── manager.py           # Existing config (EXTEND for Salesforce)
-│   └── models.py            # Existing models (EXTEND)
-└── [existing utils, etc.]
-```
-
-### New vs Modified Components
-
-**NEW Components:**
-
-1. **Container Manager** (`src/mc/controller/container.py`)
-   - Create containers with case workspace mounts
-   - List running containers
-   - Stop/remove containers
-   - Execute commands in containers
-
-2. **State Manager** (`src/mc/controller/state.py`)
-   - SQLite database for container metadata
-   - Case → Container ID mapping
-   - Container creation timestamps
-   - Mount point tracking
-
-3. **Salesforce Integration** (`src/mc/integrations/salesforce.py`)
-   - Fetch case metadata (subject, owner, status)
-   - Cache responses (30-minute TTL like existing cache)
-   - Handle authentication (OAuth or session ID)
-
-4. **Podman Integration** (`src/mc/integrations/podman.py`)
-   - Wrapper around podman-py library
-   - Handle connection (rootless vs rootful)
-   - Image management (pull, build, tag, push)
-   - Container operations with proper error handling
-
-5. **Terminal Launcher** (`src/mc/integrations/terminal.py`)
-   - Platform detection (macOS, Linux)
-   - iTerm2 integration (macOS)
-   - GNOME Terminal integration (Linux)
-   - Fallback to xterm/default terminal
-   - Execute `podman exec -it <container> /bin/bash`
-
-**MODIFIED Components:**
-
-1. **CLI Commands** (`src/mc/cli/commands/case.py`)
-   - Add `--container` flag to existing commands
-   - When in container, auto-detect and skip container creation
-   - Existing commands work unchanged in non-container mode
-
-2. **Config Manager** (`src/mc/config/manager.py`)
-   - Add Salesforce credentials (username, password, security token)
-   - Add container image configuration (registry, tag)
-   - Add terminal emulator preference
-
-3. **Workspace Manager** (`src/mc/controller/workspace.py`)
-   - Add method to get container mount points
-   - Support container-aware path resolution
-
-**UNCHANGED Components:**
-- All utils (auth, cache, downloads, file_ops, formatters, logging, validation)
-- All existing integrations (redhat_api, ldap)
-- Test infrastructure
-- Exception hierarchy
-
-## Architectural Patterns
-
-### Pattern 1: State Persistence with SQLite
-
-**What:** Use SQLite database to track container state and metadata
-
-**When to use:** When you need queryable persistent state for container orchestration
-
-**Trade-offs:**
-- ✅ Lightweight, no separate database process
-- ✅ ACID transactions for consistency
-- ✅ Industry standard (Podman uses SQLite as of v4.8+)
-- ❌ Single-writer limitation (not a problem for CLI use)
-
-**Example:**
+**Reconciliation Pattern:**
 ```python
-# src/mc/controller/state.py
-import sqlite3
-from pathlib import Path
-from typing import Optional
+def reconcile(self, podman_container_ids: set[str]) -> None:
+    """Compare state database with Podman reality.
 
-class StateManager:
-    """Manages container state persistence."""
+    Delete state entries for containers that no longer exist in Podman.
+    Called before operations to ensure consistency.
+    """
+```
 
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-        self._init_db()
+**Usage pattern in ContainerManager:**
+```python
+def create(self, case_number, workspace_path, customer_name):
+    # 1. Reconcile state with Podman
+    self._reconcile()
 
-    def _init_db(self):
-        """Initialize database schema."""
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS containers (
-                case_number TEXT PRIMARY KEY,
-                container_id TEXT NOT NULL,
-                container_name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                workspace_path TEXT NOT NULL,
-                status TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-        conn.close()
+    # 2. Check state database for existing container
+    existing = self.state.get_container(case_number)
 
-    def register_container(self, case_number: str, container_id: str,
-                          container_name: str, workspace_path: str):
-        """Register a new container."""
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("""
-            INSERT OR REPLACE INTO containers
-            (case_number, container_id, container_name, created_at, workspace_path, status)
-            VALUES (?, ?, ?, datetime('now'), ?, 'running')
-        """, (case_number, container_id, container_name, workspace_path))
-        conn.commit()
-        conn.close()
+    # 3. Create/start container
+    container = self.podman.client.containers.create(...)
 
-    def get_container(self, case_number: str) -> Optional[dict]:
-        """Get container by case number."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT * FROM containers WHERE case_number = ?",
-            (case_number,)
+    # 4. Record in state database
+    self.state.add_container(case_number, container.id, workspace_path)
+```
+
+## Recommended Window Registry Architecture
+
+### Integration Strategy: Extend StateDatabase
+
+**Recommendation:** Add window tracking table to existing StateDatabase rather than creating separate registry.
+
+**Rationale:**
+1. **Consistency:** Same database location, connection management, WAL mode
+2. **Simplicity:** No additional file to manage or coordinate
+3. **Atomicity:** Can update container + window state in single transaction
+4. **Reuse patterns:** Reconciliation, cleanup, connection pooling already implemented
+5. **Platform-aware:** Inherits platformdirs configuration (macOS: `~/Library/Application Support/mc/containers.db`, Linux: `~/.local/share/mc/containers.db`)
+
+### Proposed Schema Extension
+
+```sql
+-- Add to existing database schema
+CREATE TABLE IF NOT EXISTS window_registry (
+    case_number TEXT PRIMARY KEY,
+    window_id TEXT NOT NULL,
+    tab_id TEXT,  -- Optional: for tab-specific tracking
+    platform TEXT NOT NULL,  -- 'darwin' or 'linux'
+    terminal TEXT NOT NULL,  -- 'iTerm2', 'Terminal.app', 'gnome-terminal', etc.
+    created_at INTEGER NOT NULL,
+    last_verified_at INTEGER NOT NULL,
+    FOREIGN KEY (case_number) REFERENCES containers(case_number) ON DELETE CASCADE
+)
+CREATE INDEX IF NOT EXISTS idx_window_id ON window_registry(window_id)
+CREATE INDEX IF NOT EXISTS idx_last_verified ON window_registry(last_verified_at)
+```
+
+**Schema rationale:**
+- `window_id`: Platform-specific window identifier (AppleScript ID on macOS, X11 window ID on Linux)
+- `tab_id`: Optional for multi-tab scenarios (iTerm2 can have multiple tabs per window)
+- `platform` + `terminal`: Support cross-platform and multi-terminal scenarios
+- `last_verified_at`: For cleanup of stale entries (windows closed externally)
+- `FOREIGN KEY` + `ON DELETE CASCADE`: Automatically remove window registry when container deleted
+
+### Component Integration Points
+
+#### 1. StateDatabase Extension
+
+**File:** `src/mc/container/state.py`
+
+**New methods:**
+```python
+class StateDatabase:
+    def _ensure_schema(self) -> None:
+        """Extend to create window_registry table"""
+        # Existing containers table creation
+        # + New window_registry table creation
+
+    def store_window(self, case_number: str, window_id: str,
+                     platform: str, terminal: str, tab_id: str | None = None) -> None:
+        """Store window ID for case."""
+
+    def get_window(self, case_number: str) -> dict | None:
+        """Retrieve window metadata by case number."""
+
+    def remove_window(self, case_number: str) -> None:
+        """Remove window registry entry."""
+
+    def cleanup_stale_windows(self, active_window_ids: set[str]) -> None:
+        """Reconciliation pattern for windows.
+
+        Similar to reconcile() for containers, but for windows.
+        Checks if windows still exist and removes stale entries.
+        """
+```
+
+#### 2. MacOSLauncher Extension
+
+**File:** `src/mc/terminal/macos.py`
+
+**Integration point:** Capture window ID during creation
+
+**Modified methods:**
+```python
+class MacOSLauncher:
+    def __init__(self, terminal=None, state_db=None):
+        self.terminal = terminal or self._detect_terminal()
+        self.state_db = state_db  # NEW: inject StateDatabase
+
+    def launch(self, options: LaunchOptions) -> str:
+        """Launch terminal and return window ID.
+
+        NEW: Returns window_id instead of None
+        Stores window ID in state database if provided
+        """
+        # Build AppleScript
+        script = self._build_iterm_script_with_id_capture(options)
+
+        # Execute and capture output (window ID)
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=10
         )
-        row = cursor.fetchone()
-        conn.close()
-        return dict(row) if row else None
-```
+        window_id = result.stdout.strip()
 
-### Pattern 2: Podman API Abstraction
-
-**What:** Wrap podman-py library with domain-specific interface
-
-**When to use:** When integrating with container runtime, isolate external dependency
-
-**Trade-offs:**
-- ✅ Easier to test (mock the wrapper, not podman-py)
-- ✅ Cleaner error handling (convert podman exceptions to MC exceptions)
-- ✅ Future flexibility (could swap Docker for Podman)
-- ❌ Additional layer of abstraction
-
-**Example:**
-```python
-# src/mc/integrations/podman.py
-import logging
-from typing import Optional
-import podman
-
-from mc.exceptions import ContainerError
-
-logger = logging.getLogger(__name__)
-
-class PodmanClient:
-    """Wrapper for Podman operations."""
-
-    def __init__(self):
-        try:
-            self.client = podman.PodmanClient()
-        except Exception as e:
-            raise ContainerError(
-                "Failed to connect to Podman",
-                f"Ensure Podman is installed and running: {e}"
+        # Store in database if available
+        if self.state_db:
+            case_number = self._extract_case_number(options.title)
+            self.state_db.store_window(
+                case_number=case_number,
+                window_id=window_id,
+                platform="darwin",
+                terminal=self.terminal,
+                tab_id=None  # Could be extracted if needed
             )
 
-    def create_container(self, image: str, name: str,
-                        volumes: dict[str, dict], **kwargs) -> str:
-        """Create a container and return its ID."""
-        try:
-            container = self.client.containers.create(
-                image=image,
-                name=name,
-                volumes=volumes,
-                detach=True,
-                tty=True,
-                stdin_open=True,
-                **kwargs
-            )
-            container.start()
-            logger.info("Created container: %s (%s)", name, container.id[:12])
-            return container.id
-        except podman.errors.ImageNotFound:
-            raise ContainerError(
-                f"Container image not found: {image}",
-                "Try: podman pull <image>"
-            )
-        except Exception as e:
-            raise ContainerError(f"Failed to create container: {e}")
+        return window_id
 
-    def list_containers(self, all_containers: bool = False) -> list[dict]:
-        """List containers."""
-        try:
-            containers = self.client.containers.list(all=all_containers)
-            return [
-                {
-                    "id": c.id[:12],
-                    "name": c.name,
-                    "status": c.status,
-                    "image": c.image.tags[0] if c.image.tags else c.image.id[:12]
-                }
-                for c in containers
-            ]
-        except Exception as e:
-            raise ContainerError(f"Failed to list containers: {e}")
+    def _build_iterm_script_with_id_capture(self, options) -> str:
+        """Modified to return window ID at end."""
+        return f'''
+tell application "iTerm"
+    activate
+    create window with default profile
+    tell current session of current window
+        set name to "{escaped_title}"
+        delay 0.1
+        write text "{escaped_command}"
+    end tell
+    -- Capture and return window ID
+    return id of current window
+end tell
+'''
+
+    def find_window_by_case(self, case_number: str) -> bool:
+        """NEW: Registry-based window search.
+
+        Replaces find_window_by_title() for reliable detection.
+        """
+        if not self.state_db:
+            return False
+
+        # Look up window from registry
+        window_data = self.state_db.get_window(case_number)
+        if not window_data:
+            return False
+
+        window_id = window_data['window_id']
+
+        # Verify window still exists
+        return self._window_exists_by_id(window_id)
+
+    def _window_exists_by_id(self, window_id: str) -> bool:
+        """Check if window ID exists in iTerm2."""
+        script = f'''
+tell application "iTerm"
+    repeat with theWindow in windows
+        if id of theWindow is "{window_id}" then
+            return true
+        end if
+    end repeat
+    return false
+end tell
+'''
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.stdout.strip() == "true"
+
+    def focus_window_by_case(self, case_number: str) -> bool:
+        """NEW: Registry-based window focus."""
+        # Similar to find_window_by_case but with focus action
 ```
 
-### Pattern 3: Salesforce API Caching
+#### 3. LinuxLauncher Extension
 
-**What:** Cache Salesforce API responses with TTL, following existing cache pattern
+**File:** `src/mc/terminal/linux.py`
 
-**When to use:** External API with rate limits (same pattern as existing Red Hat API cache)
+**Challenge:** Linux window IDs require X11 integration
 
-**Trade-offs:**
-- ✅ Avoids rate limits (Salesforce: 100,000 daily API calls for Enterprise)
-- ✅ Faster response time for repeated queries
-- ✅ Consistent with existing MC cache strategy
-- ❌ Stale data within TTL window (acceptable for case metadata)
-
-**Example:**
+**Approach:**
 ```python
-# src/mc/integrations/salesforce.py
-import logging
-from mc.utils.cache import FileCache
+class LinuxLauncher:
+    def __init__(self, terminal=None, state_db=None):
+        self.terminal = terminal or self._detect_terminal()
+        self.state_db = state_db
 
-logger = logging.getLogger(__name__)
+    def launch(self, options: LaunchOptions) -> str | None:
+        """Launch terminal, attempt to capture window ID.
 
-class SalesforceClient:
-    """Salesforce API client with caching."""
+        Linux window ID capture is best-effort (requires wmctrl or xdotool).
+        """
+        # Launch terminal
+        process = subprocess.Popen([self.terminal, ...])
 
-    def __init__(self, cache_dir: Path, cache_ttl: int = 1800):
-        self.cache = FileCache(cache_dir / "salesforce", ttl=cache_ttl)
-        # Initialize Salesforce connection (simple_salesforce or requests)
+        # Wait briefly for window to appear
+        time.sleep(0.5)
 
-    def get_case_metadata(self, case_number: str) -> dict:
-        """Get case metadata with caching."""
-        cache_key = f"case_{case_number}"
+        # Try to capture window ID using wmctrl
+        window_id = self._find_window_id_by_title(options.title)
 
-        # Try cache first
-        cached = self.cache.get(cache_key)
-        if cached:
-            logger.debug("Using cached Salesforce data for case %s", case_number)
-            return cached
+        # Store if available
+        if window_id and self.state_db:
+            case_number = self._extract_case_number(options.title)
+            self.state_db.store_window(
+                case_number=case_number,
+                window_id=window_id,
+                platform="linux",
+                terminal=self.terminal
+            )
 
-        # Fetch from API
-        logger.info("Fetching Salesforce metadata for case %s", case_number)
+        return window_id
+
+    def _find_window_id_by_title(self, title: str) -> str | None:
+        """Best-effort window ID discovery using wmctrl.
+
+        Returns None if wmctrl not available or window not found.
+        """
+        if not shutil.which("wmctrl"):
+            return None
+
         try:
-            # Query Salesforce API
-            metadata = self._query_salesforce(case_number)
+            result = subprocess.run(
+                ["wmctrl", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            # Parse wmctrl output: "0x0280001c  0 hostname Title Here"
+            for line in result.stdout.splitlines():
+                if title in line:
+                    window_id = line.split()[0]
+                    return window_id
+        except Exception:
+            pass
 
-            # Cache the response
-            self.cache.set(cache_key, metadata)
-            return metadata
-        except Exception as e:
-            logger.error("Salesforce API error: %s", e)
-            raise
+        return None
 ```
 
-### Pattern 4: Terminal Launcher Abstraction
+**Note:** Linux implementation is optional/best-effort. Primary focus is macOS where the problem is acute.
 
-**What:** Platform-specific terminal launching with fallback chain
+#### 4. attach_terminal Workflow Integration
 
-**When to use:** Cross-platform CLI that needs to open new terminal windows
+**File:** `src/mc/terminal/attach.py`
 
-**Trade-offs:**
-- ✅ Best experience on each platform (iTerm2 on macOS, GNOME Terminal on Linux)
-- ✅ Graceful degradation to fallback terminals
-- ✅ User-configurable preference
-- ❌ Platform-specific code branches
-
-**Example:**
+**Modified workflow:**
 ```python
-# src/mc/integrations/terminal.py
-import platform
-import subprocess
-import shlex
-from pathlib import Path
-from mc.exceptions import TerminalError
+def attach_terminal(
+    case_number: str,
+    config_manager: ConfigManager,
+    api_client: RedHatAPIClient,
+    container_manager: ContainerManager,
+) -> None:
+    # ... existing setup (validate, fetch metadata, create container) ...
 
-class TerminalLauncher:
-    """Cross-platform terminal launcher."""
+    # Get terminal launcher with state database
+    launcher = get_launcher(state_db=container_manager.state)
 
-    def __init__(self, preferred: str | None = None):
-        self.platform = platform.system()
-        self.preferred = preferred
-
-    def launch(self, container_id: str, title: str):
-        """Launch new terminal with container exec."""
-        cmd = f"podman exec -it {container_id} /bin/bash"
-
-        if self.platform == "Darwin":  # macOS
-            self._launch_macos(cmd, title)
-        elif self.platform == "Linux":
-            self._launch_linux(cmd, title)
+    # NEW: Check for existing window using registry
+    if launcher.find_window_by_case(case_number):
+        logger.info("Found existing terminal for case %s, focusing window", case_number)
+        if launcher.focus_window_by_case(case_number):
+            print(f"Focused existing terminal for case {case_number}")
+            return  # Early exit - no new window needed
         else:
-            raise TerminalError(f"Unsupported platform: {self.platform}")
+            logger.warning("Failed to focus existing window, will launch new one")
 
-    def _launch_macos(self, cmd: str, title: str):
-        """Launch terminal on macOS."""
-        # Try iTerm2 first (if preferred or detected)
-        if self._has_iterm2():
-            script = f'''
-                tell application "iTerm"
-                    create window with default profile
-                    tell current session of current window
-                        write text "{cmd}"
-                        set name to "{title}"
-                    end tell
-                end tell
-            '''
-            subprocess.run(["osascript", "-e", script], check=True)
-        else:
-            # Fallback to Terminal.app
-            script = f'''
-                tell application "Terminal"
-                    do script "{cmd}"
-                    set custom title of front window to "{title}"
-                end tell
-            '''
-            subprocess.run(["osascript", "-e", script], check=True)
-
-    def _launch_linux(self, cmd: str, title: str):
-        """Launch terminal on Linux."""
-        # Try preferred terminal or detect available
-        terminals = [
-            ("gnome-terminal", ["gnome-terminal", "--", "bash", "-c", cmd]),
-            ("konsole", ["konsole", "-e", cmd]),
-            ("xterm", ["xterm", "-e", cmd])
-        ]
-
-        for term_name, term_cmd in terminals:
-            if self._has_command(term_name):
-                subprocess.Popen(term_cmd)
-                return
-
-        raise TerminalError("No supported terminal emulator found")
-
-    def _has_iterm2(self) -> bool:
-        """Check if iTerm2 is installed."""
-        return Path("/Applications/iTerm.app").exists()
-
-    def _has_command(self, cmd: str) -> bool:
-        """Check if command exists in PATH."""
-        return subprocess.run(
-            ["which", cmd],
-            capture_output=True
-        ).returncode == 0
+    # Launch new terminal (stores window ID internally)
+    launch_options = LaunchOptions(
+        title=window_title,
+        command=exec_command,
+        auto_focus=True
+    )
+    window_id = launcher.launch(launch_options)
+    logger.info("Terminal launched with window_id: %s", window_id)
 ```
 
-### Pattern 5: Runtime Mode Detection
-
-**What:** Single codebase with host/container mode detection via environment variable
-
-**When to use:** When host and container need different command sets but share core logic
-
-**Trade-offs:**
-- ✅ No code duplication
-- ✅ Automatic feature parity
-- ✅ Simpler deployment (one binary)
-- ❌ Slightly more complex CLI routing
-
-**Example:**
-```python
-# src/mc/cli/main.py
-import os
-import sys
-
-def detect_runtime_mode() -> str:
-    """Detect if running in host or container mode."""
-    # Check environment variable (set in container image)
-    if os.getenv("MC_RUNTIME_MODE") == "container":
-        return "container"
-
-    # Check if running inside container (multiple heuristics)
-    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
-        return "container"
-
-    return "host"
-
-def main():
-    mode = detect_runtime_mode()
-
-    if mode == "container":
-        # Container mode - no container orchestration commands
-        from mc.cli.commands.agent import build_agent_parser
-        parser = build_agent_parser()
-    else:
-        # Host mode - full command set
-        from mc.cli.commands.host import build_host_parser
-        parser = build_host_parser()
-
-    args = parser.parse_args()
-    args.func(args)
-
-if __name__ == "__main__":
-    main()
-```
+**Key changes:**
+1. Pass `state_db` to launcher initialization
+2. Use `find_window_by_case()` instead of `find_window_by_title()`
+3. Use `focus_window_by_case()` instead of `focus_window_by_title()`
+4. Early exit when existing window found and focused
+5. Window ID automatically stored by `launcher.launch()`
 
 ## Data Flow
 
-### Container Creation Flow
+### Create Flow (First Launch)
 
 ```
-User: mc create 12345678 --container
+User runs: mc case 12345678
     ↓
-CLI Parser (src/mc/cli/commands/host.py)
+attach_terminal()
     ↓
-Container Manager (src/mc/controller/container.py)
-    ├─→ Check State Manager: Does container exist for case 12345678?
-    │   └─→ Yes: Return existing container ID, skip creation
-    │   └─→ No: Continue to creation
-    ├─→ Salesforce Client: Fetch case metadata (subject, owner)
-    │   └─→ Cache response (30 min TTL)
-    ├─→ Red Hat API Client: Fetch case details (reuse v1.0 code)
-    ├─→ Workspace Manager: Ensure workspace exists
-    │   └─→ Create if needed (reuse v1.0 code)
-    ├─→ Podman Client: Create container
-    │   ├─→ Image: mc:latest (from local or pull from registry)
-    │   ├─→ Name: mc-case-12345678
-    │   ├─→ Mounts:
-    │   │   - /home/user/cases/Account/12345678-Summary:/case (workspace)
-    │   │   - /home/user/.config/mc:/root/.config/mc:ro (config)
-    │   ├─→ Start container
-    │   └─→ Return container ID
-    ├─→ State Manager: Register container
-    │   └─→ SQLite: INSERT (case_number, container_id, workspace_path, timestamp)
-    └─→ Terminal Launcher: Open new terminal window
-        └─→ Execute: podman exec -it mc-case-12345678 /bin/bash
-```
-
-### State Management Flow
-
-```
-State Manager (SQLite Database)
+launcher.find_window_by_case("12345678")
     ↓
-┌─────────────────────────────────────────────┐
-│ containers table                            │
-├─────────────────────────────────────────────┤
-│ case_number  | container_id  | created_at  │
-│ workspace    | status        |             │
-├─────────────────────────────────────────────┤
-│ 12345678     | abc123def456  | 2026-01-26  │
-│ /home/.../ws | running       | 10:30:00    │
-└─────────────────────────────────────────────┘
-    ↑
-    │ (queries)
-    │
-Container Manager
-    ├─→ register_container(case, id, workspace)
-    ├─→ get_container(case_number) → container_id
-    ├─→ list_containers() → [{case, id, status}, ...]
-    └─→ remove_container(case_number)
+state_db.get_window("12345678")  → None (first time)
+    ↓
+launcher.launch(options)
+    ↓
+Execute AppleScript: create window + return ID
+    ↓
+window_id = "itterm2-window-1-12345"
+    ↓
+state_db.store_window("12345678", window_id, "darwin", "iTerm2")
+    ↓
+SQLite INSERT: window_registry table
+    ↓
+Return to user (terminal appears)
 ```
 
-### Key Data Flows
+### Focus Flow (Subsequent Launch)
 
-1. **Container creation:** CLI → Container Manager → Podman API → State Manager → Terminal Launcher
-2. **Case workspace access:** CLI → State Manager (lookup) → Container Manager (exec) → Terminal Launcher
-3. **Salesforce metadata:** Container Manager → Salesforce Client → Cache → API
-4. **Container listing:** CLI → State Manager → Podman Client (validate) → Display
+```
+User runs: mc case 12345678 (again)
+    ↓
+attach_terminal()
+    ↓
+launcher.find_window_by_case("12345678")
+    ↓
+state_db.get_window("12345678")  → {window_id: "...", platform: "darwin"}
+    ↓
+launcher._window_exists_by_id(window_id)
+    ↓
+Execute AppleScript: check if window ID exists  → True
+    ↓
+launcher.focus_window_by_case("12345678")
+    ↓
+Execute AppleScript: select window by ID
+    ↓
+Print: "Focused existing terminal for case 12345678"
+    ↓
+Early return (no new window created)
+```
 
-## Integration Points
+### Cleanup Flow (Reconciliation)
 
-### External Services
+```
+Periodic or on-demand trigger
+    ↓
+launcher.cleanup_stale_windows()
+    ↓
+Get all window IDs from state_db
+    ↓
+For each window_id:
+    ↓
+    Check if window exists (AppleScript/wmctrl)
+    ↓
+    If NOT exists:
+        ↓
+        state_db.remove_window(case_number)
+        ↓
+        SQLite DELETE from window_registry
+```
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Podman | Python library (podman-py) | RESTful API over Unix socket, rootless preferred |
-| Salesforce | REST API with simple_salesforce or requests | OAuth or username/password/token auth, rate limits apply |
-| Red Hat API | Existing integration (keep unchanged) | OAuth with offline token |
-| LDAP | Existing integration (keep unchanged) | Subprocess call to ldapsearch |
-| Terminal Emulator | Subprocess with platform detection | osascript (macOS), direct exec (Linux) |
+## Architectural Patterns
 
-### Internal Boundaries
+### Pattern 1: Reconciliation Pattern
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| CLI ↔ Container Manager | Direct function calls | Container Manager is domain controller |
-| Container Manager ↔ State Manager | Direct function calls (SQLite queries) | State Manager owns DB connection |
-| Container Manager ↔ Podman Client | Direct function calls (wrapper API) | Podman Client converts exceptions |
-| Container Manager ↔ Salesforce Client | Direct function calls (cached) | Salesforce Client handles caching transparently |
-| Host Mode ↔ Agent Mode | Environment variable detection | No direct communication, mode determined at startup |
+**What:** Periodically compare state database with external reality (Podman, iTerm2) and remove orphaned entries.
+
+**When to use:** Any persistent state that can be modified externally (user closes window, kills container).
+
+**Trade-offs:**
+- **Pro:** Prevents state drift, recovers from external changes
+- **Pro:** Self-healing system
+- **Con:** Requires periodic execution or trigger on operations
+- **Con:** Potential race conditions if reconciliation runs during operations
+
+**Example:**
+```python
+class StateDatabase:
+    def reconcile_containers(self, podman_container_ids: set[str]) -> None:
+        """Existing container reconciliation."""
+        with self._connection() as conn:
+            rows = conn.execute("SELECT case_number, container_id FROM containers").fetchall()
+            for row in rows:
+                if row["container_id"] not in podman_container_ids:
+                    conn.execute("DELETE FROM containers WHERE case_number = ?", (row["case_number"],))
+
+    def reconcile_windows(self, launcher) -> None:
+        """NEW: Window reconciliation."""
+        with self._connection() as conn:
+            rows = conn.execute("SELECT case_number, window_id FROM window_registry").fetchall()
+            for row in rows:
+                if not launcher._window_exists_by_id(row["window_id"]):
+                    conn.execute("DELETE FROM window_registry WHERE case_number = ?", (row["case_number"],))
+```
+
+### Pattern 2: Dependency Injection for State
+
+**What:** Inject StateDatabase into launchers instead of creating new instances.
+
+**When to use:** When multiple components need to share state management.
+
+**Trade-offs:**
+- **Pro:** Single source of truth, no database file conflicts
+- **Pro:** Easier testing (inject mock database)
+- **Pro:** Lifecycle managed by caller
+- **Con:** More complex initialization
+- **Con:** Tighter coupling between components
+
+**Example:**
+```python
+# Before (independent)
+launcher = MacOSLauncher()
+launcher.launch(options)  # No state tracking
+
+# After (injected)
+state_db = StateDatabase()  # Shared instance
+launcher = MacOSLauncher(state_db=state_db)
+launcher.launch(options)  # Automatically stores window ID
+```
+
+### Pattern 3: Platform-Specific Registry with Fallback
+
+**What:** Track windows when platform supports it, gracefully degrade when not.
+
+**When to use:** Cross-platform features where capability varies.
+
+**Trade-offs:**
+- **Pro:** Best experience on supported platforms
+- **Pro:** Doesn't break unsupported platforms
+- **Con:** Feature parity issues
+- **Con:** Testing complexity
+
+**Example:**
+```python
+def find_window_by_case(self, case_number: str) -> bool:
+    # Try registry-based search first
+    if self.state_db:
+        window_data = self.state_db.get_window(case_number)
+        if window_data:
+            return self._window_exists_by_id(window_data['window_id'])
+
+    # Fallback to title-based search (unreliable but better than nothing)
+    return self._find_window_by_title_legacy(case_number)
+```
 
 ## Scaling Considerations
 
 | Scale | Architecture Adjustments |
 |-------|--------------------------|
-| 1-10 cases | Current design works perfectly, SQLite handles <1000 containers easily |
-| 10-100 cases | No changes needed, consider container cleanup policy (auto-remove stopped containers after 7 days) |
-| 100+ cases | Consider container pruning automation, disk space monitoring for workspace mounts |
+| 1-100 cases | Single SQLite database, no cleanup needed (manual close suffices) |
+| 100-1000 cases | Add periodic reconciliation (cleanup stale windows weekly), consider index optimization |
+| 1000+ cases | Partition window_registry by time (archive old entries), add TTL for auto-cleanup |
 
 ### Scaling Priorities
 
-1. **First bottleneck:** Disk space for container images and workspaces
-   - **Fix:** Implement `mc prune` command to remove stopped containers and unused images
-   - **Detection:** Monitor disk usage, warn when <10GB free
+1. **First bottleneck:** Database lock contention if many parallel `mc case` invocations
+   - **Fix:** WAL mode already enabled, handles concurrent reads + 1 writer
+   - **Monitor:** If `database is locked` errors appear, increase timeout or add retry logic
 
-2. **Second bottleneck:** SQLite database size (unlikely for <10,000 containers)
-   - **Fix:** Add cleanup task to archive old container records
-   - **Detection:** Database file size >100MB
-
-3. **Not a bottleneck:** Podman performance, Salesforce API rate limits, terminal launching
+2. **Second bottleneck:** Stale entry accumulation (windows closed manually, not cleaned up)
+   - **Fix:** Periodic reconciliation job (cron or on-demand via `mc container reconcile`)
+   - **Monitor:** `SELECT COUNT(*) FROM window_registry` vs expected active count
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Running Podman Inside Container
+### Anti-Pattern 1: Separate Window Registry File
 
-**What people do:** Try to run `podman` commands from inside the MC container (nested containers)
-
-**Why it's wrong:**
-- Requires privileged container or complex socket mounting
-- Security risk (container escape potential)
-- Unnecessary complexity (host should manage containers)
-
-**Do this instead:**
-- Host CLI manages all container lifecycle
-- Container CLI only runs case-management commands (no container orchestration)
-- Use runtime mode detection to prevent container commands in container mode
-
-### Anti-Pattern 2: Using Container ID as Primary Key
-
-**What people do:** Store only container ID in state, query Podman API for case number
+**What people do:** Create `window_registry.db` separate from `containers.db`
 
 **Why it's wrong:**
-- Container might be removed outside MC (manual `podman rm`)
-- Requires API call for every state lookup (slow)
-- Loses metadata when container is gone
+- Requires coordinating two database files
+- No transactional guarantees across files
+- Can't use FOREIGN KEY to cascade deletes
+- Duplicate connection management code
+- Race conditions between databases
 
-**Do this instead:**
-- Use case number as primary key in state database
-- Store container ID as attribute
-- Validate container still exists when accessed
-- Gracefully handle missing containers (offer to recreate)
+**Do this instead:** Extend existing `StateDatabase` with `window_registry` table
 
-### Anti-Pattern 3: Building Container Image on Every Create
+### Anti-Pattern 2: Storing Window Titles Instead of IDs
 
-**What people do:** Run `podman build` when creating each case container
+**What people do:** Store window title in registry, search by title
 
 **Why it's wrong:**
-- Extremely slow (image build takes minutes)
-- Defeats purpose of container caching
-- Wastes disk space with multiple identical images
+- Defeats purpose: titles still get overwritten by iTerm2
+- Original problem remains unsolved
+- Adds complexity without benefit
 
-**Do this instead:**
-- Build image once, tag as `mc:latest`
-- Reuse same image for all case containers
-- Provide separate `mc build-image` command for updates
-- Use `podman pull` to get updates from registry
+**Do this instead:** Store immutable window IDs that persist regardless of title changes
 
-### Anti-Pattern 4: Storing Credentials in Container
+### Anti-Pattern 3: Blocking Launch Waiting for Window ID
 
-**What people do:** Copy credentials into container filesystem
-
-**Why it's wrong:**
-- Security risk (credentials persist in image layers)
-- Credentials become stale (offline token expires)
-- Need to rebuild container when credentials change
-
-**Do this instead:**
-- Mount config directory read-only into container
-- Container reads credentials from mount point
-- Credentials managed on host, automatically available in container
-- Single source of truth for configuration
-
-### Anti-Pattern 5: Using BoltDB for State
-
-**What people do:** Choose BoltDB because Podman historically used it
-
-**Why it's wrong:**
-- Podman deprecated BoltDB in v4.8, removing in v6.0 (mid-2026)
-- SQLite is now industry standard for container state
-- BoltDB is archived, no active development
-- Migration path is painful
-
-**Do this instead:**
-- Use SQLite from the start (matches Podman v4.8+)
-- Simple schema with standard SQL
-- Excellent Python support (sqlite3 in stdlib)
-- Well-tested, actively maintained
-
-## Project Structure
-
-Based on patterns from kind, devcontainer CLI, and Podman architecture:
-
-```
-src/mc/
-├── cli/
-│   ├── main.py              # Mode detection, entry point
-│   ├── commands/
-│   │   ├── host.py          # Host-mode CLI (container create/list/stop/exec)
-│   │   ├── agent.py         # Container-mode CLI (limited commands)
-│   │   ├── case.py          # Existing case commands (MODIFY for container awareness)
-│   │   └── other.py         # Existing utility commands (KEEP)
-├── controller/
-│   ├── workspace.py         # Existing (EXTEND for container mounts)
-│   ├── container.py         # NEW: Container lifecycle orchestration
-│   └── state.py             # NEW: SQLite state management
-├── integrations/
-│   ├── redhat_api.py        # Existing (KEEP)
-│   ├── ldap.py              # Existing (KEEP)
-│   ├── salesforce.py        # NEW: Salesforce API with caching
-│   ├── podman.py            # NEW: Podman API wrapper
-│   └── terminal.py          # NEW: Cross-platform terminal launcher
-├── config/
-│   ├── manager.py           # Existing (EXTEND for Salesforce, container config)
-│   └── models.py            # Existing (EXTEND)
-├── utils/                   # All existing utils (KEEP UNCHANGED)
-│   ├── auth.py
-│   ├── cache.py
-│   ├── downloads.py
-│   ├── file_ops.py
-│   ├── formatters.py
-│   ├── logging.py
-│   └── validation.py
-└── exceptions.py            # Existing (EXTEND for container errors)
-
-container/
-├── Containerfile            # Image definition (RHEL 10, mc, oc, ocm, backplane)
-├── build.sh                 # Image build script
-└── entrypoint.sh            # Container entrypoint (sets MC_RUNTIME_MODE=container)
-
-tests/
-├── unit/
-│   ├── test_container_manager.py    # NEW
-│   ├── test_state_manager.py        # NEW
-│   ├── test_podman_client.py        # NEW
-│   ├── test_salesforce_client.py    # NEW
-│   └── test_terminal_launcher.py    # NEW
-└── integration/
-    ├── test_container_lifecycle.py  # NEW (uses testcontainers)
-    └── test_end_to_end.py           # NEW
-```
-
-### Structure Rationale
-
-- **cli/commands/host.py vs agent.py:** Separate command sets by runtime mode, clear separation
-- **controller/container.py:** Central orchestrator for container operations, follows existing controller pattern
-- **controller/state.py:** Isolated state management, easy to test, single responsibility
-- **integrations/[service].py:** One integration per file, follows existing pattern
-- **Shared utils:** All existing utils work in both modes, no duplication
-- **Container directory:** Separate from source, clear boundary for image build artifacts
-
-## Testing Strategy
-
-### Unit Testing with Mocking
-
-Following existing pytest patterns from v1.0:
-
+**What people do:**
 ```python
-# tests/unit/test_container_manager.py
-import pytest
-from unittest.mock import Mock, patch
-from mc.controller.container import ContainerManager
-
-@pytest.fixture
-def mock_podman_client():
-    """Mock Podman client."""
-    with patch("mc.controller.container.PodmanClient") as mock:
-        yield mock.return_value
-
-@pytest.fixture
-def mock_state_manager():
-    """Mock state manager."""
-    with patch("mc.controller.container.StateManager") as mock:
-        yield mock.return_value
-
-def test_create_container_new_case(mock_podman_client, mock_state_manager):
-    """Test creating container for new case."""
-    # Setup
-    mock_state_manager.get_container.return_value = None
-    mock_podman_client.create_container.return_value = "abc123"
-
-    manager = ContainerManager(
-        podman_client=mock_podman_client,
-        state_manager=mock_state_manager
-    )
-
-    # Execute
-    container_id = manager.create_container(
-        case_number="12345678",
-        workspace_path="/path/to/workspace"
-    )
-
-    # Verify
-    assert container_id == "abc123"
-    mock_podman_client.create_container.assert_called_once()
-    mock_state_manager.register_container.assert_called_once()
+# Wait for window to appear before returning
+launcher.launch(options)
+time.sleep(5)  # Hope window appears
+window_id = find_window_by_title(title)
 ```
 
-### Integration Testing with Testcontainers
+**Why it's wrong:**
+- Race conditions (window might not appear in 5s)
+- Blocks CLI unnecessarily (bad UX)
+- Fragile timing assumptions
 
-For end-to-end testing with real Podman:
+**Do this instead:** Capture window ID synchronously from AppleScript return value
 
-```python
-# tests/integration/test_container_lifecycle.py
-import pytest
-from testcontainers.core.container import DockerContainer
+## Integration Points
 
-@pytest.fixture(scope="module")
-def podman_service():
-    """Start Podman service in container for testing."""
-    # Use testcontainers to run Podman-in-Docker for testing
-    # This ensures tests don't pollute local Podman state
-    pass
+### External Dependencies
 
-def test_full_container_lifecycle(tmp_path, podman_service):
-    """Test complete container lifecycle: create, exec, stop, remove."""
-    # Real integration test with actual Podman calls
-    pass
-```
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| iTerm2 | AppleScript via `osascript` subprocess | ID capture via script return value |
+| Terminal.app | AppleScript via `osascript` subprocess | Same pattern as iTerm2 |
+| gnome-terminal | Direct subprocess launch | Window ID via `wmctrl` (best-effort) |
+| Podman | Python API via `podman-py` | Container reconciliation pattern |
+| SQLite | Python `sqlite3` stdlib | WAL mode, contextmanager pattern |
 
-## Build Order (Dependency-Driven)
+### Internal Boundaries
 
-Based on component dependencies and risk:
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| attach.py ↔ launcher.py | Function calls with LaunchOptions | Injected state_db dependency |
+| launcher.py ↔ state.py | Direct method calls | store_window(), get_window(), reconcile_windows() |
+| state.py ↔ SQLite | SQL via sqlite3 | Connection pooling, transaction management |
+| attach.py ↔ manager.py | Shared state_db instance | Both use container_manager.state |
 
-### Phase 1: State Management Foundation
-**Why first:** No external dependencies, easy to test, foundational
+## Implementation Phases
 
-1. State Manager (SQLite database)
-2. Unit tests for State Manager
-3. Manual testing with sqlite3 CLI
+### Phase 1: Database Schema Extension (1 hour)
+- Add `window_registry` table to StateDatabase schema
+- Add `store_window()`, `get_window()`, `remove_window()` methods
+- Add unit tests for window registry CRUD operations
+- **Success criteria:** Tests pass, backward compatible with existing containers table
 
-### Phase 2: Podman Integration
-**Why second:** Core functionality, needed for everything else
+### Phase 2: MacOSLauncher Window ID Capture (2 hours)
+- Modify `_build_iterm_script()` to return window ID
+- Update `launch()` to capture and store window ID
+- Add `_window_exists_by_id()` helper
+- **Success criteria:** Window ID captured and stored in database after launch
 
-1. Podman Client wrapper (podman-py)
-2. Unit tests with mocked podman-py
-3. Integration tests with real Podman (testcontainers)
+### Phase 3: Registry-Based Search and Focus (2 hours)
+- Add `find_window_by_case()` method
+- Add `focus_window_by_case()` method
+- Update `attach_terminal()` to use registry-based search
+- **Success criteria:** Second `mc case XXXXX` invocation focuses existing window
 
-### Phase 3: Container Orchestration
-**Why third:** Combines State + Podman, core business logic
+### Phase 4: Reconciliation and Cleanup (1 hour)
+- Add `reconcile_windows()` to StateDatabase
+- Trigger reconciliation in `attach_terminal()` or periodic job
+- **Success criteria:** Manually closed windows are removed from registry
 
-1. Container Manager (create, list, stop, exec)
-2. Unit tests with mocked dependencies
-3. Integration tests with real containers
+### Phase 5: Linux Support (Optional, 2 hours)
+- Implement `_find_window_id_by_title()` using wmctrl
+- Add Linux window ID capture to LinuxLauncher
+- Fallback gracefully when wmctrl unavailable
+- **Success criteria:** Linux duplicate prevention works when wmctrl installed
 
-### Phase 4: Salesforce Integration
-**Why fourth:** Independent feature, can be added without blocking others
+### Phase 6: Testing and Documentation (2 hours)
+- Update `test_duplicate_terminal_prevention_regression` to verify fix
+- Add integration tests for window registry
+- Document window tracking architecture
+- Update UAT 5.2 status
+- **Success criteria:** All tests pass, documentation complete
 
-1. Salesforce Client (with caching)
-2. Unit tests with mocked requests
-3. Integration tests with Salesforce sandbox (optional)
+## Migration Path
 
-### Phase 5: Terminal Launcher
-**Why fifth:** Presentation layer, depends on Container Manager
+### Backward Compatibility
 
-1. Terminal Launcher (platform-specific)
-2. Unit tests with mocked subprocess
-3. Manual testing on macOS and Linux
+**Existing behavior:** Continues to work if `state_db` not injected into launcher.
 
-### Phase 6: CLI Integration
-**Why sixth:** Ties everything together, user-facing
+**Upgrade path:**
+1. Deploy schema changes (adds table, doesn't modify existing tables)
+2. Update launcher initialization to inject `state_db`
+3. Existing windows won't be tracked (first launch after upgrade creates entry)
+4. Users see benefit immediately on next `mc case` invocation
 
-1. Host mode CLI commands (create, list, stop, exec)
-2. Runtime mode detection
-3. Update existing commands for container awareness
-4. End-to-end tests
-
-### Phase 7: Container Image
-**Why seventh:** Depends on working host CLI to test
-
-1. Containerfile (RHEL 10 base + tools)
-2. Build script
-3. Agent mode CLI commands
-4. Container entrypoint
-5. Build and test image
-
-### Phase 8: Polish & Documentation
-**Why last:** Refinement after core functionality works
-
-1. Config wizard updates (Salesforce credentials)
-2. Error messages and help text
-3. Documentation updates
-4. Performance tuning
-
-## Backwards Compatibility Strategy
-
-**Critical:** All existing v1.0 commands must work exactly as before.
-
-### Compatibility Guarantees
-
-1. **Existing commands unchanged:** `mc create`, `mc attach`, `mc check`, `mc ls`, `mc go` work identically
-2. **No required config changes:** Containerization is opt-in via `--container` flag
-3. **Workspace structure unchanged:** Files and directories remain the same
-4. **Config file compatible:** Existing ~/.config/mc/config.toml works unchanged
-
-### Migration Path
-
-```
-User journey:
-
-v1.0 User (no containers):
-  mc create 12345678              # Works exactly as before
-  mc attach 12345678              # Works exactly as before
-
-v2.0 User (with containers):
-  mc create 12345678 --container  # New: Creates container + workspace
-  mc attach 12345678              # Auto-detects container, works in container
-  mc exec 12345678                # New: Opens terminal in existing container
-  mc list                         # New: Shows running containers
-```
-
-### Feature Flags
-
-Consider environment variable for gradual rollout:
-
-```bash
-# Disable containerization entirely (v1.0 behavior)
-export MC_DISABLE_CONTAINERS=1
-
-# Enable containerization (v2.0 behavior)
-export MC_ENABLE_CONTAINERS=1  # or unset MC_DISABLE_CONTAINERS
-```
+**Rollback:** Remove `state_db` injection, system reverts to old behavior (duplicate windows tolerated).
 
 ## Sources
 
-**Container orchestrator architectures:**
-- [kind - Kubernetes IN Docker](https://kind.sigs.k8s.io/)
-- [kind Initial Design](https://kind.sigs.k8s.io/docs/design/initial/)
-- [DevPod Architecture](https://devpod.sh/docs/how-it-works/overview)
-- [Dev Container CLI](https://code.visualstudio.com/docs/devcontainers/devcontainer-cli)
+### Architecture Patterns
+- [Kubernetes and Reconciliation Patterns](https://hkassaei.com/posts/kubernetes-and-reconciliation-patterns/) - Reconciliation loop pattern for state management
+- [The Principle of Reconciliation](https://www.chainguard.dev/unchained/the-principle-of-reconciliation) - Declarative state and idempotency
+- [Registry Pattern - GeeksforGeeks](https://www.geeksforgeeks.org/system-design/registry-pattern/) - Registry pattern for resource management
+- [Python Registry Pattern](https://dev.to/dentedlogic/stop-writing-giant-if-else-chains-master-the-python-registry-pattern-ldm) - Python implementation patterns
 
-**Podman architecture and state management:**
-- [Podman GitHub](https://github.com/containers/podman)
-- [Podman Python Library](https://github.com/containers/podman-py)
-- [Container Lifecycle Management - Podman](https://deepwiki.com/containers/podman/3.2-container-lifecycle-management)
-- [Deep Dive: Why Podman and containerd 2.0 are Replacing Docker in 2026](https://dev.to/dataformathub/deep-dive-why-podman-and-containerd-20-are-replacing-docker-in-2026-32ak)
-- [Podman 5.7 & BoltDB to SQLite migration](https://discussion.fedoraproject.org/t/podman-5-7-boltdb-to-sqlite-migration/171172)
+### SQLite and State Management
+- [SQLite Architecture](https://sqlite.org/arch.html) - Official SQLite architecture documentation
+- [Offline-first frontend apps 2025: IndexedDB and SQLite](https://blog.logrocket.com/offline-first-frontend-apps-2025-indexeddb-sqlite/) - State management patterns
+- [Appropriate Uses For SQLite](https://sqlite.org/whentouse.html) - When to use SQLite vs other databases
 
-**Terminal integration:**
-- [Docker Desktop Support for iTerm2](https://www.docker.com/blog/desktop-support-for-iterm2-a-feature-request-from-the-docker-public-roadmap/)
-- [iTerm2 Shell Integration](https://iterm2.com/shell_integration.html)
-- [Best Linux Terminal Emulators: 2026 Comparison](https://www.glukhov.org/post/2026/01/terminal-emulators-for-linux-comparison/)
+### System Design
+- [AI System Design Patterns for 2026](https://zenvanriel.nl/ai-engineer-blog/ai-system-design-patterns-2026/) - Idempotency patterns for preventing duplicate operations
+- [Manager Design Pattern](https://www.eventhelix.com/design-patterns/manager/) - Managing multiple entities of the same type
 
-**Salesforce API:**
-- [Salesforce API Rate Limiting Best Practices](https://developer.salesforce.com/docs/marketing/marketing-cloud/guide/rate-limiting-best-practices.html)
-- [Salesforce API Rate Limits](https://coefficient.io/salesforce-api/salesforce-api-rate-limits)
-
-**Container testing:**
-- [Testcontainers Python](https://github.com/testcontainers/testcontainers-python)
-- [Getting Started with Testcontainers for Python](https://testcontainers.com/guides/getting-started-with-testcontainers-for-python/)
-
-**Container image workflows:**
-- [How to Automate Docker Image Building with Pack CLI](https://www.freecodecamp.org/news/automating-docker-image-builds-and-publishing-with-pack-cli/)
-- [devcontainers CLI](https://github.com/devcontainers/cli)
+### Project Context
+- `.planning/PHASE_PROPOSAL_WINDOW_TRACKING.md` - Original phase proposal for window tracking
+- `.planning/INTEGRATION_TEST_FIX_REPORT.md` - Root cause analysis of iTerm2 AppleScript limitation
+- `src/mc/container/state.py` - Existing StateDatabase implementation
+- `src/mc/terminal/macos.py` - Current MacOSLauncher implementation
 
 ---
-*Architecture research for: MC v2.0 Container Orchestration*
-*Researched: 2026-01-26*
+*Architecture research for: Window tracking integration for terminal automation*
+*Researched: 2026-02-04*
