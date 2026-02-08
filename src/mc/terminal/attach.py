@@ -14,6 +14,7 @@ from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.launcher import LaunchOptions, get_launcher
+from mc.terminal.registry import WindowRegistry
 from mc.terminal.shell import write_bashrc
 from mc.utils.validation import validate_case_number
 from mc.utils.cache import get_case_metadata
@@ -124,6 +125,9 @@ def attach_terminal(
                      operations fail, or terminal launch fails
     """
     logger.info("Attaching terminal for case %s", case_number)
+
+    # Import platform-specific launchers
+    from mc.terminal.macos import MacOSLauncher
 
     # 1. Check TTY - must be interactive terminal
     if not should_launch_terminal():
@@ -241,21 +245,45 @@ def attach_terminal(
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # 11. Check for existing terminal window and focus if found
-    from mc.terminal.macos import MacOSLauncher
-    from mc.terminal.linux import LinuxLauncher
-
+    # 11. Check WindowRegistry for existing window (macOS only - Phase 16)
     window_exists = False
     if isinstance(launcher, MacOSLauncher):
-        # Check if window with this title already exists
-        if launcher.find_window_by_title(window_title):
-            logger.info("Found existing terminal for case %s, focusing window", case_number)
-            if launcher.focus_window_by_title(window_title):
+        # Initialize registry and check for existing window ID
+        registry = WindowRegistry()
+
+        # Look up window ID with lazy validation
+        window_id = registry.lookup(case_number, launcher._window_exists_by_id)
+
+        if window_id:
+            # Window exists in registry and validation passed - focus it
+            logger.info("Found existing window for case %s (ID: %s), attempting focus", case_number, window_id)
+
+            success = launcher.focus_window_by_id(window_id)
+            if success:
+                # Successfully focused existing window
                 print(f"Focused existing terminal for case {case_number}")
                 window_exists = True
+                logger.info("Successfully focused existing window for case %s", case_number)
             else:
-                logger.warning("Failed to focus existing window, will launch new one")
-    # TODO: Add Linux duplicate detection when implementing LinuxLauncher enhancements
+                # Focus failed after validation - race condition (user closed window between validation and focus)
+                # Ask user whether to create new window
+                logger.warning("Window focus failed for case %s after validation - window may have closed", case_number)
+                response = input(
+                    f"Window focus failed (window may have closed). "
+                    f"Create new terminal instead? (y/n): "
+                ).lower()
+
+                if response != 'y':
+                    # User chose not to create new window - abort
+                    print("Aborted")
+                    logger.info("User aborted terminal creation after focus failure")
+                    return
+                # User chose to create new window - fall through to launch
+                print("Previous window closed, creating new terminal")
+                logger.info("Creating new terminal after focus failure for case %s", case_number)
+        else:
+            # No existing window in registry (either never created or stale entry removed by lazy validation)
+            logger.debug("No existing window found in registry for case %s", case_number)
 
     # 12. Launch terminal with command and title if no existing window
     if not window_exists:
@@ -271,6 +299,27 @@ def attach_terminal(
             )
             launcher.launch(launch_options)
             logger.info("Terminal launched successfully for case %s", case_number)
+
+            # Register window ID in registry (macOS only - Phase 16)
+            if isinstance(launcher, MacOSLauncher):
+                # Give terminal brief moment to fully create window
+                import time
+                time.sleep(0.5)
+
+                # Capture window ID
+                window_id = launcher._capture_window_id()
+                if window_id:
+                    # Register in WindowRegistry
+                    registry = WindowRegistry()
+                    registered = registry.register(case_number, window_id, launcher.terminal)
+                    if registered:
+                        logger.info("Registered window ID %s for case %s", window_id, case_number)
+                    else:
+                        # Duplicate registration - another process beat us (rare race condition)
+                        logger.warning("Window ID registration failed for case %s - duplicate entry", case_number)
+                else:
+                    # Window ID capture failed - log warning but don't block
+                    logger.warning("Failed to capture window ID for case %s - duplicate prevention disabled", case_number)
         except Exception as e:
             error_msg = (
                 f"Terminal launch failed for case {case_number}. "
