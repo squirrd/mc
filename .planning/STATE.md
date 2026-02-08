@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 17 of 19 (Registry Cleanup & Maintenance)
-Plan: 2 of 2
+Phase: 18 of 19 (Linux Support)
+Plan: 1 of 1
 Status: Phase complete
-Last activity: 2026-02-08 — Completed 17-02-PLAN.md
+Last activity: 2026-02-08 — Completed 18-01-PLAN.md
 
-Progress: [█████████████████████░░░] 89% (17/19 phases complete)
+Progress: [████████████████████░░░░] 95% (18/19 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 45 (across v1.0, v2.0, v2.0.1, v2.0.2)
+- Total plans completed: 46 (across v1.0, v2.0, v2.0.1, v2.0.2)
 - Previous milestones:
   - v1.0: 18 plans (8 phases) — shipped 2026-01-22
   - v2.0: 16 plans (6 phases) — shipped 2026-02-01
@@ -29,11 +29,11 @@ Progress: [█████████████████████░░
 
 | Phase | Plans | Status |
 |-------|-------|--------|
+| 18 (Linux Support) | 1/1 | Complete (v2.0.2) |
 | 17 (Registry Cleanup) | 2/2 | Complete (v2.0.2) |
 | 16 (macOS Window Tracking) | 2/2 | Complete (v2.0.2) |
 | 15 (Window Registry) | 2/2 | Complete (v2.0.2) |
 | 14.1 (Critical Fixes) | 5/5 | Complete (v2.0.1) |
-| 14 (Distribution) | 2/2 | Complete (v2.0) |
 
 **Recent Trend:**
 - v2.0.1 delivered in 1 day (5 plans)
@@ -49,6 +49,11 @@ Progress: [█████████████████████░░
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 18-01: Use wmctrl for window focusing by ID (more reliable than xdotool for ID-based operations)
+- 18-01: Remove xfce4-terminal support completely (limit to gnome-terminal and konsole per 18-CONTEXT.md)
+- 18-01: Strict Wayland validation - fail fast with RuntimeError instead of silent fallback
+- 18-01: Desktop-native terminal preference using XDG_CURRENT_DESKTOP (konsole on KDE, gnome-terminal on GNOME)
+- 18-01: Distro-specific installation instructions using /etc/os-release parsing
 - 17-02: Sample size 100 for manual reconcile (5x larger than automatic cleanup)
 - 17-02: Detailed reporting for reconcile command (entries validated, stale entries removed, status)
 - 17-01: Sample oldest 20 entries by last_validated timestamp for cleanup efficiency
@@ -84,14 +89,15 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-**Phase 17 complete:** Both automatic and manual registry cleanup infrastructure operational on macOS
-**Registry cleanup limitation:** Cleanup currently only runs on macOS (when MacOSLauncher detected). Linux platforms need _window_exists_by_id() implementation before cleanup is functional there.
-**Linux complexity:** X11 vs Wayland support requires platform detection and graceful fallback (Phase 19)
+**Phase 18 complete:** Linux X11 window tracking operational with wmctrl/xdotool
+**Cross-platform window tracking:** Both macOS (Phase 16) and Linux X11 (Phase 18) now support window ID lifecycle
+**Registry cleanup now cross-platform:** LinuxLauncher now has _window_exists_by_id() implementation - cleanup should work on Linux X11 after CLI integration
+**Wayland limitation:** Phase 18 explicitly does not support Wayland - strict validation raises RuntimeError with clear message
 **Test coverage:** Integration test `test_duplicate_terminal_prevention_regression` should benefit from cleanup infrastructure
 
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 17-02-PLAN.md (Manual Registry Reconciliation) - Phase 17 complete (2/2 plans)
+Stopped at: Completed 18-01-PLAN.md (Linux X11 Window Management) - Phase 18 complete (1/1 plans)
 Resume file: None
-Next action: Proceed to Phase 18 (Terminal App Tracking) planning
+Next action: Proceed to Phase 19 (Final Phase) planning
