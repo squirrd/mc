@@ -241,3 +241,121 @@ class TestWindowRegistry:
 
         assert window_id == "window-xyz"
         assert received_ids == ["window-xyz"]
+
+    def test_default_db_path_creation(self, tmp_path, mocker):
+        """Test that default db_path is created when None provided."""
+        # Mock user_data_dir to return temp path
+        mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(tmp_path))
+
+        # Create registry with None (uses default path)
+        db = WindowRegistry(db_path=None)
+
+        # Verify database file was created in mocked location
+        expected_path = tmp_path / "window.db"
+        assert expected_path.exists()
+
+        # Verify it's functional
+        assert db.register("12345678", "window-123", "iTerm2") is True
+
+    def test_get_oldest_entries(self):
+        """Test _get_oldest_entries returns entries ordered by last_validated."""
+        db = WindowRegistry(":memory:")
+
+        # Register multiple entries with different timestamps
+        db.register("11111111", "window-1", "iTerm2")
+        time.sleep(0.01)
+        db.register("22222222", "window-2", "Terminal.app")
+        time.sleep(0.01)
+        db.register("33333333", "window-3", "xterm")
+
+        # Get oldest entries
+        oldest = db._get_oldest_entries(limit=2)
+
+        # Should return 2 oldest (11111111 and 22222222)
+        assert len(oldest) == 2
+        assert oldest[0][0] == "11111111"  # case_number
+        assert oldest[1][0] == "22222222"
+
+    def test_cleanup_stale_entries_removes_invalid(self, mocker):
+        """Test cleanup_stale_entries removes entries with invalid windows."""
+        db = WindowRegistry(":memory:")
+
+        # Register multiple entries
+        db.register("11111111", "window-1", "iTerm2")
+        db.register("22222222", "window-2", "Terminal.app")
+        db.register("33333333", "window-3", "xterm")
+
+        # Mock _validate_window_exists to return False for window-1 and window-3
+        def mock_validate(window_id, terminal_type):
+            return window_id != "window-1" and window_id != "window-3"
+
+        mocker.patch.object(db, "_validate_window_exists", side_effect=mock_validate)
+
+        # Run cleanup
+        removed = db.cleanup_stale_entries(sample_size=10)
+
+        # Should remove 2 entries (window-1 and window-3)
+        assert removed == 2
+
+        # Verify only window-2 remains
+        def always_valid(wid):
+            return True
+
+        assert db.lookup("11111111", always_valid) is None
+        assert db.lookup("22222222", always_valid) == "window-2"
+        assert db.lookup("33333333", always_valid) is None
+
+    def test_cleanup_stale_entries_respects_sample_size(self, mocker):
+        """Test cleanup_stale_entries only checks sample_size entries."""
+        db = WindowRegistry(":memory:")
+
+        # Register 5 entries
+        for i in range(1, 6):
+            db.register(f"1111111{i}", f"window-{i}", "iTerm2")
+            time.sleep(0.01)
+
+        # Mock _validate_window_exists to always return False
+        mocker.patch.object(db, "_validate_window_exists", return_value=False)
+
+        # Cleanup with sample_size=3 should only check 3 oldest
+        removed = db.cleanup_stale_entries(sample_size=3)
+
+        # Should remove exactly 3 entries (the 3 oldest)
+        assert removed == 3
+
+    def test_validate_window_exists_exception_handling(self, mocker):
+        """Test _validate_window_exists returns False on exception."""
+        db = WindowRegistry(":memory:")
+
+        # Mock get_launcher to raise exception
+        mock_launcher = mocker.MagicMock()
+        mock_launcher._window_exists_by_id.side_effect = RuntimeError("Test error")
+        mocker.patch("mc.terminal.launcher.get_launcher", return_value=mock_launcher)
+
+        # Should return False (aggressive cleanup)
+        result = db._validate_window_exists("window-123", "iTerm2")
+        assert result is False
+
+    def test_connection_rollback_on_exception(self, tmp_path):
+        """Test that connection context manager rolls back on exception."""
+        db_path = str(tmp_path / "test.db")
+        db = WindowRegistry(db_path)
+
+        # Register initial entry
+        db.register("12345678", "window-123", "iTerm2")
+
+        # Force an exception during transaction
+        try:
+            with db._connection() as conn:
+                conn.execute("DELETE FROM window_registry WHERE case_number = ?", ("12345678",))
+                # Raise exception before commit
+                raise ValueError("Test exception")
+        except ValueError:
+            pass
+
+        # Verify rollback - entry should still exist
+        def always_valid(wid):
+            return True
+
+        window_id = db.lookup("12345678", always_valid)
+        assert window_id == "window-123", "Entry should still exist after rollback"
