@@ -84,6 +84,9 @@ class WindowRegistry:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_window_id ON window_registry(window_id)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_last_validated ON window_registry(last_validated)"
+            )
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -208,3 +211,82 @@ class WindowRegistry:
                 "DELETE FROM window_registry WHERE case_number = ?",
                 (case_number,),
             )
+
+    def _get_oldest_entries(self, limit: int = 20) -> list[tuple[str, str, str]]:
+        """Get oldest registry entries by last_validated timestamp.
+
+        Returns entries with oldest last_validated timestamps, indicating
+        windows that haven't been accessed recently and may be stale.
+
+        Args:
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of (case_number, window_id, terminal_type) tuples ordered
+            by last_validated ascending (oldest first)
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT case_number, window_id, terminal_type
+                FROM window_registry
+                ORDER BY last_validated ASC
+                LIMIT ?
+                """,
+                (limit,)
+            ).fetchall()
+
+            return [
+                (row["case_number"], row["window_id"], row["terminal_type"])
+                for row in rows
+            ]
+
+    def _validate_window_exists(self, window_id: str, terminal_type: str) -> bool:
+        """Validate window exists via platform-specific launcher.
+
+        Args:
+            window_id: Window ID to validate
+            terminal_type: Terminal type (iTerm2, Terminal.app, etc.)
+
+        Returns:
+            True if window exists, False if stale or validation fails
+        """
+        from mc.terminal.launcher import get_launcher
+
+        try:
+            launcher = get_launcher()
+            # Use existing _window_exists_by_id from Phase 16
+            return launcher._window_exists_by_id(window_id)
+        except Exception:
+            # Aggressive cleanup: treat validation errors as stale
+            # Better to remove questionable entries than accumulate crud
+            return False
+
+    def cleanup_stale_entries(self, sample_size: int = 20) -> int:
+        """Clean up stale window entries by validating oldest entries.
+
+        Samples oldest entries by last_validated timestamp and validates
+        window existence via platform API. Immediately deletes invalid entries.
+        Incremental deletion (commit per entry) avoids long-running locks.
+
+        Args:
+            sample_size: Number of oldest entries to validate (default: 20)
+
+        Returns:
+            Number of stale entries removed
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        removed_count = 0
+        oldest_entries = self._get_oldest_entries(limit=sample_size)
+
+        for case_number, window_id, terminal_type in oldest_entries:
+            # Validate window existence (platform-specific)
+            if not self._validate_window_exists(window_id, terminal_type):
+                # Delete stale entry immediately (incremental commit)
+                self.remove(case_number)
+                removed_count += 1
+                logger.info("Removed stale window registry entry for case %s", case_number)
+
+        return removed_count
