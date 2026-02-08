@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 15 of 19 (Window Registry Foundation)
-Plan: 1 of 1 complete
+Plan: 2 of 2 complete
 Status: Phase complete
-Last activity: 2026-02-08 — Completed 15-01-PLAN.md
+Last activity: 2026-02-08 — Completed 15-02-PLAN.md
 
 Progress: [███████████████████░░░░░] 79% (15/19 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 40 (across v1.0, v2.0, v2.0.1, v2.0.2)
+- Total plans completed: 41 (across v1.0, v2.0, v2.0.1, v2.0.2)
 - Previous milestones:
   - v1.0: 18 plans (8 phases) — shipped 2026-01-22
   - v2.0: 16 plans (6 phases) — shipped 2026-02-01
@@ -29,7 +29,7 @@ Progress: [███████████████████░░░░
 
 | Phase | Plans | Status |
 |-------|-------|--------|
-| 15 (Window Registry) | 1 | Complete (v2.0.2) |
+| 15 (Window Registry) | 2 | Complete (v2.0.2) |
 | 14.1 (Critical Fixes) | 5 | Complete (v2.0.1) |
 | 14 (Distribution) | 2 | Complete (v2.0) |
 | 13 (Container Image) | 3 | Complete (v2.0) |
@@ -48,6 +48,9 @@ Progress: [███████████████████░░░░
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 15-02: Use 'id of current window' (iTerm2) / 'id of front window' (Terminal.app) for window ID capture
+- 15-02: Return window ID as string for cross-platform compatibility
+- 15-02: Escape window ID in AppleScript validation to prevent injection
 - 15-01: Callback-based validator in lookup() for platform-agnostic window validation
 - 15-01: Return bool from register() to signal first-write-wins outcome (True=success, False=duplicate)
 - 15-01: Auto-commit transactions to avoid lock upgrade issues in concurrent scenarios
@@ -74,6 +77,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 15-01-PLAN.md (Window Registry Foundation)
+Stopped at: Completed 15-02-PLAN.md (macOS Window ID Integration)
 Resume file: None
-Next action: Run `/gsd:plan-phase 16` to plan macOS Window Tracking
+Next action: Run `/gsd:plan-phase 16` to plan macOS Window Tracking integration
