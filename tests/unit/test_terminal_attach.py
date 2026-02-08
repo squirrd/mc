@@ -74,7 +74,7 @@ class TestBuildWindowTitle:
 
         result = build_window_title(case_number, customer_name, description)
 
-        assert result == "12345678 - ACME Corp - Server down"
+        assert result == "12345678:ACME Corp:Server down://case"
 
     def test_build_window_title_truncation(self) -> None:
         """Test window title truncates long descriptions."""
@@ -87,8 +87,10 @@ class TestBuildWindowTitle:
 
         # Total length should be under 100 chars
         assert len(result) <= 100
-        # Should end with ellipsis
-        assert result.endswith("...")
+        # Should end with vm_path suffix after ellipsis in description
+        assert result.endswith("://case")
+        # Description should be truncated with ellipsis
+        assert "..." in result
 
     def test_build_window_title_no_truncation_needed(self) -> None:
         """Test window title doesn't truncate short descriptions."""
@@ -266,8 +268,8 @@ class TestAttachTerminal:
         call_args = deps["launcher"].launch.call_args
         launch_options = call_args[0][0]
 
-        # Title format: "{case} - {customer} - {description}"
-        assert launch_options.title == "12345678 - Test Customer - Test case"
+        # Title format: "{case}:{customer}:{description}://case"
+        assert launch_options.title == "12345678:Test Customer:Test case://case"
 
     def test_attach_terminal_podman_exec_command(self, mock_dependencies) -> None:
         """Test attach_terminal builds correct podman exec command."""
@@ -403,7 +405,7 @@ class TestAttachTerminal:
         # account name falls back to "Unknown"
         assert "Unknown" in launch_options.title
         # description defaults to empty string
-        assert "12345678 - Unknown - " == launch_options.title
+        assert "12345678:Unknown:://case" == launch_options.title
 
     def test_attach_terminal_workspace_path_fallback(self, mock_dependencies) -> None:
         """Test attach_terminal constructs workspace path when not in status."""
