@@ -251,6 +251,16 @@ def attach_terminal(
         # Initialize registry and check for existing window ID
         registry = WindowRegistry()
 
+        # Cleanup stale entries before operation (self-healing registry - Phase 17)
+        try:
+            removed = registry.cleanup_stale_entries(sample_size=20)
+            if removed > 0:
+                print(f"Cleaned up {removed} stale window entries")
+                logger.info("Automatic cleanup removed %d stale window entries", removed)
+        except Exception as e:
+            # Non-fatal: cleanup failures shouldn't block terminal launch
+            logger.warning("Window registry cleanup failed: %s", e)
+
         # Look up window ID with lazy validation
         window_id = registry.lookup(case_number, launcher._window_exists_by_id)
 
