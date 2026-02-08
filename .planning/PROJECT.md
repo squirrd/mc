@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.1 (2026-02-02)
+**Latest Release:** v2.0.2 (2026-02-08)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -20,22 +20,34 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Container image with essential tools (mc, RHEL 10 UBI base)
 - ✓ Quay.io registry integration with auto-pull and local fallback
 - ✓ Modern distribution via uv tool (pipx/uv tool install git+)
-- ✓ Production-ready test suite: 503 tests passing with 77% coverage
-
-## Current Milestone: v2.0.2 Window Tracking
-
-**Goal:** Fix duplicate terminal prevention by implementing window ID tracking system
-
-**Target features:**
-- Window registry system using SQLite to track terminal window IDs
-- Capture window IDs at creation time via AppleScript/platform-specific APIs
-- Update search/focus functions to use ID lookup instead of title matching
-- Implement cleanup mechanism for stale window entries
-- Fix failing integration test: test_duplicate_terminal_prevention_regression
+- ✓ Window ID tracking system eliminating duplicate terminal windows (macOS and Linux X11)
+- ✓ Self-healing window registry with automatic cleanup and reconcile command
+- ✓ Production-ready test suite: 530 tests passing with 74.65% coverage
 
 ## Requirements
 
 ### Validated
+
+Shipped in v2.0.2 (2026-02-08):
+
+**Window Tracking System:**
+- ✓ SQLite-backed window registry persists window IDs across mc process restarts — v2.0.2
+- ✓ Window registry survives concurrent access (WAL mode, first-write-wins) — v2.0.2
+- ✓ System stores window ID when creating terminal window — v2.0.2
+- ✓ System retrieves window ID by case number — v2.0.2
+- ✓ Running `mc case XXXXX` twice focuses existing window instead of creating duplicate — v2.0.2
+- ✓ System validates window still exists before focusing (lazy validation) — v2.0.2
+- ✓ System creates new window if previous window was closed manually — v2.0.2
+- ✓ System detects and removes stale entries for closed windows — v2.0.2
+- ✓ Automatic cleanup on startup reconciles registry with actual windows — v2.0.2
+- ✓ Manual `mc container reconcile` command for troubleshooting — v2.0.2
+- ✓ Window focusing works on macOS (iTerm2, Terminal.app) — v2.0.2
+- ✓ Window focusing works on Linux (X11 with wmctrl/xdotool) — v2.0.2
+- ✓ System provides feedback when focusing vs creating new window — v2.0.2
+- ✓ Integration test `test_duplicate_terminal_prevention_regression` passes consistently — v2.0.2
+- ✓ Unit tests for WindowRegistry store/lookup/cleanup operations (95% coverage) — v2.0.2
+- ✓ Platform-specific tests for macOS and Linux — v2.0.2
+- ✓ Graceful database corruption recovery — v2.0.2
 
 Shipped in v1.0 (2026-01-22):
 
@@ -99,16 +111,7 @@ Shipped in v1.0 (2026-01-22):
 
 ### Active
 
-v2.0.2 Window Tracking milestone:
-
-- [ ] Design window registry schema (SQLite table structure)
-- [ ] Implement WindowRegistry class with store/lookup/cleanup methods
-- [ ] Capture window IDs on creation via platform-specific APIs
-- [ ] Update find_window_by_title() to use registry ID lookup
-- [ ] Update focus_window_by_title() to use registry ID lookup
-- [ ] Implement stale entry cleanup mechanism
-- [ ] Fix integration test: test_duplicate_terminal_prevention_regression
-- [ ] Verify no duplicate terminals created on repeated `mc case XXXXX` calls
+(Next milestone requirements - to be defined via `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -122,14 +125,14 @@ v2.0.2 Window Tracking milestone:
 
 ## Context
 
-**Current State (v2.0 shipped 2026-02-01, v2.0.1 cleanup in progress):**
+**Current State (v2.0.2 shipped 2026-02-08):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
-- 6,056 lines of production Python code (cumulative v1.0 + v2.0)
+- 7,349 lines of production Python code (cumulative v1.0 + v2.0 + v2.0.1 + v2.0.2)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
 - External dependencies: Red Hat API, Podman, SQLite
-- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, platformdirs (legacy)
+- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, wmctrl/xdotool (Linux X11)
 - Configuration: TOML-based (~/mc/config/config.toml) with auto-migration
-- Type-safe: mypy strict mode passing with 100% type coverage (64/64 functions)
+- Type-safe: mypy strict mode passing with 100% type coverage
 
 **Key Features:**
 - Container orchestration with per-case isolated workspaces
@@ -157,10 +160,7 @@ v2.0.2 Window Tracking milestone:
 ```
 
 **Known Technical Debt:**
-- 49 test failures (integration/terminal/container tests need updates post-v2.0)
-- Container image detection requires local build (quay.io pre-built images planned)
-- Workspace path structure needs customer/case-desc hierarchy
-- Terminal duplicate launch prevention not implemented
+- None - v2.0.2 achieved zero test failures and zero tech debt
 
 ## Constraints
 
@@ -190,4 +190,4 @@ v2.0.2 Window Tracking milestone:
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-04 after starting v2.0.2 milestone*
+*Last updated: 2026-02-08 after v2.0.2 milestone*

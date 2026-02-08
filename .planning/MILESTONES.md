@@ -1,5 +1,32 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.2 Window Tracking (Shipped: 2026-02-08)
+
+**Delivered:** Eliminate duplicate terminal windows by implementing window ID tracking system
+
+**Phases completed:** 15-19 (5 phases, 10 plans total)
+
+**Key accomplishments:**
+
+- SQLite-backed window registry with WAL mode for concurrent multi-process access and lazy validation with auto-cleanup
+- macOS duplicate prevention via window ID tracking with AppleScript integration for iTerm2 and Terminal.app, eliminating unreliable title-based search
+- Self-healing registry with automatic stale entry cleanup on startup and manual `mc container reconcile` command for troubleshooting
+- Linux X11 support with wmctrl/xdotool integration for gnome-terminal and konsole, desktop-native terminal preference, and strict Wayland validation
+- Comprehensive test suite with 530 tests passing (74.65% coverage), graceful database corruption recovery, and verified duplicate prevention
+
+**Stats:**
+
+- 57 files created/modified
+- 7,349 lines of Python code
+- 5 phases, 10 plans
+- 6 hours from phase 15 start to phase 19 complete (2026-02-08, 09:48 → 15:36)
+
+**Git range:** `0ef9ea5` (docs(15): capture phase context) → `5dedf59` (docs(19): complete Test Suite & Validation phase)
+
+**What's next:** Start next milestone via `/gsd:new-milestone`
+
+---
+
 ## v2.0.1 Cleanup & Hardening (Shipped: 2026-02-02)
 
 **Delivered:** Fixed critical bugs from v2.0 release and completed comprehensive test suite improvements
