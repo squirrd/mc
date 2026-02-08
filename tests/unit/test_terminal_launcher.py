@@ -95,14 +95,6 @@ class TestDetectTerminal:
 
         assert result == "gnome-terminal"
 
-    def test_detect_terminal_xfce4(self, mocker: Mock) -> None:
-        """Test XFCE Terminal detection."""
-        mocker.patch.dict("os.environ", {"COLORTERM": "xfce4-terminal"}, clear=True)
-
-        result = detect_terminal()
-
-        assert result == "xfce4-terminal"
-
     def test_detect_terminal_unknown(self, mocker: Mock) -> None:
         """Test detection returns None for unknown terminal."""
         mocker.patch.dict("os.environ", {}, clear=True)
@@ -157,14 +149,6 @@ class TestFindAvailableTerminal:
         result = find_available_terminal("Linux")
 
         assert result == "konsole"
-
-    def test_find_available_terminal_linux_xfce4(self, mocker: Mock) -> None:
-        """Test finding xfce4-terminal on Linux."""
-        mocker.patch("shutil.which", side_effect=lambda t: t == "xfce4-terminal")
-
-        result = find_available_terminal("Linux")
-
-        assert result == "xfce4-terminal"
 
     def test_find_available_terminal_linux_xterm(self, mocker: Mock) -> None:
         """Test finding xterm on Linux as last resort."""
@@ -382,14 +366,6 @@ class TestLinuxLauncher:
 
         assert launcher.terminal == "konsole"
 
-    def test_linux_launcher_xfce4_detection(self, mocker: Mock) -> None:
-        """Test LinuxLauncher detects xfce4-terminal."""
-        mocker.patch("shutil.which", side_effect=lambda t: t == "xfce4-terminal")
-
-        launcher = LinuxLauncher()
-
-        assert launcher.terminal == "xfce4-terminal"
-
     def test_linux_launcher_no_terminal_found(self, mocker: Mock) -> None:
         """Test error when no supported terminal found."""
         mocker.patch("shutil.which", return_value=None)
@@ -441,22 +417,6 @@ class TestLinuxLauncher:
         # Title set via escape sequence
         assert any("\\033]0;" in arg and "Test Window" in arg for arg in args)
 
-    def test_linux_launcher_xfce4_terminal_args(self, mocker: Mock) -> None:
-        """Test xfce4-terminal command-line arguments."""
-        launcher = LinuxLauncher(terminal="xfce4-terminal")
-        options = LaunchOptions(
-            title="Test Window",
-            command="echo 'hello world'",
-            auto_focus=True,
-        )
-
-        args = launcher._build_xfce4_terminal_args(options)
-
-        assert args[0] == "xfce4-terminal"
-        assert "--title=Test Window" in args
-        assert "--command" in args
-        assert any("bash -c" in arg and "echo 'hello world'" in arg for arg in args)
-
     def test_linux_launcher_launch_gnome_terminal(self, mocker: Mock) -> None:
         """Test launching gnome-terminal."""
         mocker.patch("shutil.which", return_value="/usr/bin/gnome-terminal")
@@ -498,27 +458,6 @@ class TestLinuxLauncher:
         assert mock_popen.call_count == 1
         call_args = mock_popen.call_args
         assert call_args[0][0][0] == "konsole"
-
-    def test_linux_launcher_launch_xfce4_terminal(self, mocker: Mock) -> None:
-        """Test launching xfce4-terminal."""
-        mocker.patch("shutil.which", return_value="/usr/bin/xfce4-terminal")
-        mock_popen = mocker.patch("subprocess.Popen")
-        mock_process = MagicMock()
-        mock_popen.return_value = mock_process
-
-        launcher = LinuxLauncher(terminal="xfce4-terminal")
-        options = LaunchOptions(
-            title="12345678 - Customer - Description",
-            command="podman exec -it mc-12345678 bash",
-            auto_focus=True,
-        )
-
-        launcher.launch(options)
-
-        # Verify xfce4-terminal called
-        assert mock_popen.call_count == 1
-        call_args = mock_popen.call_args
-        assert call_args[0][0][0] == "xfce4-terminal"
 
     def test_linux_launcher_missing_binary(self, mocker: Mock) -> None:
         """Test error when terminal binary not found."""
