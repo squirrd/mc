@@ -306,6 +306,73 @@ end tell
         except Exception:
             return False
 
+    def focus_window_by_id(self, window_id: str) -> bool:
+        """Focus window by ID, handling minimized windows and cross-Space switching.
+
+        Args:
+            window_id: Window ID to focus (as string)
+
+        Returns:
+            True if window found and focused, False otherwise
+
+        Un-minimizes Dock-minimized windows and switches macOS Spaces if needed.
+        Uses activate + set index pattern for reliable cross-Space focusing.
+        """
+        if not shutil.which("osascript"):
+            return False
+
+        escaped_id = self._escape_applescript(window_id)
+
+        if self.terminal == "iTerm2":
+            script = f'''
+tell application "iTerm"
+    activate
+    repeat with theWindow in windows
+        if (id of theWindow as text) is "{escaped_id}" then
+            -- Un-minimize if needed
+            if miniaturized of theWindow then
+                set miniaturized of theWindow to false
+            end if
+            -- Bring to front
+            set index of theWindow to 1
+            return true
+        end if
+    end repeat
+    return false
+end tell
+'''
+        else:  # Terminal.app
+            script = f'''
+tell application "Terminal"
+    activate
+    repeat with theWindow in windows
+        if (id of theWindow as text) is "{escaped_id}" then
+            -- Un-minimize if needed
+            if miniaturized of theWindow then
+                set miniaturized of theWindow to false
+            end if
+            -- Bring to front
+            set index of theWindow to 1
+            return true
+        end if
+    end repeat
+    return false
+end tell
+'''
+
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.stdout.strip() == "true"
+        except subprocess.TimeoutExpired:
+            return False
+        except Exception:
+            return False
+
     def _build_iterm_script(self, options: LaunchOptions) -> str:
         """Build AppleScript for launching iTerm2.
 
