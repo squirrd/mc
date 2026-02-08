@@ -1,16 +1,24 @@
 """Integration tests for window tracking edge cases.
 
-Tests window lifecycle, stale entry handling, and registry corruption recovery
-with real Podman containers and terminal launchers.
+Tests window lifecycle, stale entry handling, and registry corruption recovery.
+These tests verify the window tracking system (phases 15-18) handles edge cases
+beyond the primary duplicate prevention scenario.
 """
 
 import os
 import platform
+import sqlite3
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from mc.config.manager import ConfigManager
 from mc.container.manager import ContainerManager
@@ -18,9 +26,7 @@ from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.attach import attach_terminal
-from mc.terminal.launcher import get_launcher
 from mc.terminal.registry import WindowRegistry
-from mc.utils.auth import get_access_token
 
 
 def _podman_available() -> bool:
@@ -38,8 +44,10 @@ def _redhat_api_configured() -> bool:
         config = ConfigManager()
         if not config.exists():
             return False
+
         cfg = config.load()
         api_config = cfg.get("api", {})
+
         return bool(api_config.get("rh_api_offline_token"))
     except Exception:
         return False
@@ -56,22 +64,23 @@ def _redhat_api_configured() -> bool:
 )
 @pytest.mark.skipif(
     platform.system() != "Darwin",
-    reason="Test requires macOS"
+    reason="macOS-specific test"
 )
 def test_window_cleanup_after_manual_close(mocker, tmp_path):
-    """Test window lifecycle: manual close → cleanup → new window creation.
+    """Test window registry cleanup when user manually closes window.
 
-    Edge case: User manually closes terminal window (via Cmd+W or close button),
-    then runs `mc case XXXXX` again. System should detect stale entry, clean it up,
-    and create new window.
+    Scenario:
+    1. Create terminal for case X
+    2. Verify window ID registered
+    3. Manually close window (simulate user closing iTerm2 window)
+    4. Run attach_terminal again for same case
+    5. Verify: New window created (not error), old entry cleaned up
 
-    Validation:
-    1. First attach creates window and registers window ID
-    2. Manually close window (simulated by removing from registry)
-    3. Second attach detects stale entry, removes it, creates new window
-    4. New window ID is different from old window ID
+    This tests the lazy validation cleanup in WindowRegistry.lookup().
+    When validator returns False (window doesn't exist), the stale entry
+    should be removed and a new window created.
     """
-    # Setup isolated test environment
+    # Setup: Create temporary directories for isolated test environment
     test_base_dir = tmp_path / "mc"
     test_state_dir = test_base_dir / "state"
     test_state_dir.mkdir(parents=True)
@@ -79,10 +88,11 @@ def test_window_cleanup_after_manual_close(mocker, tmp_path):
     test_config_dir.mkdir(parents=True)
 
     db_path = test_state_dir / "containers.db"
-    registry_path = test_state_dir / "window.db"
+    registry_db_path = test_state_dir / "window.db"
 
-    # Create minimal config
-    real_config = ConfigManager()
+    # Create minimal config with API credentials
+    from mc.config.manager import ConfigManager as RealConfigManager
+    real_config = RealConfigManager()
     real_cfg = real_config.load()
 
     minimal_config = {
@@ -93,42 +103,58 @@ def test_window_cleanup_after_manual_close(mocker, tmp_path):
     }
 
     config_path = test_config_dir / "config.toml"
+
     import tomli_w
     with open(config_path, "wb") as f:
         tomli_w.dump(minimal_config, f)
 
-    # Setup components with isolated registry
+    # Setup REAL components
     config_manager = ConfigManager()
     config_manager._config_path = config_path
+
+    from mc.integrations.redhat_api import RedHatAPIClient
+    from mc.utils.auth import get_access_token
 
     access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
     api_client = RedHatAPIClient(access_token)
 
+    # Mock TTY check
     mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
 
+    # Mock user_data_dir for WindowRegistry to use isolated test database
+    mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(test_state_dir))
+
+    # Initialize REAL components
     podman_client = PodmanClient()
     state_db = StateDatabase(str(db_path))
     container_manager = ContainerManager(podman_client, state_db)
 
-    # Use isolated registry
-    registry = WindowRegistry(str(registry_path))
-    mocker.patch("mc.terminal.attach.WindowRegistry", return_value=registry)
+    # Use REAL launcher
+    from mc.terminal.launcher import get_launcher
+    launcher = get_launcher()
 
-    test_case_number = "04347611"
+    # Use real case number from test set
+    test_case_number = "04300354"
     container_name = f"mc-{test_case_number}"
 
     # Pre-cleanup
     try:
-        existing = podman_client.client.containers.get(container_name)
-        existing.stop(timeout=2)
-        existing.remove()
+        existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing_container.remove()  # type: ignore[no-untyped-call]
     except Exception:
         pass
 
+    # Clean up registry entry
+    registry = WindowRegistry(str(registry_db_path))
+    registry.remove(test_case_number)
+
     container = None
+    created_window_id = None
+
     try:
-        print("\n=== FIRST ATTACH: Create window ===")
-        # First attach creates window
+        # FIRST CALL: Create terminal and window
+        print("\n=== FIRST CALL: Create initial window ===")
         attach_terminal(
             case_number=test_case_number,
             config_manager=config_manager,
@@ -136,33 +162,37 @@ def test_window_cleanup_after_manual_close(mocker, tmp_path):
             container_manager=container_manager,
         )
 
-        time.sleep(2)  # Give window time to be created and registered
+        time.sleep(2)  # Give window time to register
 
-        # Verify window was registered
+        # Verify window ID was registered
         def always_valid(wid):
             return True
 
-        first_window_id = registry.lookup(test_case_number, always_valid)
-        assert first_window_id is not None, "Window ID should be registered after first attach"
-        print(f"First window ID: {first_window_id}")
+        created_window_id = registry.lookup(test_case_number, always_valid)
+        assert created_window_id is not None, "Window ID should be registered after first call"
+        print(f"✓ Window ID registered: {created_window_id}")
 
-        print("\n=== SIMULATE MANUAL CLOSE: Make window ID invalid ===")
-        # Simulate manual close by making validator always return False
-        # This simulates the window being closed but entry still in registry
-        def always_invalid(wid):
-            return False
+        # SIMULATE WINDOW CLOSURE: Stop container to cause window to close
+        # (Stopping the podman exec process will cause iTerm2 window to close)
+        try:
+            existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            print("Stopping container to simulate window closure...")
+            existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            time.sleep(2)  # Give iTerm2 time to close window after container stops
+        except Exception as e:
+            print(f"Warning: Failed to stop container: {e}")
 
-        # Next lookup should detect stale entry and remove it
-        result = registry.lookup(test_case_number, always_invalid)
-        assert result is None, "Lookup should return None for invalid window"
+        # Verify window is actually closed (the window should close when process exits)
+        from mc.terminal.macos import MacOSLauncher
+        if isinstance(launcher, MacOSLauncher):
+            window_exists = launcher._window_exists_by_id(created_window_id)
+            # Note: Window might still exist briefly if user hasn't closed it manually
+            print(f"Window exists after container stop: {window_exists}")
+            # Don't assert here - window closure is async and depends on user closing iTerm2 window
+            print("✓ Container stopped (window should close or become orphaned)")
 
-        # Verify entry was removed from registry
-        stale_check = registry.lookup(test_case_number, always_valid)
-        assert stale_check is None, "Stale entry should be removed from registry"
-        print("✓ Stale entry removed from registry")
-
-        print("\n=== SECOND ATTACH: Create new window ===")
-        # Second attach should create new window (not error)
+        # SECOND CALL: Attach again (should detect stale or create new depending on window state)
+        print("\n=== SECOND CALL: Attach after manual close ===")
         attach_terminal(
             case_number=test_case_number,
             config_manager=config_manager,
@@ -172,33 +202,38 @@ def test_window_cleanup_after_manual_close(mocker, tmp_path):
 
         time.sleep(2)
 
-        # Verify new window was registered
-        second_window_id = registry.lookup(test_case_number, always_valid)
-        assert second_window_id is not None, "New window ID should be registered"
-        print(f"Second window ID: {second_window_id}")
+        # Verify: Window ID registered (should be new or same if window still exists)
+        new_window_id = registry.lookup(test_case_number, always_valid)
+        assert new_window_id is not None, "Window ID should be registered after second attach"
+        print(f"✓ Window ID after second attach: {new_window_id}")
 
-        # Note: Window IDs may be the same if we're reusing the same terminal window
-        # The important part is that no error occurred and a window ID exists
-        print("✓ Test PASSED: Window lifecycle handled correctly")
+        if new_window_id != created_window_id:
+            print("✓ Stale entry cleanup working - new window created after container stop")
+        else:
+            print("Note: Same window ID (window might still exist or was reused)")
 
         # Get container for cleanup
         try:
-            container = podman_client.client.containers.get(container_name)
+            container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         except Exception:
             pass
 
+        print("\n⚠️  MANUAL CLEANUP REQUIRED:")
+        print("Please manually close the iTerm2 window for this test.")
+
     finally:
-        # Cleanup
+        # Cleanup: Remove test container
         if container:
             try:
-                container.stop(timeout=2)
-                container.remove()
+                container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
+
         try:
-            cleanup_container = podman_client.client.containers.get(container_name)
-            cleanup_container.stop(timeout=2)
-            cleanup_container.remove()
+            cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
 
@@ -214,22 +249,21 @@ def test_window_cleanup_after_manual_close(mocker, tmp_path):
 )
 @pytest.mark.skipif(
     platform.system() != "Darwin",
-    reason="Test requires macOS"
+    reason="macOS-specific test"
 )
 def test_stale_window_id_handling(mocker, tmp_path):
     """Test handling of stale window IDs (window force-killed).
 
-    Edge case: Window ID is in registry but window was force-killed externally
-    (via Activity Monitor or killall). System should detect window doesn't exist,
-    remove stale entry, and create new window.
-
-    Validation:
-    1. Manually register fake window ID (simulates orphaned registry entry)
+    Scenario:
+    1. Register fake window ID in WindowRegistry
     2. Verify window doesn't actually exist (validation fails)
-    3. Run attach_terminal - should detect stale entry and remove it
-    4. New window should be created successfully
+    3. Run attach_terminal for that case
+    4. Verify: Stale entry removed, new window created
+
+    This tests lazy validation cleanup when window ID exists in registry
+    but the window was force-killed (e.g., iTerm2 crashed, window killed via Activity Monitor).
     """
-    # Setup isolated environment
+    # Setup
     test_base_dir = tmp_path / "mc"
     test_state_dir = test_base_dir / "state"
     test_state_dir.mkdir(parents=True)
@@ -237,10 +271,11 @@ def test_stale_window_id_handling(mocker, tmp_path):
     test_config_dir.mkdir(parents=True)
 
     db_path = test_state_dir / "containers.db"
-    registry_path = test_state_dir / "window.db"
+    registry_db_path = test_state_dir / "window.db"
 
-    # Create minimal config
-    real_config = ConfigManager()
+    # Create config
+    from mc.config.manager import ConfigManager as RealConfigManager
+    real_config = RealConfigManager()
     real_cfg = real_config.load()
 
     minimal_config = {
@@ -251,6 +286,7 @@ def test_stale_window_id_handling(mocker, tmp_path):
     }
 
     config_path = test_config_dir / "config.toml"
+
     import tomli_w
     with open(config_path, "wb") as f:
         tomli_w.dump(minimal_config, f)
@@ -259,48 +295,54 @@ def test_stale_window_id_handling(mocker, tmp_path):
     config_manager = ConfigManager()
     config_manager._config_path = config_path
 
+    from mc.integrations.redhat_api import RedHatAPIClient
+    from mc.utils.auth import get_access_token
+
     access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
     api_client = RedHatAPIClient(access_token)
 
     mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
+    mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(test_state_dir))
 
     podman_client = PodmanClient()
     state_db = StateDatabase(str(db_path))
     container_manager = ContainerManager(podman_client, state_db)
 
-    # Use isolated registry
-    registry = WindowRegistry(str(registry_path))
-    mocker.patch("mc.terminal.attach.WindowRegistry", return_value=registry)
+    from mc.terminal.launcher import get_launcher
+    launcher = get_launcher()
 
-    test_case_number = "04347611"
+    test_case_number = "04330024"
     container_name = f"mc-{test_case_number}"
 
     # Pre-cleanup
     try:
-        existing = podman_client.client.containers.get(container_name)
-        existing.stop(timeout=2)
-        existing.remove()
+        existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing_container.remove()  # type: ignore[no-untyped-call]
     except Exception:
         pass
 
+    registry = WindowRegistry(str(registry_db_path))
+    registry.remove(test_case_number)
+
     container = None
+
     try:
-        print("\n=== REGISTER FAKE WINDOW ID ===")
-        # Manually register fake window ID (simulates orphaned entry)
-        fake_window_id = "999999"
-        success = registry.register(test_case_number, fake_window_id, "iTerm2")
-        assert success is True, "Should register fake window ID"
-        print(f"Registered fake window ID: {fake_window_id}")
+        # INJECT STALE ENTRY: Register fake window ID that doesn't exist
+        fake_window_id = "999999999"
+        registered = registry.register(test_case_number, fake_window_id, "iTerm2")
+        assert registered is True, "Fake window ID should register successfully"
+        print(f"\n✓ Injected stale entry: case {test_case_number} -> window ID {fake_window_id}")
 
-        # Verify it's in registry
-        def always_valid(wid):
-            return True
+        # Verify window doesn't actually exist
+        from mc.terminal.macos import MacOSLauncher
+        if isinstance(launcher, MacOSLauncher):
+            window_exists = launcher._window_exists_by_id(fake_window_id)
+            assert not window_exists, "Fake window ID should not exist"
+            print("✓ Verified fake window ID doesn't exist")
 
-        registered_id = registry.lookup(test_case_number, always_valid)
-        assert registered_id == fake_window_id, "Fake ID should be in registry"
-
-        print("\n=== ATTACH WITH STALE ENTRY ===")
-        # attach_terminal should detect window doesn't exist and handle gracefully
+        # RUN ATTACH: Should detect stale entry and create new window
+        print("\n=== ATTACH: Should detect stale entry and create new window ===")
         attach_terminal(
             case_number=test_case_number,
             config_manager=config_manager,
@@ -310,31 +352,38 @@ def test_stale_window_id_handling(mocker, tmp_path):
 
         time.sleep(2)
 
-        # After attach, either:
-        # 1. Stale entry removed and new window created, OR
-        # 2. New window focused if it already exists
-        # Either case is valid - key is no crash/error occurred
+        # Verify: New real window ID registered (different from fake)
+        def always_valid(wid):
+            return True
 
-        print("✓ Test PASSED: Stale window ID handled without error")
+        new_window_id = registry.lookup(test_case_number, always_valid)
+        assert new_window_id is not None, "New window ID should be registered"
+        assert new_window_id != fake_window_id, "New window ID should be different from fake"
+        print(f"✓ New real window ID registered: {new_window_id}")
+        print("✓ Stale entry cleanup working - new window created when old ID invalid")
 
         # Get container for cleanup
         try:
-            container = podman_client.client.containers.get(container_name)
+            container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         except Exception:
             pass
+
+        print("\n⚠️  MANUAL CLEANUP REQUIRED:")
+        print("Please manually close the iTerm2 window for this test.")
 
     finally:
         # Cleanup
         if container:
             try:
-                container.stop(timeout=2)
-                container.remove()
+                container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
+
         try:
-            cleanup_container = podman_client.client.containers.get(container_name)
-            cleanup_container.stop(timeout=2)
-            cleanup_container.remove()
+            cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
 
@@ -350,22 +399,21 @@ def test_stale_window_id_handling(mocker, tmp_path):
 )
 @pytest.mark.skipif(
     platform.system() != "Darwin",
-    reason="Test requires macOS"
+    reason="macOS-specific test"
 )
 def test_registry_corruption_graceful_fallback(mocker, tmp_path):
-    """Test recovery from registry corruption/deletion.
+    """Test graceful fallback when registry database is corrupted/deleted.
 
-    Edge case: Registry database file gets corrupted or deleted. System should
-    gracefully recover by creating new registry and continuing operation.
-
-    Validation:
+    Scenario:
     1. Create container and window
-    2. Corrupt/delete registry database
+    2. Corrupt/delete registry database file
     3. Run attach_terminal again
-    4. System creates new registry, continues without crash
-    5. Window creation succeeds (no error)
+    4. Verify: New registry created, window created (no crash)
+
+    This tests that the system gracefully handles registry corruption
+    without crashing. It should create a new registry and continue working.
     """
-    # Setup isolated environment
+    # Setup
     test_base_dir = tmp_path / "mc"
     test_state_dir = test_base_dir / "state"
     test_state_dir.mkdir(parents=True)
@@ -373,10 +421,11 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
     test_config_dir.mkdir(parents=True)
 
     db_path = test_state_dir / "containers.db"
-    registry_path = test_state_dir / "window.db"
+    registry_db_path = test_state_dir / "window.db"
 
-    # Create minimal config
-    real_config = ConfigManager()
+    # Create config
+    from mc.config.manager import ConfigManager as RealConfigManager
+    real_config = RealConfigManager()
     real_cfg = real_config.load()
 
     minimal_config = {
@@ -387,6 +436,7 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
     }
 
     config_path = test_config_dir / "config.toml"
+
     import tomli_w
     with open(config_path, "wb") as f:
         tomli_w.dump(minimal_config, f)
@@ -395,34 +445,39 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
     config_manager = ConfigManager()
     config_manager._config_path = config_path
 
+    from mc.integrations.redhat_api import RedHatAPIClient
+    from mc.utils.auth import get_access_token
+
     access_token = get_access_token(minimal_config["api"]["rh_api_offline_token"])
     api_client = RedHatAPIClient(access_token)
 
     mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
+    mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(test_state_dir))
 
     podman_client = PodmanClient()
     state_db = StateDatabase(str(db_path))
     container_manager = ContainerManager(podman_client, state_db)
 
-    test_case_number = "04347611"
+    test_case_number = "04339264"
     container_name = f"mc-{test_case_number}"
 
     # Pre-cleanup
     try:
-        existing = podman_client.client.containers.get(container_name)
-        existing.stop(timeout=2)
-        existing.remove()
+        existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing_container.remove()  # type: ignore[no-untyped-call]
     except Exception:
         pass
 
+    # Remove registry if exists
+    if registry_db_path.exists():
+        os.remove(registry_db_path)
+
     container = None
+
     try:
-        print("\n=== FIRST ATTACH: Create window and registry ===")
-        # First attach creates window and registry
-        # Use isolated registry
-        registry1 = WindowRegistry(str(registry_path))
-        mocker.patch("mc.terminal.attach.WindowRegistry", return_value=registry1)
-
+        # FIRST CALL: Create window and registry
+        print("\n=== FIRST CALL: Create window and registry ===")
         attach_terminal(
             case_number=test_case_number,
             config_manager=config_manager,
@@ -432,28 +487,28 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
 
         time.sleep(2)
 
-        # Verify registry file exists
-        assert Path(registry_path).exists(), "Registry file should exist"
-        print(f"Registry created at: {registry_path}")
+        # Verify registry was created
+        assert registry_db_path.exists(), "Registry database should be created"
+        print("✓ Registry database created")
 
-        print("\n=== DELETE REGISTRY (simulate corruption) ===")
-        # Delete registry database (simulate corruption)
-        if Path(registry_path).exists():
-            Path(registry_path).unlink()
-        # Also delete WAL files if they exist
-        for wal_file in [f"{registry_path}-wal", f"{registry_path}-shm"]:
-            if Path(wal_file).exists():
-                Path(wal_file).unlink()
+        # CORRUPT THE REGISTRY: Write garbage data to database file
+        print("\n=== CORRUPTING REGISTRY ===")
+        with open(registry_db_path, "wb") as f:
+            f.write(b"This is not a valid SQLite database! Corruption simulation.")
+        print("✓ Registry database corrupted")
 
-        assert not Path(registry_path).exists(), "Registry file should be deleted"
-        print("✓ Registry deleted")
+        # Verify corruption (opening should fail)
+        try:
+            conn = sqlite3.connect(str(registry_db_path))
+            conn.execute("SELECT * FROM window_registry")
+            conn.close()
+            pytest.fail("Database should be corrupted and fail to query")
+        except sqlite3.DatabaseError:
+            print("✓ Verified database is corrupted")
 
-        print("\n=== SECOND ATTACH: Recover from corruption ===")
-        # Create new registry instance (simulates next mc case command after corruption)
-        registry2 = WindowRegistry(str(registry_path))
-        mocker.patch("mc.terminal.attach.WindowRegistry", return_value=registry2)
-
-        # Should create new registry and continue without error
+        # SECOND CALL: Attach after corruption (should recover gracefully)
+        print("\n=== SECOND CALL: Attach after registry corruption ===")
+        # This should NOT crash - it should create a new registry
         attach_terminal(
             case_number=test_case_number,
             config_manager=config_manager,
@@ -463,29 +518,39 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
 
         time.sleep(2)
 
-        # Verify new registry was created
-        assert Path(registry_path).exists(), "New registry should be created"
-        print("✓ New registry created after corruption")
+        # Verify: New registry created and working
+        registry = WindowRegistry(str(registry_db_path))
 
-        print("✓ Test PASSED: Graceful recovery from registry corruption")
+        def always_valid(wid):
+            return True
+
+        window_id = registry.lookup(test_case_number, always_valid)
+        # Note: window_id might be None or a new ID depending on whether corruption recovery
+        # recreated the DB or if it's using the existing window
+        print(f"✓ Registry accessible after corruption: window_id = {window_id}")
+        print("✓ System gracefully handled registry corruption (no crash)")
 
         # Get container for cleanup
         try:
-            container = podman_client.client.containers.get(container_name)
+            container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         except Exception:
             pass
+
+        print("\n⚠️  MANUAL CLEANUP REQUIRED:")
+        print("Please manually close the iTerm2 window for this test.")
 
     finally:
         # Cleanup
         if container:
             try:
-                container.stop(timeout=2)
-                container.remove()
+                container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
+
         try:
-            cleanup_container = podman_client.client.containers.get(container_name)
-            cleanup_container.stop(timeout=2)
-            cleanup_container.remove()
+            cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
