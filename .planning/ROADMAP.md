@@ -225,10 +225,11 @@ Plans:
   2. Unit tests validate WindowRegistry store/lookup/cleanup operations
   3. Manual testing on macOS confirms no duplicates on repeated `mc case XXXXX`
   4. Platform-specific tests pass on both macOS and Linux
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 19-01: [Plan TBD - run /gsd:plan-phase 19]
+- [ ] 19-01-PLAN.md — Fix failing unit tests (window title format, consolidated paths)
+- [ ] 19-02-PLAN.md — Expand window tracking test coverage (edge cases, consistency validation)
 
 ## Progress
 
@@ -256,4 +257,4 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19
 | 16. macOS Window Tracking | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 17. Registry Cleanup | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 18. Linux Support | v2.0.2 | 2/2 | Complete | 2026-02-08 |
-| 19. Test Suite & Validation | v2.0.2 | 0/TBD | Not started | - |
+| 19. Test Suite & Validation | v2.0.2 | 0/2 | Not started | - |
