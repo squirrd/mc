@@ -33,10 +33,6 @@ def detect_terminal() -> str | None:
     if os.getenv("KONSOLE_DBUS_SERVICE") or os.getenv("KONSOLE_DBUS_SESSION"):
         return "konsole"
 
-    # XFCE Terminal detection
-    if os.getenv("COLORTERM") == "xfce4-terminal":
-        return "xfce4-terminal"
-
     # GNOME Terminal detection (via COLORTERM)
     if os.getenv("COLORTERM") == "gnome-terminal":
         return "gnome-terminal"
@@ -55,12 +51,12 @@ def find_available_terminal(platform_name: str) -> str | None:
 
     Priority order:
         macOS: iTerm, Terminal.app
-        Linux: gnome-terminal, konsole, xfce4-terminal, xterm
+        Linux: gnome-terminal, konsole, xterm
     """
     if platform_name == "Darwin":
         # macOS terminals (check if applications exist)
-        terminals = ["iTerm", "Terminal"]
-        for term in terminals:
+        macos_terminals: Sequence[str] = ["iTerm", "Terminal"]
+        for term in macos_terminals:
             # On macOS, check if application exists
             app_path = f"/Applications/{term}.app"
             if os.path.exists(app_path):
@@ -69,13 +65,12 @@ def find_available_terminal(platform_name: str) -> str | None:
 
     elif platform_name == "Linux":
         # Linux terminals (check if binaries exist)
-        terminals: Sequence[str] = [
+        linux_terminals: Sequence[str] = [
             "gnome-terminal",
             "konsole",
-            "xfce4-terminal",
             "xterm",
         ]
-        for term in terminals:
+        for term in linux_terminals:
             if shutil.which(term):
                 return term
         return None
