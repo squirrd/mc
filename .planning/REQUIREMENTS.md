@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WM-02 | Phase 16 | Complete |
 | WM-03 | Phase 16 | Complete |
 | WM-04 | Phase 16 | Complete |
-| WM-05 | Phase 18 | Pending |
+| WM-05 | Phase 18 | Complete |
 | WM-06 | Phase 16 | Complete |
 | TEST-01 | Phase 19 | Pending |
 | TEST-02 | Phase 19 | Pending |
