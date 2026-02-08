@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 17 of 19 (Registry Cleanup & Maintenance)
-Plan: 1 of 2
-Status: In progress
-Last activity: 2026-02-08 — Completed 17-01-PLAN.md
+Plan: 2 of 2
+Status: Phase complete
+Last activity: 2026-02-08 — Completed 17-02-PLAN.md
 
-Progress: [████████████████████░░░░] 84% (16/19 phases complete, 17 started)
+Progress: [█████████████████████░░░] 89% (17/19 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 43 (across v1.0, v2.0, v2.0.1, v2.0.2)
+- Total plans completed: 45 (across v1.0, v2.0, v2.0.1, v2.0.2)
 - Previous milestones:
   - v1.0: 18 plans (8 phases) — shipped 2026-01-22
   - v2.0: 16 plans (6 phases) — shipped 2026-02-01
@@ -29,7 +29,7 @@ Progress: [████████████████████░░░
 
 | Phase | Plans | Status |
 |-------|-------|--------|
-| 17 (Registry Cleanup) | 1/2 | In progress (v2.0.2) |
+| 17 (Registry Cleanup) | 2/2 | Complete (v2.0.2) |
 | 16 (macOS Window Tracking) | 2/2 | Complete (v2.0.2) |
 | 15 (Window Registry) | 2/2 | Complete (v2.0.2) |
 | 14.1 (Critical Fixes) | 5/5 | Complete (v2.0.1) |
@@ -49,6 +49,8 @@ Progress: [████████████████████░░░
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 17-02: Sample size 100 for manual reconcile (5x larger than automatic cleanup)
+- 17-02: Detailed reporting for reconcile command (entries validated, stale entries removed, status)
 - 17-01: Sample oldest 20 entries by last_validated timestamp for cleanup efficiency
 - 17-01: Aggressive cleanup - treat validation errors as stale entries
 - 17-01: Incremental deletion (commit per entry) avoids long-running locks
@@ -82,7 +84,7 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-**Phase 17 in progress:** Self-healing registry cleanup infrastructure operational on macOS
+**Phase 17 complete:** Both automatic and manual registry cleanup infrastructure operational on macOS
 **Registry cleanup limitation:** Cleanup currently only runs on macOS (when MacOSLauncher detected). Linux platforms need _window_exists_by_id() implementation before cleanup is functional there.
 **Linux complexity:** X11 vs Wayland support requires platform detection and graceful fallback (Phase 19)
 **Test coverage:** Integration test `test_duplicate_terminal_prevention_regression` should benefit from cleanup infrastructure
@@ -90,6 +92,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 17-01-PLAN.md (Registry Cleanup Infrastructure) - Phase 17 plan 1 of 2 complete
+Stopped at: Completed 17-02-PLAN.md (Manual Registry Reconciliation) - Phase 17 complete (2/2 plans)
 Resume file: None
-Next action: Execute 17-02-PLAN.md or proceed to Phase 18 (Terminal App Tracking) planning
+Next action: Proceed to Phase 18 (Terminal App Tracking) planning
