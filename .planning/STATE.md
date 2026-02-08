@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 Phase: 16 of 19 (macOS Window Tracking)
 Plan: 2 of 2 complete
 Status: Phase complete
-Last activity: 2026-02-08 — Completed 16-02-PLAN.md
+Last activity: 2026-02-08 — Phase 16 verified and complete
 
-Progress: [████████████████████████░] 98% (47/48 plans complete)
+Progress: [████████████████████░░░░] 84% (16/19 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 41 (across v1.0, v2.0, v2.0.1, v2.0.2)
+- Total plans completed: 43 (across v1.0, v2.0, v2.0.1, v2.0.2)
 - Previous milestones:
   - v1.0: 18 plans (8 phases) — shipped 2026-01-22
   - v2.0: 16 plans (6 phases) — shipped 2026-02-01

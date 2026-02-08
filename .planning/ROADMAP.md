@@ -251,7 +251,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19
 | 14. Modern Distribution | v2.0 | 2/2 | Complete | 2026-02-01 |
 | 14.1. Critical Fixes | v2.0.1 | 5/5 | Complete | 2026-02-02 |
 | 15. Window Registry Foundation | v2.0.2 | 2/2 | Complete | 2026-02-08 |
-| 16. macOS Window Tracking | v2.0.2 | 0/2 | Not started | - |
+| 16. macOS Window Tracking | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 17. Registry Cleanup | v2.0.2 | 0/TBD | Not started | - |
 | 18. Linux Support | v2.0.2 | 0/TBD | Not started | - |
 | 19. Test Suite & Validation | v2.0.2 | 0/TBD | Not started | - |
