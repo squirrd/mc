@@ -297,3 +297,44 @@ def quick_access(args: argparse.Namespace) -> None:
     """
     # Route to case_terminal function
     case_terminal(args)
+
+
+def reconcile_windows(args: argparse.Namespace) -> None:
+    """Reconcile window registry with actual terminal windows.
+
+    Manual command for troubleshooting: validates window registry entries
+    and removes stale entries for windows closed outside MC's control.
+    Uses larger sample size than automatic cleanup for thorough validation.
+
+    Args:
+        args: Parsed arguments (no additional args needed)
+    """
+    import logging
+    from mc.terminal.registry import WindowRegistry
+
+    logger = logging.getLogger(__name__)
+
+    # Use default WindowRegistry location (platformdirs)
+    registry = WindowRegistry()
+
+    # Larger sample for manual reconcile (more thorough than automatic cleanup)
+    sample_size = 100
+
+    print("Window Registry Reconciliation")
+    print(f"Validating up to {sample_size} oldest entries...")
+    print()
+
+    try:
+        removed = registry.cleanup_stale_entries(sample_size=sample_size)
+
+        # Detailed report
+        print("Reconciliation Complete")
+        print(f"  Entries validated: {sample_size}")
+        print(f"  Stale entries removed: {removed}")
+        print(f"  Status: {'No cleanup needed' if removed == 0 else f'{removed} entries cleaned'}")
+
+        logger.info("Manual reconcile completed: %d stale entries removed", removed)
+    except Exception as e:
+        print(f"Error during reconciliation: {e}")
+        logger.error("Manual reconcile failed: %s", e)
+        raise
