@@ -104,24 +104,19 @@ class TestGetBashrcPath:
         assert os.path.isabs(path)
         assert not path.startswith("~")
 
-    @patch("mc.terminal.shell.user_data_dir")
-    def test_get_bashrc_path_uses_platformdirs(self, mock_user_data_dir):
-        """Verify platformdirs.user_data_dir is used."""
-        mock_user_data_dir.return_value = "/tmp/mc-test"
-        
+    def test_get_bashrc_path_uses_consolidated_directory(self):
+        """Verify consolidated directory structure is used."""
         path = get_bashrc_path("12345678")
-        
-        mock_user_data_dir.assert_called_once_with("mc", "redhat")
-        assert "/tmp/mc-test/bashrc/mc-12345678.bashrc" == path
+
+        # Should use ~/mc/config/bashrc/ instead of platformdirs
+        expected = str(Path.home() / "mc" / "config" / "bashrc" / "mc-12345678.bashrc")
+        assert path == expected
 
     @patch("mc.terminal.shell.Path.mkdir")
-    @patch("mc.terminal.shell.user_data_dir")
-    def test_get_bashrc_path_creates_directory(self, mock_user_data_dir, mock_mkdir):
+    def test_get_bashrc_path_creates_directory(self, mock_mkdir):
         """Verify parent directory created if missing."""
-        mock_user_data_dir.return_value = "/tmp/mc-test"
-        
         get_bashrc_path("12345678")
-        
+
         # Should create bashrc directory with parents=True, exist_ok=True
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
