@@ -121,6 +121,12 @@ def main() -> ExitCode:
         exec_parser.add_argument('case_number', help='Case number')
         exec_parser.add_argument('command', nargs='+', help='Command to execute')
 
+        # Reconcile window registry
+        reconcile_parser = container_subparsers.add_parser(
+            'reconcile',
+            help='Reconcile window registry with actual terminal windows'
+        )
+
         # Quick access subcommand (hidden, used via mc <case_number>)
         quick_parser = subparsers.add_parser('quick_access', help=argparse.SUPPRESS)
         quick_parser.add_argument('case_number', type=str, help='Case number')
@@ -193,6 +199,8 @@ def main() -> ExitCode:
                 container.delete(args)
             elif args.container_command == 'exec':
                 container.exec_command(args)
+            elif args.container_command == 'reconcile':
+                container.reconcile_windows(args)
             else:
                 container_parser.print_help()
         elif args.command == 'quick_access':
