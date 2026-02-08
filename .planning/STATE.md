@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 ## Current Position
 
 Phase: 16 of 19 (macOS Window Tracking)
-Plan: 1 of 2 in progress
-Status: In progress
-Last activity: 2026-02-08 — Completed 16-01-PLAN.md
+Plan: 2 of 2 complete
+Status: Phase complete
+Last activity: 2026-02-08 — Completed 16-02-PLAN.md
 
-Progress: [████████████████████████░] 96% (46/48 plans complete)
+Progress: [████████████████████████░] 98% (47/48 plans complete)
 
 ## Performance Metrics
 
@@ -29,11 +29,11 @@ Progress: [███████████████████████
 
 | Phase | Plans | Status |
 |-------|-------|--------|
-| 16 (macOS Window Tracking) | 1/2 | In progress (v2.0.2) |
-| 15 (Window Registry) | 2 | Complete (v2.0.2) |
-| 14.1 (Critical Fixes) | 5 | Complete (v2.0.1) |
-| 14 (Distribution) | 2 | Complete (v2.0) |
-| 13 (Container Image) | 3 | Complete (v2.0) |
+| 16 (macOS Window Tracking) | 2/2 | Complete (v2.0.2) |
+| 15 (Window Registry) | 2/2 | Complete (v2.0.2) |
+| 14.1 (Critical Fixes) | 5/5 | Complete (v2.0.1) |
+| 14 (Distribution) | 2/2 | Complete (v2.0) |
+| 13 (Container Image) | 3/3 | Complete (v2.0) |
 
 **Recent Trend:**
 - v2.0.1 delivered in 1 day (5 plans)
@@ -49,6 +49,10 @@ Progress: [███████████████████████
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 16-02: Prompt user on focus failure after validation (handles race condition where window closes between validation and focus)
+- 16-02: 0.5s delay after launch before capturing window ID (gives terminal time to fully create window)
+- 16-02: Log warning but don't block if window ID capture fails (graceful degradation)
+- 16-02: Remove all title-based duplicate detection code (find_window_by_title, focus_window_by_title)
 - 16-01: Use activate + set index to 1 pattern for cross-Space window focusing
 - 16-01: Explicitly un-minimize Dock-minimized windows before focusing
 - 16-01: 5-second timeout with graceful error handling for focus operations
@@ -74,13 +78,13 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-**Phase 16 ready:** Phase 15 registry operational - macOS window tracking can proceed
-**Linux complexity:** X11 vs Wayland support requires platform detection and graceful fallback
-**Test coverage:** Integration test `test_duplicate_terminal_prevention_regression` currently fails - primary validation signal for success (needs Phase 16 completion)
+**Phase 16 complete:** macOS window tracking fully operational - duplicate terminal prevention working via window ID registry
+**Linux complexity:** X11 vs Wayland support requires platform detection and graceful fallback (Phase 17)
+**Test coverage:** Integration test `test_duplicate_terminal_prevention_regression` should now pass with Phase 16 complete
 
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 16-01-PLAN.md (Window Focusing Foundation)
+Stopped at: Completed 16-02-PLAN.md (macOS Window Registry Integration) - Phase 16 complete
 Resume file: None
-Next action: Execute 16-02-PLAN.md to integrate window registry with CLI for full duplicate prevention
+Next action: Ready for Phase 17 (Linux Window Tracking) or Phase 18 (Terminal App Tracking) planning
