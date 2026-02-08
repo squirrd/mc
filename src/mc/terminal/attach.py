@@ -128,6 +128,7 @@ def attach_terminal(
 
     # Import platform-specific launchers
     from mc.terminal.macos import MacOSLauncher
+    from mc.terminal.linux import LinuxLauncher
 
     # 1. Check TTY - must be interactive terminal
     if not should_launch_terminal():
@@ -245,9 +246,9 @@ def attach_terminal(
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # 11. Check WindowRegistry for existing window (macOS only - Phase 16)
+    # 11. Check WindowRegistry for existing window (macOS and Linux - Phase 16, Phase 18)
     window_exists = False
-    if isinstance(launcher, MacOSLauncher):
+    if isinstance(launcher, (MacOSLauncher, LinuxLauncher)):
         # Initialize registry and check for existing window ID
         registry = WindowRegistry()
 
@@ -310,8 +311,8 @@ def attach_terminal(
             launcher.launch(launch_options)
             logger.info("Terminal launched successfully for case %s", case_number)
 
-            # Register window ID in registry (macOS only - Phase 16)
-            if isinstance(launcher, MacOSLauncher):
+            # Register window ID in registry (macOS and Linux - Phase 16, Phase 18)
+            if isinstance(launcher, (MacOSLauncher, LinuxLauncher)):
                 # Give terminal brief moment to fully create window
                 import time
                 time.sleep(0.5)
