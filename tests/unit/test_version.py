@@ -59,7 +59,7 @@ def test_get_version_fallback_to_pyproject(monkeypatch):
 
     # Should fall back to parsing pyproject.toml
     version = get_version()
-    assert version == "2.0.0"
+    assert version == "2.0.1"  # Updated to match current pyproject.toml version
     assert isinstance(version, str)
 
 

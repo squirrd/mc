@@ -152,7 +152,7 @@ class TestCLIList:
         assert "CASE" in captured.out
         assert "STATUS" in captured.out
         assert "CUSTOMER" in captured.out
-        assert "WORKSPACE PATH" in captured.out
+        assert "DESCRIPTION" in captured.out  # Changed from WORKSPACE PATH
         assert "CREATED" in captured.out
         assert "12345678" in captured.out
         assert "running" in captured.out
@@ -558,19 +558,19 @@ class TestGetManager:
     @patch("mc.cli.commands.container.StateDatabase")
     @patch("mc.cli.commands.container.PodmanClient")
     @patch("mc.cli.commands.container.os.makedirs")
-    @patch("mc.cli.commands.container.user_data_dir")
+    @patch("mc.cli.commands.container.os.path.expanduser")
     def test_get_manager_creates_manager(
-        self, mock_user_data_dir, mock_makedirs, mock_podman, mock_state_db
+        self, mock_expanduser, mock_makedirs, mock_podman, mock_state_db
     ):
         """Test _get_manager creates ContainerManager instance."""
-        mock_user_data_dir.return_value = "/Users/user/Library/Application Support/mc"
+        mock_expanduser.return_value = "/Users/user"
 
         # Call helper
         manager = container._get_manager()
 
-        # Verify data directory created
+        # Verify data directory created with consolidated path
         mock_makedirs.assert_called_once_with(
-            "/Users/user/Library/Application Support/mc",
+            "/Users/user/mc/state",
             exist_ok=True
         )
 
@@ -579,7 +579,7 @@ class TestGetManager:
 
         # Verify StateDatabase created with correct path
         mock_state_db.assert_called_once_with(
-            "/Users/user/Library/Application Support/mc/containers.db"
+            "/Users/user/mc/state/containers.db"
         )
 
         # Verify ContainerManager created

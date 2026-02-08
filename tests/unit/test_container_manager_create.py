@@ -370,7 +370,8 @@ class TestErrorHandling:
         with pytest.raises(RuntimeError) as exc_info:
             manager.create("12345678", "/path/to/workspace")
 
-        assert "Image mc-rhel10:latest not found" in str(exc_info.value)
+        # Error message changed to be more detailed
+        assert "Container image mc-rhel10:latest not available" in str(exc_info.value)
         assert "podman build -t mc-rhel10:latest -f container/Containerfile ." in str(exc_info.value)
 
     @patch('mc.container.manager.os.makedirs')

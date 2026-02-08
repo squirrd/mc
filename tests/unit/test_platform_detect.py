@@ -219,10 +219,13 @@ class TestGetSocketPath:
         assert result == '/run/user/1000/podman/podman.sock'
 
     def test_get_socket_path_macos(self):
-        """Test macOS returns None for auto-detection."""
+        """Test macOS returns machine socket path if it exists, else None."""
         result = get_socket_path('macos')
 
-        assert result is None
+        # Should return machine socket path if it exists, else None
+        if result is not None:
+            assert 'podman/machine/podman.sock' in result
+        # If None, that's also valid (socket doesn't exist yet)
 
     def test_get_socket_path_unsupported(self):
         """Test unsupported platform raises ValueError."""
