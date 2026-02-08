@@ -40,8 +40,34 @@ class WindowRegistry:
             )
             self._memory_conn.row_factory = sqlite3.Row
 
-        self._setup_wal_mode()
-        self._ensure_schema()
+        # Try to initialize database with corruption recovery
+        try:
+            self._setup_wal_mode()
+            self._ensure_schema()
+        except sqlite3.DatabaseError:
+            # Database corrupted - delete and recreate (graceful recovery)
+            # Only for file-based databases (not :memory:)
+            if db_path != ":memory:" and os.path.exists(db_path):
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning("Window registry database corrupted, recreating: %s", db_path)
+
+                # Remove corrupted database file and WAL/SHM files
+                try:
+                    os.remove(db_path)
+                    if os.path.exists(f"{db_path}-wal"):
+                        os.remove(f"{db_path}-wal")
+                    if os.path.exists(f"{db_path}-shm"):
+                        os.remove(f"{db_path}-shm")
+                except OSError:
+                    pass  # Best effort cleanup
+
+                # Retry initialization with fresh database
+                self._setup_wal_mode()
+                self._ensure_schema()
+            else:
+                # :memory: database or file doesn't exist - re-raise
+                raise
 
     def _setup_wal_mode(self) -> None:
         """Enable WAL mode for better read/write concurrency.
