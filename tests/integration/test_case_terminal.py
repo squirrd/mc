@@ -856,51 +856,43 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     Bug discovered: 2026-02-04
     Platform: macOS with iTerm2 (reproduced)
     Severity: Major - Affects usability, creates terminal clutter
+    Fixed in: Phases 15-18 (Window ID-based tracking)
 
     Problem:
     Running `mc case 04347611` multiple times incorrectly allows multiple
     terminal windows to be spun up instead of focusing the existing window.
 
-    Expected behavior:
-    1. First call: Creates new terminal window
-    2. Second call: Finds existing window, focuses it, shows message
+    Expected behavior (fixed in phases 15-18):
+    1. First call: Creates new terminal window, captures window ID, registers in WindowRegistry
+    2. Second call: Finds existing window via WindowRegistry, focuses by ID, shows message
        "Focused existing terminal for case 04347611"
     3. No new terminal window created on second call
 
-    Actual behavior (before fix):
-    1. First call: Creates new terminal window
-    2. Second call: Creates ANOTHER new terminal window
-    3. No "Focused" message shown
-    4. Duplicate detection not working
-
-    Root cause:
-    iTerm2 AppleScript find_window_by_title() in src/mc/terminal/macos.py:69-117
-    does not find windows that were just created. The search AppleScript and
-    the create AppleScript may be accessing different properties for the title.
-
-    Steps to reproduce:
-    1. Run: mc case 04347611
-    2. Run: mc case 04347611 (again)
-    3. Observe: Two terminal windows exist instead of focusing first
+    Solution:
+    Window ID-based tracking replaces title-based search (which was unreliable in iTerm2).
+    - Phase 15: WindowRegistry with window ID storage
+    - Phase 16: macOS window ID capture and focus_window_by_id()
+    - Phase 18: Linux X11 support
 
     This test verifies (using REAL iTerm2 integration):
     1. First attach_terminal creates a new window (real iTerm2 window)
-    2. Second attach_terminal finds existing window (real AppleScript search)
-    3. Second attach_terminal does NOT create new window (verified by window count)
-    4. "Focused existing terminal" message shown on second call
+    2. Window ID is captured and stored in WindowRegistry
+    3. Second attach_terminal finds existing window via WindowRegistry lookup
+    4. Second attach_terminal does NOT create new window (verified by window count)
+    5. "Focused existing terminal" message shown on second call
 
     IMPORTANT - NO MOCKING:
     This is a TRUE integration test. It uses:
     - Real Podman client and containers
     - Real Red Hat API calls
     - Real iTerm2 AppleScript execution (launches actual windows!)
-    - Real MacOSLauncher with real find_window_by_title()
+    - Real MacOSLauncher with real window ID tracking
+    - Real WindowRegistry with isolated database
 
     We only mock TTY detection (pytest limitation). Everything else is REAL.
-    This ensures we catch the actual iTerm2 AppleScript integration bug.
 
     UAT Test: 5.2 Duplicate Launch Detection
-    Fixed in: TBD (test will fail when bug exists, pass when fixed)
+    Fixed in: Phases 15-18 (2026-02-07)
     """
     import platform
     import time
@@ -917,6 +909,7 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     test_config_dir.mkdir(parents=True)
 
     db_path = test_state_dir / "containers.db"
+    registry_db_path = test_state_dir / "window.db"
 
     # Create minimal config with API credentials
     from mc.config.manager import ConfigManager as RealConfigManager
@@ -949,6 +942,9 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     # ONLY mock TTY check (pytest limitation - tests don't run in TTY)
     mocker.patch("mc.terminal.attach.should_launch_terminal", return_value=True)
 
+    # Mock user_data_dir for WindowRegistry to use isolated test database
+    mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(test_state_dir))
+
     # Initialize REAL Podman client, state database, container manager
     podman_client = PodmanClient()
     state_db = StateDatabase(str(db_path))
@@ -977,7 +973,7 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     expected_title = build_window_title(test_case_number, customer_name, description)
     print(f"Expected window title: {expected_title}")
 
-    # Pre-cleanup: Remove any existing container AND close any existing terminal windows
+    # Pre-cleanup: Remove any existing container and registry entries
     try:
         existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         print(f"Removing pre-existing container {container_name}...")
@@ -986,11 +982,10 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     except Exception:
         pass
 
-    # Close any existing windows with this title (pre-cleanup)
-    if hasattr(launcher, 'find_window_by_title'):
-        if launcher.find_window_by_title(expected_title):
-            print(f"WARNING: Window with title '{expected_title}' already exists. Test may be affected.")
-            print("Consider manually closing iTerm2 windows before running this test.")
+    # Clean up any existing registry entry for this case
+    from mc.terminal.registry import WindowRegistry
+    registry = WindowRegistry(str(registry_db_path))
+    registry.remove(test_case_number)
 
     container = None
     terminal_windows_created = []
@@ -1026,7 +1021,7 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
             container_manager=container_manager,
         )
 
-        # Give iTerm2 time to create the window
+        # Give iTerm2 time to create the window and register it
         time.sleep(2)
 
         # Count windows after first call
@@ -1048,21 +1043,21 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
         # Verify window was created
         print(f"\n✓ First call completed - iTerm2 window should be open")
 
-        # Verify we can find the window we just created (REAL AppleScript search)
+        # Verify window ID was registered in WindowRegistry
         if isinstance(launcher, MacOSLauncher):
-            window_found = launcher.find_window_by_title(expected_title)
-            print(f"\nSearching for window with title: {expected_title}")
-            print(f"find_window_by_title result: {window_found}")
+            def always_valid(window_id):
+                return True
 
-            if not window_found:
-                # This is the bug! We just created the window but can't find it
+            window_id = registry.lookup(test_case_number, always_valid)
+            print(f"\nWindowRegistry lookup for case {test_case_number}: {window_id}")
+
+            if not window_id:
+                # Window ID should be registered after first call
                 pytest.fail(
-                    f"✗ BUG FOUND: find_window_by_title returned False immediately after creating window!\n"
-                    f"Expected title: {expected_title}\n"
-                    f"Window was just created but AppleScript search cannot find it.\n"
-                    f"This is the iTerm2 AppleScript integration bug.\n"
-                    f"Root cause: Search uses 'name of current session' but create uses 'set name'\n"
-                    f"Fix needed in: src/mc/terminal/macos.py find_window_by_title() and _build_iterm_script()"
+                    f"✗ BUG FOUND: Window ID not registered in WindowRegistry!\n"
+                    f"First call should capture window ID and store in registry.\n"
+                    f"Registry path: {registry_db_path}\n"
+                    f"Fix needed in: src/mc/terminal/attach.py window registration logic"
                 )
 
         # SECOND CALL: Attach terminal again (should focus existing, not create new)
@@ -1116,8 +1111,9 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
                 f"✗ BUG FOUND: No 'Focused existing terminal' message shown\n"
                 f"Captured output: {output}\n"
                 f"Expected: 'Focused existing terminal for case {test_case_number}'\n"
-                f"This means duplicate detection did not find the existing window.\n"
-                f"Fix needed in: src/mc/terminal/macos.py find_window_by_title()"
+                f"This means WindowRegistry lookup or focus_window_by_id failed.\n"
+                f"Check: 1) WindowRegistry lookup, 2) Window ID validation, 3) focus_window_by_id\n"
+                f"Fix needed in: src/mc/terminal/attach.py or src/mc/terminal/macos.py"
             )
 
         # 2. Window count should not increase (no new window created)
@@ -1133,10 +1129,10 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
             if windows_created_on_second > 0:
                 pytest.fail(
                     f"✗ BUG FOUND: Second call created {windows_created_on_second} new window(s)!\n"
-                    f"Expected: 0 new windows (should focus existing)\n"
+                    f"Expected: 0 new windows (should focus existing via WindowRegistry)\n"
                     f"Actual: {windows_created_on_second} new window(s)\n"
-                    f"Multiple terminals created instead of focusing existing one.\n"
-                    f"Fix needed in: src/mc/terminal/macos.py AppleScript integration"
+                    f"Duplicate window created - WindowRegistry lookup/focus failed.\n"
+                    f"Fix needed in: src/mc/terminal/attach.py window ID tracking logic"
                 )
 
         print("\n✓ Test PASSED: Duplicate prevention working correctly")
