@@ -9,22 +9,22 @@ Requirements for window tracking system to fix duplicate terminal prevention.
 
 ### Window Registry (Core Infrastructure)
 
-- [ ] **WR-01**: System stores window ID when creating terminal window
-- [ ] **WR-02**: System retrieves window ID by case number
-- [ ] **WR-03**: Window registry persists across mc process restarts
-- [ ] **WR-04**: Window registry survives concurrent access (multiple mc processes)
-- [ ] **WR-05**: System detects and removes stale entries for closed windows
-- [ ] **WR-06**: Automatic cleanup on startup (reconcile registry with actual windows)
-- [ ] **WR-07**: Manual reconcile command for troubleshooting (`mc container reconcile`)
+- [x] **WR-01**: System stores window ID when creating terminal window
+- [x] **WR-02**: System retrieves window ID by case number
+- [x] **WR-03**: Window registry persists across mc process restarts
+- [x] **WR-04**: Window registry survives concurrent access (multiple mc processes)
+- [x] **WR-05**: System detects and removes stale entries for closed windows
+- [x] **WR-06**: Automatic cleanup on startup (reconcile registry with actual windows)
+- [x] **WR-07**: Manual reconcile command for troubleshooting (`mc container reconcile`)
 
 ### Window Management (User-Facing)
 
-- [ ] **WM-01**: Running `mc case XXXXX` twice focuses existing window, doesn't create duplicate
-- [ ] **WM-02**: System validates window still exists before focusing
-- [ ] **WM-03**: System creates new window if previous window was closed manually
-- [ ] **WM-04**: Window focusing works on macOS (iTerm2, Terminal.app)
-- [ ] **WM-05**: Window focusing works on Linux (X11 with wmctrl/xdotool)
-- [ ] **WM-06**: System provides feedback when focusing existing window vs creating new
+- [x] **WM-01**: Running `mc case XXXXX` twice focuses existing window, doesn't create duplicate
+- [x] **WM-02**: System validates window still exists before focusing
+- [x] **WM-03**: System creates new window if previous window was closed manually
+- [x] **WM-04**: Window focusing works on macOS (iTerm2, Terminal.app)
+- [x] **WM-05**: Window focusing works on Linux (X11 with wmctrl/xdotool)
+- [x] **WM-06**: System provides feedback when focusing existing window vs creating new
 
 ### Testing & Validation
 
