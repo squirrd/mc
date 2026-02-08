@@ -167,8 +167,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — WindowRegistry class with SQLite backend (Wave 1)
-- [ ] 15-02-PLAN.md — macOS window ID methods and unit tests (Wave 2)
+- [x] 15-01: WindowRegistry class with SQLite backend (Wave 1)
+- [x] 15-02: macOS window ID methods and unit tests (Wave 2)
 
 #### Phase 16: macOS Window Tracking
 **Goal**: Duplicate terminal prevention working on macOS
@@ -249,7 +249,7 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19
 | 13. Container Image | v2.0 | 3/3 | Complete | 2026-02-01 |
 | 14. Modern Distribution | v2.0 | 2/2 | Complete | 2026-02-01 |
 | 14.1. Critical Fixes | v2.0.1 | 5/5 | Complete | 2026-02-02 |
-| 15. Window Registry Foundation | v2.0.2 | 0/2 | Ready to execute | - |
+| 15. Window Registry Foundation | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 16. macOS Window Tracking | v2.0.2 | 0/TBD | Not started | - |
 | 17. Registry Cleanup | v2.0.2 | 0/TBD | Not started | - |
 | 18. Linux Support | v2.0.2 | 0/TBD | Not started | - |

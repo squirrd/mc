@@ -62,10 +62,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WR-01 | Phase 15 | Pending |
-| WR-02 | Phase 15 | Pending |
-| WR-03 | Phase 15 | Pending |
-| WR-04 | Phase 15 | Pending |
+| WR-01 | Phase 15 | Complete |
+| WR-02 | Phase 15 | Complete |
+| WR-03 | Phase 15 | Complete |
+| WR-04 | Phase 15 | Complete |
 | WR-05 | Phase 17 | Pending |
 | WR-06 | Phase 17 | Pending |
 | WR-07 | Phase 17 | Pending |
