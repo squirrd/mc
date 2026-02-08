@@ -183,8 +183,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Window focus implementation (focus_window_by_id method)
-- [ ] 16-02-PLAN.md — Registry integration (attach_terminal workflow updates)
+- [x] 16-01-PLAN.md — Window focus implementation (focus_window_by_id method)
+- [x] 16-02-PLAN.md — Registry integration (attach_terminal workflow updates)
 
 #### Phase 17: Registry Cleanup & Maintenance
 **Goal**: Self-healing registry that stays accurate over time
@@ -195,10 +195,11 @@ Plans:
   2. Automatic cleanup on startup reconciles registry with actual windows
   3. Manual `mc container reconcile` command cleans orphaned entries
   4. Registry stays accurate after 1 week of daily use (no accumulation of stale entries)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 17-01: [Plan TBD - run /gsd:plan-phase 17]
+- [ ] 17-01-PLAN.md — Cleanup infrastructure (cleanup methods, schema index, automatic cleanup)
+- [ ] 17-02-PLAN.md — Reconcile command (manual cleanup command with detailed reporting)
 
 #### Phase 18: Linux Support
 **Goal**: Cross-platform window tracking with graceful fallback
@@ -252,6 +253,6 @@ Phases execute in numeric order: 15 → 16 → 17 → 18 → 19
 | 14.1. Critical Fixes | v2.0.1 | 5/5 | Complete | 2026-02-02 |
 | 15. Window Registry Foundation | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 16. macOS Window Tracking | v2.0.2 | 2/2 | Complete | 2026-02-08 |
-| 17. Registry Cleanup | v2.0.2 | 0/TBD | Not started | - |
+| 17. Registry Cleanup | v2.0.2 | 0/2 | Not started | - |
 | 18. Linux Support | v2.0.2 | 0/TBD | Not started | - |
 | 19. Test Suite & Validation | v2.0.2 | 0/TBD | Not started | - |
