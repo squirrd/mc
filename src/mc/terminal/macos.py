@@ -70,7 +70,7 @@ class MacOSLauncher:
         """Check if a window with matching title exists.
 
         Args:
-            title: Window title to search for
+            title: Window title to search for (format: "CASE:Customer:Description:/path")
 
         Returns:
             True if window found, False otherwise
@@ -80,14 +80,33 @@ class MacOSLauncher:
 
         escaped_title = self._escape_applescript(title)
 
+        # Extract case number from title for more reliable searching
+        # Title format: "CASE:Customer:Description:/path" -> extract "CASE"
+        case_number = title.split(":")[0] if ":" in title else title
+        escaped_case = self._escape_applescript(case_number)
+
         if self.terminal == "iTerm2":
+            # Search using the full title first (works when window is idle)
+            # If not found, search for case number (works when command is running)
             script = f'''
 tell application "iTerm"
     repeat with theWindow in windows
         repeat with theTab in tabs of theWindow
-            if name of current session of theTab contains "{escaped_title}" then
-                return true
-            end if
+            tell current session of theTab
+                set sessionName to name
+                -- Try exact match first (when window is idle)
+                if sessionName is "{escaped_title}" then
+                    return true
+                end if
+                -- Then try substring match (catches partial matches)
+                if sessionName contains "{escaped_title}" then
+                    return true
+                end if
+                -- Finally check if the case number appears (when command is running)
+                if sessionName contains "{escaped_case}" then
+                    return true
+                end if
+            end tell
         end repeat
     end repeat
     return false
@@ -120,7 +139,7 @@ end tell
         """Focus window with matching title.
 
         Args:
-            title: Window title to search for
+            title: Window title to search for (format: "CASE:Customer:Description:/path")
 
         Returns:
             True if window found and focused, False otherwise
@@ -130,17 +149,34 @@ end tell
 
         escaped_title = self._escape_applescript(title)
 
+        # Extract case number for fallback search
+        case_number = title.split(":")[0] if ":" in title else title
+        escaped_case = self._escape_applescript(case_number)
+
         if self.terminal == "iTerm2":
             script = f'''
 tell application "iTerm"
     activate
     repeat with theWindow in windows
         repeat with theTab in tabs of theWindow
-            if name of current session of theTab contains "{escaped_title}" then
-                select theWindow
-                select theTab
-                return true
-            end if
+            tell current session of theTab
+                set sessionName to name
+                set shouldFocus to false
+                -- Try exact match, substring match, or case number match
+                if sessionName is "{escaped_title}" then
+                    set shouldFocus to true
+                else if sessionName contains "{escaped_title}" then
+                    set shouldFocus to true
+                else if sessionName contains "{escaped_case}" then
+                    set shouldFocus to true
+                end if
+
+                if shouldFocus then
+                    select theWindow
+                    select theTab
+                    return true
+                end if
+            end tell
         end repeat
     end repeat
     return false
@@ -158,6 +194,104 @@ tell application "Terminal"
         end if
     end repeat
     return false
+end tell
+'''
+
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.stdout.strip() == "true"
+        except Exception:
+            return False
+
+    def _capture_window_id(self) -> str | None:
+        """Capture window ID after terminal creation.
+
+        Returns:
+            Window ID as string, or None if capture fails
+
+        Captures the "current window" (iTerm2) or "front window" (Terminal.app)
+        window ID immediately after window creation. Used for window registry
+        operations in Phase 16.
+        """
+        if not shutil.which("osascript"):
+            return None
+
+        if self.terminal == "iTerm2":
+            script = '''
+tell application "iTerm"
+    return id of current window as text
+end tell
+'''
+        else:  # Terminal.app
+            script = '''
+tell application "Terminal"
+    return id of front window as text
+end tell
+'''
+
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+            return None
+        except Exception:
+            return None
+
+    def _window_exists_by_id(self, window_id: str) -> bool:
+        """Validate if window with specific ID still exists.
+
+        Args:
+            window_id: Window ID to check (as string)
+
+        Returns:
+            True if window exists, False otherwise
+
+        Used as validator callback for WindowRegistry.lookup() operations.
+        Iterates through all windows and checks if any match the target ID.
+        """
+        if not shutil.which("osascript"):
+            return False
+
+        escaped_id = self._escape_applescript(window_id)
+
+        if self.terminal == "iTerm2":
+            script = f'''
+tell application "iTerm"
+    try
+        repeat with theWindow in windows
+            if (id of theWindow as text) is "{escaped_id}" then
+                return true
+            end if
+        end repeat
+        return false
+    on error
+        return false
+    end try
+end tell
+'''
+        else:  # Terminal.app
+            script = f'''
+tell application "Terminal"
+    try
+        repeat with theWindow in windows
+            if (id of theWindow as text) is "{escaped_id}" then
+                return true
+            end if
+        end repeat
+        return false
+    on error
+        return false
+    end try
 end tell
 '''
 
@@ -190,6 +324,7 @@ tell application "iTerm"
     create window with default profile
     tell current session of current window
         set name to "{escaped_title}"
+        delay 0.1
         write text "{escaped_command}"
     end tell
 end tell
