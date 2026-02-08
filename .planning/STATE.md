@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 15 of 19 (Window Registry Foundation)
-Plan: 2 of 2 complete
-Status: Phase complete
-Last activity: 2026-02-08 — Completed 15-02-PLAN.md
+Phase: 16 of 19 (macOS Window Tracking)
+Plan: 1 of 2 in progress
+Status: In progress
+Last activity: 2026-02-08 — Completed 16-01-PLAN.md
 
-Progress: [███████████████████░░░░░] 79% (15/19 phases complete)
+Progress: [████████████████████████░] 96% (46/48 plans complete)
 
 ## Performance Metrics
 
@@ -29,6 +29,7 @@ Progress: [███████████████████░░░░
 
 | Phase | Plans | Status |
 |-------|-------|--------|
+| 16 (macOS Window Tracking) | 1/2 | In progress (v2.0.2) |
 | 15 (Window Registry) | 2 | Complete (v2.0.2) |
 | 14.1 (Critical Fixes) | 5 | Complete (v2.0.1) |
 | 14 (Distribution) | 2 | Complete (v2.0) |
@@ -48,6 +49,9 @@ Progress: [███████████████████░░░░
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- 16-01: Use activate + set index to 1 pattern for cross-Space window focusing
+- 16-01: Explicitly un-minimize Dock-minimized windows before focusing
+- 16-01: 5-second timeout with graceful error handling for focus operations
 - 15-02: Use 'id of current window' (iTerm2) / 'id of front window' (Terminal.app) for window ID capture
 - 15-02: Return window ID as string for cross-platform compatibility
 - 15-02: Escape window ID in AppleScript validation to prevent injection
@@ -77,6 +81,6 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 15-02-PLAN.md (macOS Window ID Integration)
+Stopped at: Completed 16-01-PLAN.md (Window Focusing Foundation)
 Resume file: None
-Next action: Run `/gsd:plan-phase 16` to plan macOS Window Tracking integration
+Next action: Execute 16-02-PLAN.md to integrate window registry with CLI for full duplicate prevention
