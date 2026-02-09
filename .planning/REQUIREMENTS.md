@@ -19,10 +19,10 @@ Requirements for multi-stage container architecture with efficient layer caching
 
 ### Version Management
 
-- [ ] **VER-01**: versions.yaml config file exists with image/mc/tools structure
-- [ ] **VER-02**: Image version uses semantic versioning (x.y.z) independent from MC CLI version
-- [ ] **VER-03**: versions.yaml tracks MC CLI version to bundle
-- [ ] **VER-04**: versions.yaml tracks OCM tool version and other tools when they are added
+- [x] **VER-01**: versions.yaml config file exists with image/mc/tools structure
+- [x] **VER-02**: Image version uses semantic versioning (x.y.z) independent from MC CLI version
+- [x] **VER-03**: versions.yaml tracks MC CLI version to bundle
+- [x] **VER-04**: versions.yaml tracks OCM tool version and other tools when they are added
 - [ ] **VER-05**: Build script can query quay.io registry API for latest published image tag
 - [ ] **VER-06**: Build script auto-increments patch version when building new image (1.0.5 → 1.0.6)
 - [ ] **VER-07**: User manually updates minor version in versions.yaml when adding new tools (y in x.y.z)
