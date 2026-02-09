@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Phase 21 - Version Management System
+**Current focus:** Phase 22 - Build Automation Core
 
 ## Current Position
 
-Phase: 21 of 25 (Version Management System)
+Phase: 22 of 25 (Build Automation Core)
 Plan: 1 of 1 (complete)
-Status: Phase complete and verified (all 5 success criteria met)
-Last activity: 2026-02-09 — Phase 21 verified: versions.yaml created, independent image versioning, manual build workflow validated
+Status: Phase complete (automated build script with version injection)
+Last activity: 2026-02-09 — Completed 22-01-PLAN.md: build-container.sh with yq extraction, semver validation, podman orchestration
 
-Progress: [████████████████████░░░░] 85% (46/~48 total plans across all milestones)
+Progress: [████████████████████░░░░] 87% (47/~48 total plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 46 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
+- Total plans completed: 47 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
 - Milestones shipped:
   - v1.0 Hardening: 21 plans (8 phases) — shipped 2026-01-22
   - v2.0 Containerization: 22 plans (7 phases) — shipped 2026-02-01
@@ -31,16 +31,17 @@ Progress: [████████████████████░░░
 | Milestone | Phases | Plans | Duration | Status |
 |-----------|--------|-------|----------|--------|
 | v2.0.2 Window Tracking | 15-19 | 10/10 | 6 hours | ✅ Shipped 2026-02-08 |
-| v2.0.3 Container Tools | 20-25 | 3/TBD | In progress | 🚧 Phase 21 complete (versions.yaml) |
+| v2.0.3 Container Tools | 20-25 | 4/TBD | In progress | 🚧 Phase 22 complete (build automation) |
 
 **Recent Trend:**
 - v2.0.2 delivered in <1 day (10 plans, 5 phases, 6 hours)
 - Phase 21 completed in 2 minutes (independent image versioning established)
+- Phase 22 completed in 4 minutes (build automation with yq and podman)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
-- Trend: Fast iteration on focused milestones
+- Trend: Ultra-fast iteration on container tooling phases
 
-*Updated: 2026-02-09 after Phase 21 completion*
+*Updated: 2026-02-09 after Phase 22 completion*
 
 ## Accumulated Context
 
@@ -71,6 +72,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - yq command-line tool for YAML parsing in build scripts (standard practice for container builds)
 - versions.yaml as single source of truth: Manual workflow: yq extract → podman build --build-arg → verify in container
 
+**Phase 22 execution decisions:**
+- Manual while-loop argument parsing for long-form flags (--dry-run, --verbose, --help) instead of getopts
+- Comprehensive preflight validation: yq version (mikefarah/yq vs Python yq), podman machine status on macOS, versions.yaml existence
+- SECONDS builtin for build time tracking (zero subprocess overhead)
+- Default quiet mode (podman --quiet) for CI-friendly output, verbose flag available for debugging
+- Architecture detection supports both macOS (arm64) and Linux (aarch64/x86_64) with normalization to standard names
+- Removed plan's amd64-only restriction: Containerfile supports both architectures, no artificial limitation needed
+
 ### Pending Todos
 
 None yet.
@@ -82,9 +91,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Phase 21 verified and complete
+Stopped at: Completed Phase 22 Plan 01
 Resume file: None
-Next action: `/gsd:discuss-phase 22` to gather context for Build Automation phase
+Next action: `/gsd:discuss-phase 23` to gather context for Quay Registry Integration
 
 ---
-*Phase 21 complete: versions.yaml single source of truth, independent image versioning, validated manual build workflow*
+*Phase 22 complete: Automated build orchestration with version injection, dual tagging, dry-run preview*
