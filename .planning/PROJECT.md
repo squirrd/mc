@@ -24,6 +24,18 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Self-healing window registry with automatic cleanup and reconcile command
 - ✓ Production-ready test suite: 530 tests passing with 74.65% coverage
 
+## Current Milestone: v2.0.3 Container Tools
+
+**Goal:** Multi-stage container architecture with efficient layer caching and versioned tool management
+
+**Target features:**
+- Multi-stage Containerfile (mc-builder → tool-downloader stages → final image)
+- Independent image versioning (semver x.y.z) separate from MC CLI version
+- versions.yaml config file tracking image, mc, and tool versions
+- build-container.sh script with auto-patch-bump and quay.io integration
+- OCM CLI tool as proof-of-concept (verify pattern before scaling to other tools)
+- Efficient rebuilds: only changed stages rebuild, not entire image
+
 ## Requirements
 
 ### Validated
@@ -111,7 +123,32 @@ Shipped in v1.0 (2026-01-22):
 
 ### Active
 
-(Next milestone requirements - to be defined via `/gsd:new-milestone`)
+v2.0.3 Container Tools milestone:
+
+**Multi-stage Architecture:**
+- [ ] Convert single-stage Containerfile to multi-stage pattern
+- [ ] mc-builder stage packages MC CLI from source
+- [ ] tool-downloader stages fetch versioned binaries
+- [ ] Final stage copies artifacts with minimal layers
+
+**Version Management:**
+- [ ] Image versioning independent from MC CLI version (semver x.y.z)
+- [ ] versions.yaml config file (image, mc, tools sections)
+- [ ] Auto-patch-bump when tool versions change
+- [ ] Manual minor bump when new tools added
+
+**Build Tooling:**
+- [ ] build-container.sh script reads versions.yaml
+- [ ] Query quay.io API for latest image tag
+- [ ] Auto-bump patch version if tool versions changed
+- [ ] Support --push flag for quay.io publishing
+- [ ] Tag both versioned (1.0.0) and latest
+
+**OCM Tool Integration (POC):**
+- [ ] OCM downloader stage fetches versioned binary
+- [ ] OCM available in final image at /usr/local/bin/ocm
+- [ ] `ocm version` returns expected version from versions.yaml
+- [ ] Verify multi-stage pattern scales to additional tools
 
 ### Out of Scope
 
@@ -190,4 +227,4 @@ Shipped in v1.0 (2026-01-22):
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-08 after v2.0.2 milestone*
+*Last updated: 2026-02-09 after starting v2.0.3 milestone*
