@@ -1,87 +1,118 @@
 # MC CLI Container Image - RHEL 10 UBI Base
 #
-# This container image provides an isolated environment for Red Hat case work
-# with the mc CLI pre-installed and essential bash tools available.
-#
-# Features:
-# - RHEL 10 UBI base image (registry.access.redhat.com/ubi10/ubi:10.1)
-# - MC CLI installed in editable mode from /opt/mc
-# - Python 3.12 runtime (pre-installed in RHEL 10 UBI, compatible with 3.11+ requirement)
-# - Essential text editors (vim, nano), networking tools (curl, wget)
-# - Non-root mcuser for security (works with --userns=keep-id)
-# - Runtime mode detection via MC_RUNTIME_MODE=agent environment variable
-# - Case workspace mounted at /case with proper ownership
+# Multi-stage build optimized for layer caching and minimal runtime image size.
+# Three stages: ocm-downloader (OCM binary), mc-builder (MC CLI build), final (runtime-only)
 #
 # Build:
 #   podman build -t mc-rhel10:latest -f container/Containerfile .
+#   podman build --build-arg OCM_VERSION=0.34.0 -t mc-rhel10:latest -f container/Containerfile .
 #
 # Run:
 #   podman run --rm -it -v /path/to/workspace:/case:U mc-rhel10:latest
 
-FROM registry.access.redhat.com/ubi10/ubi:10.1
+# =============================================================================
+# Stage 1: OCM Binary Downloader
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS ocm-downloader
+
+# ARG for OCM version - placed before dependencies to accept build script injection (Phase 22)
+# When build script injects new version via --build-arg, downstream layers are invalidated
+# This is correct behavior: version changes require downloading new binary
+ARG OCM_VERSION=0.35.0
+
+# Install download tools
+RUN microdnf install -y curl tar gzip && \
+    microdnf clean all
+
+# Download and verify OCM binary from GitHub releases
+# Fail fast on download or checksum mismatch
+RUN set -e && \
+    cd /tmp && \
+    curl -fsSL "https://github.com/open-component-model/ocm/releases/download/v${OCM_VERSION}/ocm-${OCM_VERSION}-linux-amd64.tar.gz" -o ocm.tar.gz && \
+    curl -fsSL "https://github.com/open-component-model/ocm/releases/download/v${OCM_VERSION}/ocm-${OCM_VERSION}-linux-amd64.tar.gz.sha256" -o expected.sha256 && \
+    echo "$(cat expected.sha256)  ocm.tar.gz" | sha256sum --check && \
+    tar -xzf ocm.tar.gz && \
+    chmod +x ocm && \
+    mv ocm /usr/local/bin/ocm && \
+    rm -rf /tmp/*
+
+# =============================================================================
+# Stage 2: MC CLI Builder
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi:10.1 AS mc-builder
+
+# Install build dependencies and clean up in single layer
+RUN dnf install -y \
+    python3-pip \
+    gcc \
+    python3-devel \
+    && dnf clean all && \
+    rm -rf /var/cache/dnf
+
+# Install Python build tools
+RUN pip3 install --no-cache-dir setuptools wheel
+
+# Copy project source
+COPY . /opt/mc
+
+# Install MC CLI in editable mode
+# --no-cache-dir: reduces image size
+# --no-build-isolation: required for editable install to work at runtime
+RUN pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
+
+# =============================================================================
+# Stage 3: Final Runtime Image
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi:10.1 AS final
 
 LABEL maintainer="MC CLI Team"
 LABEL description="RHEL 10 UBI container with MC CLI and essential tools for Red Hat case work"
 LABEL version="2.0"
 
-# Install Python 3.12 (pre-installed in UBI 10, but adding python3-pip for package management)
-# Install essential bash tools in single layer with cache cleanup
-# Note: python3 (3.12) is pre-installed in ubi10/ubi:10.1, curl is also pre-installed
+# Install runtime dependencies only (no build tools)
 RUN dnf install -y \
-    python3-pip \
+    python3 \
     vim \
     nano \
     wget \
     openssl \
-    && dnf clean all
-
-# Note: jq excluded from base image (not available in UBI repos without EPEL)
-# Users can install jq at runtime if needed via: dnf install -y jq (after enabling EPEL)
-# Essential tools pre-installed in UBI: tar, gzip, openssl, sed, grep, awk, find, less
+    && dnf clean all && \
+    rm -rf /var/cache/dnf
 
 # Create non-root user for security
-# System user/group with proper UID/GID ranges
 RUN groupadd --system mcuser && \
     useradd --system --gid mcuser --home-dir /home/mcuser --create-home mcuser
 
-# Create case workspace mount point with correct ownership
-# Will be mounted from host via -v workspace:/case:U flag
+# Create case workspace mount point
 RUN mkdir -p /case && \
     chown mcuser:mcuser /case
 
-# Install MC CLI in editable mode from project root
-# Copy entire project to /opt/mc for installation
-COPY --chown=mcuser:mcuser . /opt/mc
+# Copy OCM binary from downloader stage
+COPY --from=ocm-downloader --chown=mcuser:mcuser /usr/local/bin/ocm /usr/local/bin/ocm
 
-# Install build dependencies for editable install
-# setuptools and wheel required when using --no-build-isolation
-RUN pip3 install --no-cache-dir setuptools wheel
+# Copy MC CLI source from builder stage
+COPY --from=mc-builder --chown=mcuser:mcuser /opt/mc /opt/mc
 
-# Install MC CLI and dependencies
-# --no-cache-dir: Don't cache pip downloads (reduces image size)
-# --no-build-isolation: Required for editable install to work at runtime
-# -e /opt/mc: Editable install allows code changes without image rebuild
-RUN pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
+# Copy Python site-packages from builder stage
+COPY --from=mc-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 
-# Copy and set permissions for entrypoint script
+# Copy MC CLI console script from builder stage
+COPY --from=mc-builder --chown=mcuser:mcuser /usr/local/bin/mc /usr/local/bin/mc
+
+# Copy entrypoint script
 COPY --chmod=755 container/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# Set runtime mode environment variable to identify agent mode (inside container)
-# Controller mode (host) has this unset and defaults to "controller"
+# Set runtime mode to identify agent mode (inside container)
 ENV MC_RUNTIME_MODE=agent
 
-# Switch to non-root user for all subsequent operations
-# Matches Phase 11 --userns=keep-id pattern for permission mapping
+# Switch to non-root user
 USER mcuser
 
 # Set working directory to case workspace
-# Containers start in the mounted case workspace
 WORKDIR /case
 
-# Use exec form for proper signal handling (SIGTERM/SIGINT)
-# Entrypoint handles environment initialization and shell customization
+# Entrypoint handles environment initialization
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 # Default command: interactive bash shell
-# Can be overridden at runtime (e.g., podman run mc-rhel10 python3 script.py)
 CMD ["/bin/bash"]
