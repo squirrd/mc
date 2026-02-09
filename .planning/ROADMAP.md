@@ -139,11 +139,10 @@
   3. Final stage contains only runtime artifacts (no pip, gcc, or other build tools)
   4. Final stage image is smaller than original single-stage image
   5. OCM binary exists at /usr/local/bin/ocm in final image
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 20-01: TBD
-- [ ] 20-02: TBD
+- [ ] 20-01-PLAN.md — Multi-stage Containerfile with OCM integration and cache verification
 
 ### Phase 21: Version Management System
 **Goal**: Establish versions.yaml as single source of truth with independent image versioning
@@ -250,7 +249,7 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 17. Self-Healing Registry | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 18. Linux X11 Support | v2.0.2 | 2/2 | Complete | 2026-02-08 |
 | 19. Test Suite & Validation | v2.0.2 | 2/2 | Complete | 2026-02-08 |
-| 20. Multi-Stage Architecture Foundation | v2.0.3 | 0/TBD | Not started | - |
+| 20. Multi-Stage Architecture Foundation | v2.0.3 | 0/1 | Not started | - |
 | 21. Version Management System | v2.0.3 | 0/TBD | Not started | - |
 | 22. Build Automation Core | v2.0.3 | 0/TBD | Not started | - |
 | 23. Quay.io Integration | v2.0.3 | 0/TBD | Not started | - |
