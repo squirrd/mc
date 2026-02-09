@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Phase 22 - Build Automation Core
+**Current focus:** Phase 23 - Quay.io Integration
 
 ## Current Position
 
-Phase: 22 of 25 (Build Automation Core)
+Phase: 23 of 25 (Quay.io Integration)
 Plan: 1 of 1 (complete)
-Status: Phase complete and verified (all 6 success criteria met)
-Last activity: 2026-02-10 — Phase 22 verified: build-container.sh created, version extraction/validation automated, dual tagging functional
+Status: Phase complete (registry query with skopeo, digest comparison, JSON output)
+Last activity: 2026-02-10 — Completed 23-01-PLAN.md: Registry query capability added to build-container.sh with version staleness detection
 
-Progress: [████████████████████░░░░] 87% (47/~48 total plans across all milestones)
+Progress: [█████████████████████░░░] 90% (48/~48 total plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
+- Total plans completed: 48 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
 - Milestones shipped:
   - v1.0 Hardening: 21 plans (8 phases) — shipped 2026-01-22
   - v2.0 Containerization: 22 plans (7 phases) — shipped 2026-02-01
@@ -31,17 +31,18 @@ Progress: [████████████████████░░░
 | Milestone | Phases | Plans | Duration | Status |
 |-----------|--------|-------|----------|--------|
 | v2.0.2 Window Tracking | 15-19 | 10/10 | 6 hours | ✅ Shipped 2026-02-08 |
-| v2.0.3 Container Tools | 20-25 | 4/TBD | In progress | 🚧 Phase 22 complete (build automation) |
+| v2.0.3 Container Tools | 20-25 | 5/TBD | In progress | 🚧 Phase 23 complete (registry integration) |
 
 **Recent Trend:**
 - v2.0.2 delivered in <1 day (10 plans, 5 phases, 6 hours)
 - Phase 21 completed in 2 minutes (independent image versioning established)
 - Phase 22 completed in 4 minutes (build automation with yq and podman)
+- Phase 23 completed in 3 minutes (registry query with skopeo and digest comparison)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
 - Trend: Fast iteration on focused phases
 
-*Updated: 2026-02-10 after Phase 22 completion*
+*Updated: 2026-02-10 after Phase 23 completion*
 
 ## Accumulated Context
 
@@ -80,6 +81,14 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - CI-friendly defaults: Quiet mode (--quiet) by default, verbose flag for debugging, build time tracking with SECONDS builtin
 - Dry-run performs full validation: Same preflight checks + version extraction to ensure reliable CI pipeline preview
 
+**Phase 23 execution decisions:**
+- Skopeo chosen over direct curl to registry API for OCI standards compliance and automatic credential handling from podman auth.json
+- Exponential backoff with jitter (1s→2s→4s→8s→16s) prevents thundering herd on rate limit retry, max 5 attempts
+- Fail-fast error handling: Network errors, auth failures, and malformed JSON all fail the build for CI/CD reliability
+- Registry query integrated after version extraction, before build to provide comparison data for Phase 24 auto-versioning
+- JSON output mode (--json) suppresses human-readable messages, outputs only structured data for pipeline consumption
+- Registry query skipped in dry-run mode (no network calls during preview)
+
 ### Pending Todos
 
 None yet.
@@ -91,9 +100,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 22 verified and complete
+Stopped at: Phase 23 complete
 Resume file: None
-Next action: `/gsd:discuss-phase 23` to gather context for Quay.io Integration phase
+Next action: `/gsd:discuss-phase 24` to gather context for Auto-Versioning System phase
 
 ---
-*Phase 22 complete: build-container.sh with yq extraction, semver validation, podman orchestration, dual tagging, dry-run preview*
+*Phase 23 complete: Registry query capability with skopeo, exponential backoff, digest comparison, JSON output for CI/CD*
