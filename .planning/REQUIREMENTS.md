@@ -88,43 +88,51 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MULTI-01 | TBD | Pending |
-| MULTI-02 | TBD | Pending |
-| MULTI-03 | TBD | Pending |
-| MULTI-04 | TBD | Pending |
-| MULTI-05 | TBD | Pending |
-| MULTI-06 | TBD | Pending |
-| MULTI-07 | TBD | Pending |
-| VER-01 | TBD | Pending |
-| VER-02 | TBD | Pending |
-| VER-03 | TBD | Pending |
-| VER-04 | TBD | Pending |
-| VER-05 | TBD | Pending |
-| VER-06 | TBD | Pending |
-| VER-07 | TBD | Pending |
-| BUILD-01 | TBD | Pending |
-| BUILD-02 | TBD | Pending |
-| BUILD-03 | TBD | Pending |
-| BUILD-04 | TBD | Pending |
-| BUILD-05 | TBD | Pending |
-| BUILD-06 | TBD | Pending |
-| BUILD-07 | TBD | Pending |
-| BUILD-08 | TBD | Pending |
-| BUILD-09 | TBD | Pending |
-| BUILD-10 | TBD | Pending |
-| TOOL-01 | TBD | Pending |
-| TOOL-02 | TBD | Pending |
-| TOOL-03 | TBD | Pending |
-| TOOL-04 | TBD | Pending |
-| TOOL-05 | TBD | Pending |
-| TOOL-06 | TBD | Pending |
-| TOOL-07 | TBD | Pending |
+| MULTI-01 | Phase 20 | Pending |
+| MULTI-02 | Phase 20 | Pending |
+| MULTI-03 | Phase 20 | Pending |
+| MULTI-04 | Phase 20 | Pending |
+| MULTI-05 | Phase 20 | Pending |
+| MULTI-06 | Phase 20 | Pending |
+| MULTI-07 | Phase 20 | Pending |
+| VER-01 | Phase 21 | Pending |
+| VER-02 | Phase 21 | Pending |
+| VER-03 | Phase 21 | Pending |
+| VER-04 | Phase 21 | Pending |
+| VER-05 | Phase 23 | Pending |
+| VER-06 | Phase 24 | Pending |
+| VER-07 | Phase 24 | Pending |
+| BUILD-01 | Phase 22 | Pending |
+| BUILD-02 | Phase 22 | Pending |
+| BUILD-03 | Phase 22 | Pending |
+| BUILD-04 | Phase 22 | Pending |
+| BUILD-05 | Phase 22 | Pending |
+| BUILD-06 | Phase 25 | Pending |
+| BUILD-07 | Phase 23 | Pending |
+| BUILD-08 | Phase 24 | Pending |
+| BUILD-09 | Phase 22 | Pending |
+| BUILD-10 | Phase 22 | Pending |
+| TOOL-01 | Phase 25 | Pending |
+| TOOL-02 | Phase 25 | Pending |
+| TOOL-03 | Phase 25 | Pending |
+| TOOL-04 | Phase 25 | Pending |
+| TOOL-05 | Phase 25 | Pending |
+| TOOL-06 | Phase 25 | Pending |
+| TOOL-07 | Phase 25 | Pending |
 
 **Coverage:**
 - v2.0.3 requirements: 28 total
-- Mapped to phases: 0 (awaiting roadmap)
-- Unmapped: 28
+- Mapped to phases: 28/28 (100% coverage)
+- Unmapped: 0
+
+**Coverage by phase:**
+- Phase 20 (Multi-Stage Architecture Foundation): 7 requirements
+- Phase 21 (Version Management System): 4 requirements
+- Phase 22 (Build Automation Core): 7 requirements
+- Phase 23 (Quay.io Integration): 2 requirements
+- Phase 24 (Auto-Versioning Logic): 3 requirements
+- Phase 25 (Registry Publishing & OCM Verification): 7 requirements
 
 ---
 *Requirements defined: 2026-02-09*
-*Last updated: 2026-02-09 after initial definition*
+*Last updated: 2026-02-09 after roadmap creation (100% coverage validated)*
