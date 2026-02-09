@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Phase 20 - Multi-Stage Architecture Foundation
+**Current focus:** Phase 21 - Version Management System
 
 ## Current Position
 
-Phase: 20 of 25 (Multi-Stage Architecture Foundation)
-Plan: 2 of 2 (complete)
-Status: Phase complete and verified (all 5 runtime tests passed)
-Last activity: 2026-02-09 — Phase 20 verified: Multi-stage architecture, layer caching, correct OCM tool
+Phase: 21 of 25 (Version Management System)
+Plan: 1 of 1 (complete)
+Status: Phase complete
+Last activity: 2026-02-09 — Completed 21-01-PLAN.md: versions.yaml single source of truth with independent image versioning
 
-Progress: [████████████████████░░░░] 83% (45/~48 total plans across all milestones)
+Progress: [████████████████████░░░░] 85% (46/~48 total plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 45 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
+- Total plans completed: 46 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
 - Milestones shipped:
   - v1.0 Hardening: 21 plans (8 phases) — shipped 2026-01-22
   - v2.0 Containerization: 22 plans (7 phases) — shipped 2026-02-01
@@ -31,15 +31,16 @@ Progress: [████████████████████░░░
 | Milestone | Phases | Plans | Duration | Status |
 |-----------|--------|-------|----------|--------|
 | v2.0.2 Window Tracking | 15-19 | 10/10 | 6 hours | ✅ Shipped 2026-02-08 |
-| v2.0.3 Container Tools | 20-25 | 2/TBD | In progress | 🚧 Phase 20 complete (gap closed) |
+| v2.0.3 Container Tools | 20-25 | 3/TBD | In progress | 🚧 Phase 21 complete (versions.yaml) |
 
 **Recent Trend:**
 - v2.0.2 delivered in <1 day (10 plans, 5 phases, 6 hours)
+- Phase 21 completed in 2 minutes (independent image versioning established)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
 - Trend: Fast iteration on focused milestones
 
-*Updated: 2026-02-09 after Phase 20 completion*
+*Updated: 2026-02-09 after Phase 21 completion*
 
 ## Accumulated Context
 
@@ -63,6 +64,13 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Architecture detection: Auto-detect arm64/amd64 via uname -m for multi-platform support
 - Direct binary downloads: ocm-cli provides binaries directly, no tarball extraction needed
 
+**Phase 21 execution decisions:**
+- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.2) enables tool updates without code releases
+- URL template pattern with {version} and {arch} placeholders enables version changes without URL modifications
+- Nested YAML schema: image/mc/tools sections for clear organization
+- yq command-line tool for YAML parsing in build scripts (standard practice for container builds)
+- versions.yaml as single source of truth: Manual workflow: yq extract → podman build --build-arg → verify in container
+
 ### Pending Todos
 
 None yet.
@@ -74,9 +82,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-09
-Stopped at: Completed 20-02-PLAN.md (gap closure)
+Stopped at: Completed 21-01-PLAN.md (versions.yaml single source of truth)
 Resume file: None
-Next action: `/gsd:plan-phase 21` to create execution plan for Version Management
+Next action: `/gsd:plan-phase 22` to create execution plan for Build Automation
 
 ---
-*Phase 20 complete: Multi-stage Containerfile, ARG injection architecture, correct OCM tool integration (gap closed)*
+*Phase 21 complete: versions.yaml single source of truth, independent image versioning, validated manual build workflow*
