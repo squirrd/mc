@@ -23,7 +23,7 @@ Requirements for multi-stage container architecture with efficient layer caching
 - [x] **VER-02**: Image version uses semantic versioning (x.y.z) independent from MC CLI version
 - [x] **VER-03**: versions.yaml tracks MC CLI version to bundle
 - [x] **VER-04**: versions.yaml tracks OCM tool version and other tools when they are added
-- [ ] **VER-05**: Build script can query quay.io registry API for latest published image tag
+- [x] **VER-05**: Build script can query quay.io registry API for latest published image tag
 - [ ] **VER-06**: Build script auto-increments patch version when building new image (1.0.5 → 1.0.6)
 - [ ] **VER-07**: User manually updates minor version in versions.yaml when adding new tools (y in x.y.z)
 
@@ -35,7 +35,7 @@ Requirements for multi-stage container architecture with efficient layer caching
 - [ ] **BUILD-04**: Build script tags image with semantic version (mc-rhel10:1.0.0)
 - [ ] **BUILD-05**: Build script also tags image as :latest (mc-rhel10:latest)
 - [ ] **BUILD-06**: Build script supports --push flag to publish to quay.io registry
-- [ ] **BUILD-07**: Build script queries quay.io for latest tag before building
+- [x] **BUILD-07**: Build script queries quay.io for latest tag before building
 - [ ] **BUILD-08**: Build script auto-bumps patch version from quay.io latest (1.0.5 becomes 1.0.6)
 - [ ] **BUILD-09**: Build script supports --dry-run flag showing actions without building
 - [ ] **BUILD-10**: Build is architecture aware and can build for different architectures (limit to amd64 for v2.0.3)
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VER-02 | Phase 21 | Pending |
 | VER-03 | Phase 21 | Pending |
 | VER-04 | Phase 21 | Pending |
-| VER-05 | Phase 23 | Pending |
+| VER-05 | Phase 23 | Complete |
 | VER-06 | Phase 24 | Pending |
 | VER-07 | Phase 24 | Pending |
 | BUILD-01 | Phase 22 | Complete |
@@ -108,7 +108,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUILD-04 | Phase 22 | Complete |
 | BUILD-05 | Phase 22 | Complete |
 | BUILD-06 | Phase 25 | Pending |
-| BUILD-07 | Phase 23 | Pending |
+| BUILD-07 | Phase 23 | Complete |
 | BUILD-08 | Phase 24 | Pending |
 | BUILD-09 | Phase 22 | Complete |
 | BUILD-10 | Phase 22 | Complete |
