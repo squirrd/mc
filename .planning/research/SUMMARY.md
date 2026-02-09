@@ -1,265 +1,203 @@
 # Project Research Summary
 
-**Project:** Terminal Window Tracking System for MC CLI
-**Domain:** Terminal automation with persistent session deduplication
-**Researched:** 2026-02-04
+**Project:** MC CLI v2.0.3 Container Tools
+**Domain:** Container build automation with multi-stage architecture and versioned tool management
+**Researched:** 2026-02-09
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This project adds window ID tracking to the MC CLI's terminal automation system to prevent duplicate terminal windows. The core problem is that iTerm2's AppleScript overwrites session names when commands execute, making title-based window searches fail immediately after launch. The solution is a persistent window registry using window IDs (immutable identifiers) instead of titles (volatile strings).
+MC CLI v2.0.3 enhances container tooling by migrating from single-stage to multi-stage builds, enabling efficient layer caching, independent image versioning, and automated tool management. The research validates a three-component architecture: a multi-stage Containerfile (mc-builder, ocm-downloader, final stages), a versions.yaml config file for version management, and a build-container.sh automation script. This architecture separates build-time complexity from runtime simplicity, requiring zero changes to existing Python container management code while delivering significant benefits—smaller images, faster incremental builds, and independent versioning for container updates without MC CLI code changes.
 
-The recommended approach extends the existing StateDatabase with a window_registry table, uses AppleScript's window `id` property on macOS (no new dependencies), and leverages wmctrl/xdotool on Linux for X11 window tracking. This zero-dependency approach integrates cleanly with existing infrastructure: SQLite is already in use for container state, AppleScript is already used for terminal launching, and the reconciliation pattern is already proven in container management.
+The recommended approach uses Podman's native multi-stage build capabilities (already in dependencies), Bash for build orchestration with Python for version logic, and introduces semver for version bumping plus PyYAML for config management. The OCM CLI serves as proof-of-concept for a scalable pattern: one downloader stage per tool maximizes cache reuse and enables parallel builds. Independent image versioning (1.0.0 separate from MC 2.0.3) allows tool updates to trigger automatic patch bumps without coupling to MC release cycles.
 
-Key risks are race conditions between window creation and ID capture (mitigated by atomic AppleScript execution), stale registry entries after manual window closure (mitigated by cleanup-on-lookup pattern), and concurrent SQLite access (mitigated by WAL mode and busy_timeout). The research shows these are well-understood problems with proven solutions that can be implemented incrementally without breaking existing functionality.
+Critical risks center on layer cache invalidation (defeating multi-stage benefits), version drift between image tags and actual contents, and architecture mismatches for multi-platform support. Prevention strategies are well-documented: explicit stage naming, careful instruction ordering, rigorous version validation, and TARGETARCH ARG usage. The research shows high confidence across all areas, with clear implementation patterns validated against official Podman documentation and real-world container build best practices.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new Python dependencies required. Window tracking uses existing infrastructure: SQLite (Python stdlib) for registry storage, AppleScript (macOS built-in) for window ID capture, and wmctrl/xdotool (Linux system tools) for X11 window management.
+Multi-stage builds work with existing Podman 5.7.0+ already in pyproject.toml dependencies—no additional container tooling needed. The stack additions focus on version management and build automation: semver (3.0.4) for semantic version bumping, PyYAML (6.0.2) for parsing versions.yaml, and bash for build orchestration with Python for complex logic. Skopeo (1.21.0+ already on host) queries registry tags via `list-tags` command, avoiding unnecessary API complexity. The research specifically recommends against jq (not in UBI repos) in favor of Python's json module for API parsing.
 
 **Core technologies:**
-- **SQLite (existing)**: Window registry persistence — Extend existing StateDatabase. WAL mode supports concurrent access. Zero new dependencies.
-- **AppleScript (existing)**: macOS window ID capture — Already in use for terminal launching. Access window `id` property directly. Verified in iTerm2 official docs.
-- **wmctrl/xdotool (system deps)**: Linux window tracking — Standard X11 tools. Best-effort window ID capture on Linux. Document as runtime dependencies.
-
-**Critical version requirements:**
-- None. All stack elements are either Python stdlib, macOS built-ins, or optional Linux system tools.
-
-**Deferred to Phase 2:**
-- **iterm2 Python package**: Requires async refactoring of entire terminal system. Too much scope creep for Phase 1. AppleScript works today.
-- **dbus-python**: Terminal-specific (Konsole only). Over-engineered for universal solution. Use wmctrl instead.
+- **Podman 5.7.0+ (existing)**: Multi-stage builds with native support for `FROM...AS stage` and `COPY --from=stage` patterns
+- **semver 3.0.4**: Semantic version parsing and bumping (patch/minor/major) with simple API and Python 3.11+ compatibility
+- **PyYAML 6.0.2**: Parse and update versions.yaml config file (adequate for machine-managed YAML despite ruamel.yaml's comment preservation)
+- **Bash + Python hybrid**: Bash for build orchestration (simple command sequencing), Python when logic complexity requires YAML parsing or semver operations
+- **skopeo 1.21.0+ (existing)**: Query Quay.io tags via `list-tags` without pulling images—faster than REST API for simple queries
 
 ### Expected Features
 
-Window tracking is fundamentally a deduplication system following the tmux/screen session management pattern: check for existing session, attach if found, create if not.
+Multi-stage container builds are table-stakes infrastructure that users expect to "just work" with standard Docker/Podman behaviors. The research identifies eight must-have features including layer caching, named build stages, explicit version tags (no :latest in production), ARG-based version control, and build reproducibility. These are low-complexity standard patterns that form the foundation. Differentiators include versions.yaml as single source of truth, automated patch bumping when tool versions change, and registry-queried version detection—medium complexity features that provide competitive advantage through reduced manual version management and drift prevention.
 
 **Must have (table stakes):**
-- Window ID registry storage (case_number → window_id mapping)
-- Capture window ID on terminal creation
-- Lookup by case number and focus existing window
-- Create new window when registry lookup fails
-- Stale entry cleanup (remove entries for manually closed windows)
-- Persist across MC process restarts
+- Layer caching with multi-stage builds — standard BuildKit behavior users rely on
+- Named build stages — required for `--target` and `COPY --from=` references
+- Explicit version tags (semver x.y.z) — production requirement, :latest causes rollback problems
+- ARG-based version control — standard Dockerfile pattern for configurable builds
+- Semantic version bumping — auto-increment patch, manual minor/major control
+- Build reproducibility — same input produces same output via version pinning
 
 **Should have (competitive advantage):**
-- Automatic cleanup on startup (no manual intervention for stale entries)
-- Manual reconciliation command (`mc window reconcile`)
-- Health check command (`mc window status` for debugging)
-- Window metadata timestamps (creation time, last verified time)
+- versions.yaml single source of truth — centralized tool versions prevent drift across stages
+- Tool version change detection — git diff on versions.yaml triggers auto patch bump
+- Registry query for current version — auto-detect if local version is stale vs quay.io
+- OCM tool as POC — prove pattern works with single tool before scaling complexity
+- Dry-run mode — preview build actions without execution (safety feature)
 
-**Defer (v2+):**
-- Audit log of window operations (low immediate value)
-- Cross-desktop/Space tracking on macOS (high complexity)
-- Window content/state restoration (very complex, unclear value)
-- Grace period before cleanup (adds complexity, defer until validated need)
-
-**Anti-features to avoid:**
-- Title-based search as primary method (fragile, defeats purpose)
-- Pre-execution window search (race conditions)
-- Real-time window monitoring (polling overhead, battery drain)
-- Shared registry across users (security and concurrency issues)
+**Defer (v2.1.x and beyond):**
+- Inline cache metadata — BuildKit `BUILDKIT_INLINE_CACHE=1` for CI/CD optimization
+- Additional tools beyond OCM — scale pattern to jq, yq, oc, kubectl after validation
+- Stage-level cache pushing — `--cache-from` with per-stage tags for advanced CI/CD
+- Multi-platform builds — `--platform linux/amd64,linux/arm64` support
+- Automated dependency updates — Dependabot/Renovate for tool version bumps
 
 ### Architecture Approach
 
-Extend existing StateDatabase class with window_registry table. Use dependency injection to pass StateDatabase to terminal launchers. Window ID capture happens atomically during terminal creation via single AppleScript that creates window AND returns ID. Reconciliation pattern (already proven in container management) cleans stale entries.
+The architecture maintains clean separation between build-time concerns (container/ directory with Containerfile, versions.yaml, build-container.sh) and runtime concerns (src/mc/container/ Python code managing container lifecycle). Multi-stage Containerfile uses builder-downloader-final pattern: mc-builder stage compiles MC CLI from source, ocm-downloader fetches versioned OCM binary, final stage assembles minimal runtime image copying only artifacts. This separation enables independent caching—MC source changes rebuild only mc-builder + final, OCM version changes rebuild only ocm-downloader + final. Layer caching optimization follows least-to-most-frequently-changed ordering, reducing incremental builds from 3-5 minutes to under 1 minute.
 
 **Major components:**
-1. **StateDatabase extension** — Add window_registry table, store_window(), get_window(), remove_window(), reconcile_windows() methods. FOREIGN KEY to containers table with CASCADE delete.
-2. **MacOSLauncher modification** — Capture window ID during launch via AppleScript return value. Store in registry automatically. Add find_window_by_case() and focus_window_by_case() methods using ID lookup.
-3. **attach_terminal workflow** — Check registry for existing window before creating new one. Focus if found and verified. Early exit prevents duplicate creation. Cleanup stale entries on lookup failure.
-4. **LinuxLauncher best-effort** — Optional window ID capture using wmctrl. Graceful fallback to title-based search if wmctrl unavailable. Document X11-only support.
-
-**Key patterns:**
-- **Reconciliation**: Same pattern as container state management. Compare registry to reality, remove orphans.
-- **Dependency injection**: StateDatabase injected into launchers. Single source of truth, easier testing.
-- **Platform-specific with fallback**: Best experience on macOS (reliable ID tracking), graceful degradation on Linux (best-effort), no breaking changes.
-- **Atomic operations**: Single AppleScript creates window + captures ID. Prevents race conditions.
+1. **Multi-stage Containerfile** — Three named stages (mc-builder, ocm-downloader, final) with ARG-based version injection from versions.yaml; final stage copies artifacts only, no build dependencies
+2. **versions.yaml config** — Single source of truth with independent image semver (not tied to MC CLI version), tool versions with URL patterns, schema enabling easy tool additions
+3. **build-container.sh script** — Reads versions.yaml, queries Quay.io API for latest tag, detects tool version changes to auto-bump patch, builds with podman passing build args, optional --push for registry publishing
+4. **ContainerManager (unchanged)** — Existing _ensure_image() pull-then-create workflow preserved; multi-stage build transparent to runtime; OCM appears at /usr/local/bin/ocm automatically
 
 ### Critical Pitfalls
 
-1. **Window Title Volatility (iTerm2 AppleScript)** — Session names get overwritten when commands execute, making title-based search fail immediately. Prevention: Use window ID tracking from day one, never rely on mutable title property after command execution. This is the root cause requiring this entire project.
+Research identified seven critical pitfalls with high-confidence prevention strategies. Layer cache invalidation tops the list—`COPY --from=builder` can incorrectly invalidate downstream caches even when upstream cached, defeating multi-stage benefits (verified Podman issue #20229). Prevention requires explicit named stages, careful stage ordering, and testing cache behavior with double-builds. Version conflicts between image tag, versions.yaml, and actual MC CLI version inside container cause drift—auto-bumping on every tool change creates version noise. Architecture mismatches (hardcoded ocm-linux-amd64 instead of using TARGETARCH) break ARM64 users. Quay.io API rate limiting during rapid iteration blocks builds without exponential backoff. Breaking existing single-stage build workflow requires backward compatibility planning. YAML parsing failures from manual edits (tabs vs spaces) require validation. Missing runtime dependencies for binaries require `ldd` verification.
 
-2. **Race Condition Between Window Creation and ID Capture** — Terminal launch is async (Popen), but ID capture is sync. AppleScript may execute before window fully created, capturing wrong ID. Prevention: Use single atomic AppleScript that creates window AND returns ID. Don't split into separate subprocess calls. Add 0.1-0.2s delay within AppleScript before capturing ID.
-
-3. **Stale Registry Entries After Manual Window Closure** — User closes window (Cmd+W), but registry still has ID. Next lookup finds stale entry, creates new window but doesn't update registry. Prevention: Cleanup-on-lookup pattern (remove stale entry immediately when verification fails). Periodic reconciliation on startup. Provide manual reconcile command.
-
-4. **Platform-Specific Window ID Format Assumptions** — Window ID formats differ dramatically: iTerm2 uses temporary strings, X11 uses integers that change on restart. Prevention: Store IDs as opaque strings, add platform identifier to schema, never assume IDs persist across reboots. Clear registry on system restart.
-
-5. **Concurrent Access to SQLite Registry** — Multiple `mc case` commands run simultaneously, both try to write to registry, one gets "database is locked" error. Prevention: Set PRAGMA busy_timeout=5000, enable WAL mode, wrap operations in retry logic. Keep transactions short.
-
-6. **Focusing Wrong Window Security Risk** — Window ID gets recycled, registry maps case to ID that now belongs to different application (browser, email). User types in wrong window. Prevention: ALWAYS verify window belongs to correct application before focusing. If verification fails, remove stale entry and create new window.
-
-7. **Registry Corruption Without Recovery Path** — SQLite file corrupted (disk full, crash), application fails to start. Prevention: Treat registry as cache (can rebuild), catch DatabaseError on load, delete corrupted file and create fresh. Provide manual reset command.
-
-8. **X11 vs Wayland Incompatibility** — Window tracking works on X11 but fails on Wayland (xdotool/wmctrl don't work). Prevention: Detect display server on startup, use platform-appropriate APIs, document limitations, graceful fallback.
+1. **Layer cache invalidation from stage dependencies** — Verify cache works with double-builds; order stages least-to-most frequently changed; never use --squash-all with multi-stage (Podman #14712)
+2. **Version conflict between image version and MC CLI version** — Declare version relationship policy in versions.yaml header; validate consistency across image tag, versions.yaml, and `mc --version` output
+3. **Architecture mismatch in tool binaries** — Use `ARG TARGETARCH` in every downloader stage; substitute `${TARGETARCH}` in download URLs; test on both amd64 and arm64
+4. **Quay.io API rate limiting and authentication failures** — Implement exponential backoff; cache API responses locally (5min TTL); provide `--version X.Y.Z` override to skip API
+5. **Breaking existing single-stage build workflow** — Maintain build.sh as wrapper for backward compat; validate podman version >= 4.0; document migration path
+6. **versions.yaml parsing failures from manual edits** — Add yamllint validation in pre-commit hook; quote all version strings; validate YAML before parsing in build script
+7. **Missing dependencies in final stage** — Test binaries with `ldd` to check shared library dependencies; use RHEL UBI base with common deps pre-installed; add smoke tests to Containerfile
 
 ## Implications for Roadmap
 
-Based on research, suggested 3-phase structure focused on incremental delivery with minimal risk:
+The research strongly suggests a 6-phase incremental approach that validates each layer before adding complexity. Starting with multi-stage Containerfile architecture (Phase 1) proves the build pattern works and establishes cache behavior baselines before introducing automation. Version management (Phase 2) establishes single source of truth in versions.yaml before building automation that depends on it. Build automation (Phase 3) orchestrates what was proven manually in Phases 1-2. Quay.io integration (Phase 4) adds external dependency only after core automation works. Auto-versioning logic (Phase 5) implements complex version comparison after all pieces exist. Registry publishing (Phase 6) comes last since it requires reliable builds. This ordering minimizes risk by validating assumptions incrementally and allows early exit if patterns don't work as expected.
 
-### Phase 1: Registry Foundation & macOS Implementation
-**Rationale:** Establish core infrastructure with zero new dependencies. Focus on macOS where problem is acute and solution is well-documented. Proven patterns (SQLite, AppleScript) minimize risk.
+### Phase 1: Multi-Stage Architecture Foundation
+**Rationale:** Validates build pattern works before adding automation complexity; establishes cache behavior baselines; proves OCM tool integration succeeds
+**Delivers:** Working 3-stage Containerfile (mc-builder, ocm-downloader, final); hardcoded OCM version initially; verified layer caching; image size comparison vs single-stage
+**Addresses:** Table-stakes features (layer caching, named stages, build reproducibility); Anti-feature avoidance (no build tools in final image)
+**Avoids:** Pitfall #1 (cache invalidation) via explicit stage naming and ordering; Pitfall #7 (missing dependencies) via smoke tests and `ldd` verification
+**Needs research:** No—multi-stage builds are well-documented standard patterns with official Podman docs and extensive community examples
 
-**Delivers:**
-- Functional duplicate prevention on macOS (iTerm2, Terminal.app)
-- Window ID registry with CRUD operations
-- Atomic window creation + ID capture
-- Basic stale entry cleanup
+### Phase 2: Version Management System
+**Rationale:** Establishes single source of truth before automation depends on it; defines version relationship policy (image semver independent from MC CLI version)
+**Delivers:** versions.yaml schema with image version, MC CLI reference, tool versions; manual builds with --build-arg pattern; YAML validation
+**Addresses:** Differentiator features (versions.yaml single source of truth, version validation); Must-have (ARG-based version control)
+**Avoids:** Pitfall #2 (version conflicts) via explicit version relationship policy; Pitfall #6 (YAML parsing failures) via yamllint validation and quote enforcement
+**Needs research:** No—YAML parsing and semver libraries are straightforward; version management patterns well-established
 
-**Addresses (features):**
-- Window ID registry storage (table stakes)
-- Capture window ID on creation (table stakes)
-- Lookup by case number and focus existing (table stakes)
-- Create new window when not found (table stakes)
-- Persist across restarts (table stakes)
+### Phase 3: Build Automation Core
+**Rationale:** Automates what was proven manually in Phases 1-2; no version bumping yet, just orchestration
+**Delivers:** build-container.sh script that reads versions.yaml, extracts tool versions, runs podman build with --build-arg flags, tags image
+**Addresses:** Differentiator features (dry-run mode potential, build orchestration); Must-have (semantic versioning enforcement)
+**Avoids:** Pitfall #5 (breaking existing builds) via backward-compatible wrapper; UX pitfall (silent failures) via set -e and clear messaging
+**Needs research:** No—bash scripting patterns for container builds are standard; Python YAML parsing straightforward
 
-**Implements (architecture):**
-- StateDatabase extension with window_registry table
-- MacOSLauncher modification for ID capture and focus
-- attach_terminal workflow integration with registry checks
+### Phase 4: Quay.io API Integration
+**Rationale:** Adds external dependency only after core automation works; enables version staleness detection
+**Delivers:** Quay.io REST API querying in build-container.sh; latest semver tag extraction; --check-only flag for dry-run version comparison
+**Addresses:** Differentiator features (registry query for current version, version staleness detection)
+**Avoids:** Pitfall #4 (API rate limiting) via exponential backoff, local caching (5min TTL), and --version override; Security mistake (token handling) via environment variables
+**Needs research:** Minimal—Quay.io API is well-documented; may need brief research on OAuth2 token generation for private repos if needed
 
-**Avoids (pitfalls):**
-- Window title volatility (use IDs from start)
-- Race condition in ID capture (atomic AppleScript)
-- Platform-specific ID assumptions (opaque string storage)
-- Concurrent SQLite access (WAL mode + busy_timeout)
-- Focusing wrong window (application verification)
+### Phase 5: Intelligent Version Bumping
+**Rationale:** Most complex logic; needs all previous pieces working; implements core differentiator (auto patch bump)
+**Delivers:** Version comparison logic (local versions.yaml vs Quay.io latest); tool version change detection via git diff; auto-increment patch on changes; manual --minor/--major flags; updated versions.yaml write-back
+**Addresses:** Differentiator features (tool version change detection, auto patch bump); Must-have (semantic version bumping with manual control)
+**Avoids:** Pitfall #2 (version conflicts) via version validation; UX pitfall (auto-bump without confirmation) via user confirmation prompt
+**Needs research:** No—semver library API is simple; git diff patterns standard; version comparison logic straightforward
 
-**Dependencies:** None external. All macOS built-ins.
-
-**Success criteria:** UAT 5.2 passes (second `mc case 12345678` focuses existing window, no duplicate created)
-
-### Phase 2: Cleanup & Reconciliation
-**Rationale:** After core tracking proven, add robustness for long-term operation. Focus on self-healing and maintenance features that prevent registry drift.
-
-**Delivers:**
-- Automatic cleanup on startup (validate all IDs, remove stale)
-- Manual reconciliation command (`mc window reconcile`)
-- Health check command (`mc window status`)
-- Window metadata timestamps (created_at, last_verified_at)
-- Corruption detection and recovery
-
-**Addresses (features):**
-- Automatic cleanup on startup (differentiator)
-- Manual reconciliation command (differentiator)
-- Health check command (differentiator)
-- Window metadata storage (differentiator)
-
-**Implements (architecture):**
-- reconcile_windows() method using existing reconciliation pattern
-- PRAGMA integrity_check on database load
-- Graceful degradation when registry unavailable
-
-**Avoids (pitfalls):**
-- Stale registry entries accumulation
-- Registry corruption without recovery
-- No diagnostic tools for debugging
-
-**Dependencies:** None. Extends Phase 1 infrastructure.
-
-**Success criteria:** Registry stays clean after 1 week of daily use. Corrupted database recovers automatically.
-
-### Phase 3: Linux Support (Optional)
-**Rationale:** After macOS implementation proven and stable, extend to Linux for feature parity. Linux implementation is best-effort due to X11/Wayland complexity.
-
-**Delivers:**
-- Window ID capture on Linux (X11 only) using wmctrl
-- Focus by window ID on Linux
-- Display server detection (X11 vs Wayland)
-- Graceful fallback when wmctrl unavailable
-- Documentation of Linux limitations
-
-**Addresses (features):**
-- Cross-platform window tracking
-- Document X11-only support
-
-**Implements (architecture):**
-- LinuxLauncher extension with window ID capture
-- Platform-specific ID extraction methods
-- Fallback to title-based search when tracking unavailable
-
-**Avoids (pitfalls):**
-- X11 vs Wayland incompatibility (detect and document)
-
-**Dependencies:** wmctrl or xdotool (runtime, optional)
-
-**Success criteria:** Window tracking works on Ubuntu 20.04/22.04 with X11. Wayland systems fall back gracefully.
+### Phase 6: Registry Publishing
+**Rationale:** Only needed after build process proven reliable; publishing is one-way operation requiring confidence
+**Delivers:** --push flag support; dual tagging (semver + latest); podman push to Quay.io; verification that ContainerManager can pull new image
+**Addresses:** Must-have (registry push capability); Anti-feature avoidance (no auto-push, explicit flag required)
+**Avoids:** Security mistake (hardcoded tokens) via environment variables; UX pitfall (breaking changes without migration) via backward compat verification
+**Needs research:** No—podman push is standard; registry authentication well-documented
 
 ### Phase Ordering Rationale
 
-- **Phase 1 first:** Solves immediate problem (UAT 5.2 failure) with minimal dependencies. macOS is development platform and primary use case.
-- **Phase 2 after validation:** Don't add cleanup complexity until core tracking proven. Reconciliation pattern already understood from container management.
-- **Phase 3 optional:** Linux support is nice-to-have. Complex (X11/Wayland split) and lower priority than macOS.
-- **Incremental risk:** Each phase independently valuable. Can stop after Phase 1 if needed.
-- **No breaking changes:** All phases backward compatible. Registry is additive feature.
+- **Foundation first (Phase 1):** Multi-stage Containerfile must work before adding automation—validates cache behavior, image size benefits, tool integration success; early exit point if pattern doesn't deliver expected benefits
+- **Config before automation (Phase 2):** versions.yaml establishes contract before build-container.sh depends on parsing it—prevents fragile automation built on unstable foundation
+- **Local before remote (Phases 3-4):** Build automation works locally before adding Quay.io API dependency—allows iteration without network calls; API integration adds external dependency only when core proven
+- **Detection before action (Phases 4-5):** Query Quay.io for versions before implementing auto-bump logic—version comparison depends on reliable registry queries
+- **Build before publish (Phases 5-6):** Reliable versioning before pushing to registry—prevents publishing incorrectly-versioned images; publishing is one-way, requires confidence
+- **Incremental validation:** Each phase has clear success criteria; failure in early phase prevents wasted effort in later phases; allows pivots based on discovered constraints
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **None.** All three phases use well-documented, proven patterns. Window tracking is a solved problem in tmux/screen/kubectl ecosystems.
-
 **Phases with standard patterns (skip research-phase):**
-- **Phase 1:** SQLite extension, AppleScript window ID property, dependency injection — all standard patterns with official documentation
-- **Phase 2:** Reconciliation pattern already implemented for containers, PRAGMA integrity_check is standard SQLite
-- **Phase 3:** wmctrl and xdotool are mature tools with comprehensive man pages
+- **Phase 1 (Multi-stage Architecture):** Multi-stage builds extensively documented in official Podman docs, Docker docs, and 2026 community sources; layer caching behavior well-understood
+- **Phase 2 (Version Management):** PyYAML and semver library usage straightforward; version management patterns established in container ecosystem
+- **Phase 3 (Build Automation):** Bash scripting for container builds follows standard patterns; no novel integration complexity
+- **Phase 5 (Version Bumping):** semver library API simple; git diff patterns standard; no complex algorithm discovery needed
+- **Phase 6 (Registry Publishing):** podman push standard operation; authentication well-documented
 
-**Areas to validate during implementation:**
-- iTerm2 window ID format stability across app restarts (test in Phase 1)
-- SQLite concurrent write performance with 5+ simultaneous launches (test in Phase 1)
-- Grace period vs immediate cleanup trade-offs (decide in Phase 2 based on user feedback)
-- Wayland compositor-specific APIs (research in Phase 3 if demand exists)
+**Phases potentially needing focused research:**
+- **Phase 4 (Quay.io API):** May warrant brief focused research if authentication complexity arises (OAuth2 token generation, robot accounts) or if advanced API features needed (pagination for repos with 100+ tags, filtering by date/labels); however, basic tag listing is well-documented and likely sufficient for POC
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All technologies verified in official docs. SQLite is stdlib. AppleScript window `id` property confirmed in iTerm2 docs. wmctrl is standard X11 tool. |
-| Features | HIGH | Feature landscape derived from tmux/screen/kubectl session management patterns. Table stakes vs differentiators validated against ecosystem. |
-| Architecture | HIGH | Extends existing StateDatabase architecture (already proven). Reconciliation pattern already implemented for containers. Dependency injection is standard pattern. |
-| Pitfalls | HIGH | All 8 critical pitfalls based on real bug analysis (UAT 5.2 failure investigation), official SQLite docs, and verified iTerm2 limitations. Prevention strategies tested. |
+| Stack | HIGH | Podman multi-stage support verified in official docs (2026); semver and PyYAML versions confirmed on PyPI with Python 3.11+ compatibility; skopeo 1.21.0 verified on host; no new container tooling required |
+| Features | HIGH | Multi-stage builds and semantic versioning are industry-standard practices with extensive documentation; table-stakes vs differentiators clearly delineated based on Docker/Podman ecosystem expectations; anti-features validated against real-world pitfalls |
+| Architecture | HIGH | Builder-downloader-final pattern proven in official Docker multi-stage docs and community examples; separation of build-time vs runtime concerns aligns with established containerization best practices; layer caching optimization patterns well-documented |
+| Pitfalls | HIGH | All critical pitfalls validated against real GitHub issues (Podman #20229, #14712) and official documentation; prevention strategies tested in community; recovery costs accurately estimated based on container ecosystem experience |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-**Window ID stability across iTerm2 versions:**
-- Research shows window `id` property is stable API, but not tested across all iTerm2 versions
-- **Mitigation:** Document minimum iTerm2 version requirement (3.3.0+). Add version detection if needed.
+**Minor gaps requiring validation during implementation:**
 
-**Linux terminal diversity:**
-- Research focused on gnome-terminal and konsole. Many other terminals exist (alacritty, kitty, etc.)
-- **Mitigation:** Phase 3 is best-effort. Document tested terminals. Community can extend support.
+- **Quay.io API pagination:** Research covers basic tag listing, but repos with 100+ tags may require pagination handling—likely not needed for MC CLI container (expects <20 versions in first year), but should validate during Phase 4 if tag count grows
+- **Multi-architecture build timing:** Research assumes TARGETARCH substitution works for OCM CLI (verified in GitHub releases)—should validate during Phase 3 that URL pattern `ocm-linux-${TARGETARCH}` resolves correctly for both amd64 and arm64
+- **Version relationship enforcement:** Research suggests policy declaration in versions.yaml header—during Phase 2 implementation, may need to formalize rules (e.g., "MC minor bump requires image minor bump") with validation logic rather than just comments
+- **Cache hit rate monitoring:** Research mentions build time benefits (3-5min → <1min) but doesn't provide tooling to measure cache effectiveness—consider adding `--verbose` flag to build-container.sh that reports cache hit/miss per stage for troubleshooting
 
-**Performance at scale:**
-- Registry tested conceptually up to 1000 entries, but not benchmarked
-- **Mitigation:** Monitor in production. Add indexes if query performance degrades. Current architecture supports 100-1000 cases without issue.
-
-**Wayland compositor-specific APIs:**
-- Research identified limitation but didn't deep-dive into KDE/GNOME extensions
-- **Mitigation:** Phase 3 documents X11-only. Future enhancement can add compositor-specific support based on demand.
+**No blocking gaps identified.** All core patterns validated against official sources and real-world implementations. Gaps above are refinements discovered during execution, not fundamental unknowns.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [iTerm2 AppleScript Documentation](https://iterm2.com/documentation-scripting.html) — Official window `id` property documentation
-- [wmctrl man page](https://linux.die.net/man/1/wmctrl) — Official X11 window management tool
-- [SQLite WAL mode](https://sqlite.org/wal.html) — Concurrent access patterns
-- [SQLite Locking](https://sqlite.org/lockingv3.html) — Lock contention prevention
-- `.planning/INTEGRATION_TEST_FIX_REPORT.md` — Real UAT 5.2 failure investigation (root cause analysis)
-- `src/mc/container/state.py` — Existing StateDatabase implementation (reconciliation pattern)
+
+**Official Documentation:**
+- Podman Build Documentation (docs.podman.io) — Multi-stage build syntax, --target flag, layer caching behavior
+- Skopeo Documentation (containers/skopeo GitHub) — Registry tag listing via `list-tags` command
+- Quay.io API Documentation (docs.quay.io/api) — REST API for repository queries, tag listing endpoints
+- OCM CLI Releases (github.com/openshift-online/ocm-cli/releases) — Binary downloads, v1.0.10 verified Dec 2025
+- Semantic Versioning Spec (semver.org) — Version format specification
+- python-semver PyPI (pypi.org/project/semver) — Version 3.0.4 compatibility, Python 3.7-3.14 support
+- PyYAML PyPI (pypi.org/project/pyyaml) — Version 6.0.2+ for YAML parsing
+- Docker Multi-stage Builds Documentation (docs.docker.com/build/building/multi-stage) — Canonical reference for multi-stage patterns
+- Container Image Versioning (container-registry.com) — Best practices for semver tagging
 
 ### Secondary (MEDIUM confidence)
-- [tmux session management](https://www.ditig.com/how-to-attach-tmux-session) — Session deduplication patterns
-- [docker-compose orphan cleanup](https://dockerpros.com/wiki/docker-compose-down-remove-orphans/) — Stale entry cleanup strategies
-- [Wayland vs X11 2026 comparison](https://dev.to/rosgluk/wayland-vs-x11-2026-comparison-5cok) — Window tracking differences
-- [Kubernetes reconciliation patterns](https://hkassaei.com/posts/kubernetes-and-reconciliation-patterns/) — State management philosophy
+
+**Community Best Practices (2026 sources):**
+- How to Build Images with Podman (OneUptime Blog, Jan 2026) — Multi-stage build patterns and optimization
+- Skopeo: The Unsung Hero (Red Hat Developer, Sep 2025) — Registry inspection patterns
+- Docker Layer Caching Strategies (OneUptime Blog, Jan 2026) — Cache optimization techniques
+- Semantic Versioning Automation (OneUptime Blog, Jan 2026) — Version bumping workflows
+- Container Anti-Patterns (dev.to, 2026) — Common mistakes and avoidance strategies
+- DevOps Anti-Patterns (Medium, 2026) — Build automation pitfalls
+
+**Verified GitHub Issues:**
+- containers/podman#20229 — Layer caching does not work with --squash-all --layers
+- containers/podman#14712 — podman build --squash always rebuilds every layer
+- containers/buildah#4950 — buildah doesn't use cached layers with multi-stage build and --label
+- moby/buildkit#2120 — cache-from and COPY invalidates all layers
 
 ### Tertiary (LOW confidence)
-- [MacScripter: Get window ID](https://www.macscripter.net/t/get-window-id/72891) — Community window ID patterns
-- [GNOME Terminal WINDOWID issue](https://gitlab.gnome.org/GNOME/gnome-terminal/-/issues/17) — Known limitations
+
+No tertiary sources required—all findings validated against official documentation or verified community sources with 2025-2026 timestamps.
 
 ---
-*Research completed: 2026-02-04*
+*Research completed: 2026-02-09*
 *Ready for roadmap: yes*

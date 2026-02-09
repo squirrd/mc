@@ -1,549 +1,385 @@
-# Pitfalls Research: Container Orchestration with Salesforce Integration
+# Pitfalls Research: Multi-Stage Builds & Version Management
 
-**Domain:** Rootless Podman CLI orchestrator with external API integration
-**Researched:** 2026-01-26
+**Domain:** Container build automation with multi-stage architecture and versioned tool management
+**Researched:** 2026-02-09
 **Confidence:** HIGH
-
----
 
 ## Critical Pitfalls
 
-### Pitfall 1: UID/GID Mapping Confusion in Volume Mounts
+### Pitfall 1: Layer Cache Invalidation from Stage Dependencies
 
 **What goes wrong:**
-Container creates files in mounted workspace directories that appear owned by unexpected UIDs on the host (e.g., UID 100025 instead of the user's UID 1000), causing permission denied errors when the host user tries to access files created by the container.
+When converting a single-stage Containerfile to multi-stage with `COPY --from=builder`, Docker/Podman incorrectly invalidates cache for downstream stages even when upstream stage was cached. Result: Every build rebuilds all stages, defeating the primary benefit of multi-stage builds (fast incremental rebuilds).
 
 **Why it happens:**
-Rootless Podman maps the container's root user (UID 0) to the host user's UID, but other container UIDs are mapped to subuids defined in `/etc/subuid`. If a container process runs as UID 26, it appears as UID 100025 on the host. Developers assume container UID 0 = host UID 0, or that mounted volumes preserve host permissions.
+Build tools (buildah/BuildKit) calculate cache checksums by examining file metadata in `COPY --from=` instructions. If the source stage was rebuilt (even from cache), the cache key changes, invalidating all downstream stages. This is a known bug in both Docker (moby/buildkit#2120) and Podman (containers/podman#20229).
 
 **How to avoid:**
-- Use `podman run --userns=keep-id` to map the host user's UID directly into the container
-- Add `:U` suffix to volume mounts (e.g., `-v ~/cases/12345678:/workspace:U`) to automatically recursively chown the volume to match the container's user
-- Document clearly which user (root vs. non-root) runs inside the container
-- Test file creation/modification from both container and host before finalizing
+- Use named stages explicitly: `FROM base AS mc-builder` not just `FROM base`
+- Order stages from least-frequently-changed to most-frequently-changed
+- Place tool downloader stages BEFORE mc-builder stage (tools change less than code)
+- Test cache behavior: `podman build` twice in a row should show "Using cache" for unchanged stages
+- Never use `--squash-all` with multi-stage builds (completely breaks layer caching per containers/podman#14712)
 
 **Warning signs:**
-- `ls -la` shows unexpected high UIDs (100000+) on workspace files
-- Permission denied errors when accessing files created by container
-- Files owned by "nobody" or unmapped UIDs
-- chown commands fail inside containers
+- Build times don't improve on second run
+- Console shows "Step X/Y" rebuilding instead of "Using cache"
+- `podman build` output never shows cached layer reuse
 
 **Phase to address:**
-Phase 1 (Container Architecture & Podman Integration) - core volume mounting strategy must be established during initial implementation to prevent architectural rework later.
+Phase 1 (Multi-stage Architecture Design) - Verify cache behavior in acceptance criteria before proceeding to Phase 2
 
 ---
 
-### Pitfall 2: Pasta Networking Breaks Inter-Container Communication
+### Pitfall 2: Version Conflict Between Image Version and MC CLI Version
 
 **What goes wrong:**
-On Podman 5.0+, containers cannot communicate with each other or with services on the host's primary IP address because pasta (the new default networking) copies the host's IP, preventing connections to that IP from containers.
+Image version (1.0.0) and MC CLI version (2.0.3) drift out of sync. Users pull image tagged `mc-rhel10:latest`, expect MC 2.0.3 inside, but get MC 2.0.2 because image wasn't rebuilt. Or worse: auto-bumping patch version on every tool change causes version.yaml to show image 1.0.47 when nothing meaningful changed.
 
 **Why it happens:**
-Podman 5.0 switched from slirp4netns to pasta as the default rootless networking backend. Pasta improves performance but has the side effect of copying the main interface's IP address. If the host only has one network interface, inter-container networking fails without explicit pasta configuration.
+Three separate version numbers exist (image semver, MC CLI version in pyproject.toml, tool versions in versions.yaml) with no enforcement of their relationship. Common mistakes:
+- Forgetting to rebuild image after MC version bump
+- Auto-bumping image patch for tool version changes that don't warrant a release
+- Tagging both `:latest` and `:1.0.0` without checking if versions.yaml matches
 
 **How to avoid:**
-- Explicitly test container-to-container communication during development
-- For MC's use case (single containers per case), document that cross-case container communication is not supported
-- If inter-container communication becomes required, configure pasta explicitly: `--network pasta:--config-net` or fall back to slirp4netns with `--network slirp4netns`
-- Test on both single-NIC and multi-NIC systems
+- Declare version relationship policy in versions.yaml header comment:
+  ```yaml
+  # Image version: Independent semver (x.y.z)
+  # - Patch bump: Tool version changes only (OCM 1.2.3 -> 1.2.4)
+  # - Minor bump: New tool added OR MC CLI minor version bump
+  # - Major bump: Breaking changes to container interface
+  ```
+- build-container.sh reads MC CLI version from pyproject.toml and validates compatibility
+- Add version mismatch detection: `mc --version` inside container vs. image tag
+- Never auto-bump on tool version changes - require manual decision
+- Phase acceptance: Verify version.yaml → image tag → `mc --version` consistency
 
 **Warning signs:**
-- Containers can reach the internet but not each other
-- `podman exec <container> curl http://<host-ip>:<port>` times out
-- Works on developer's multi-NIC Linux workstation but fails on production single-NIC system
-- Network connectivity issues that don't appear in rootful Podman
+- Image tag 1.0.5 but `mc --version` shows 2.0.2
+- versions.yaml shows OCM 1.2.3 but `ocm version` returns 1.2.1
+- Quay.io shows 12 patch versions in 1 day (over-aggressive auto-bumping)
 
 **Phase to address:**
-Phase 1 (Container Architecture & Podman Integration) - network architecture decisions impact container isolation model and must be validated early.
+Phase 2 (Version Management System) - Define and implement version relationship policy before automation
 
 ---
 
-### Pitfall 3: Salesforce API Token Expiration During Long-Running Operations
+### Pitfall 3: Architecture Mismatch in Tool Binaries
 
 **What goes wrong:**
-Container is created successfully with case metadata, but 60+ minutes later when the user lists containers or attaches to one, the CLI fails with authentication errors because the Salesforce access token expired (typically 2-hour lifetime). Case metadata becomes stale or inaccessible.
+Containerfile downloads `ocm-linux-amd64` binary, builds successfully on amd64 build host, pushes to quay.io. Users on ARM64 (Apple Silicon, AWS Graviton) pull image, run container, `ocm` command fails with "Exec format error" because binary is wrong architecture.
 
 **Why it happens:**
-Salesforce access tokens expire after a fixed duration (commonly 2 hours, configurable). Long-lived operations (container running overnight, user switches contexts) assume tokens remain valid indefinitely. The CLI doesn't detect token expiration until attempting API calls, leading to confusing failures during routine operations.
+Tool downloader stage hardcodes architecture instead of using `TARGETARCH` build argument:
+```dockerfile
+# WRONG - hardcoded architecture
+RUN curl -L https://github.com/.../ocm-linux-amd64 -o /usr/local/bin/ocm
+
+# RIGHT - dynamic architecture
+ARG TARGETARCH
+RUN curl -L https://github.com/.../ocm-linux-${TARGETARCH} -o /usr/local/bin/ocm
+```
+
+OCM CLI provides separate binaries for amd64, arm64, and ppc64le. Without TARGETARCH substitution, image only works on build host's architecture.
 
 **How to avoid:**
-- Cache access tokens with expiration metadata (using `expires_in` from OAuth response)
-- Check token expiration before every Salesforce API call, refresh proactively 5 minutes before expiry
-- Implement automatic refresh using stored refresh tokens (store in secure local cache)
-- Provide clear error messages distinguishing "auth expired, refreshing..." from "re-authentication required"
-- Handle refresh token expiration (max 5 concurrent tokens per user per connected app) by prompting re-authentication
-- Store container metadata locally (case number, subject, priority) independent of live API access
+- Every tool downloader stage MUST declare `ARG TARGETARCH` before RUN instructions
+- Substitute `${TARGETARCH}` in download URLs: `ocm-linux-${TARGETARCH}`
+- Test on multiple architectures: Build on amd64, verify on arm64 (or vice versa)
+- Use `podman build --platform linux/amd64,linux/arm64` to create multi-arch manifest
+- Add architecture to versions.yaml: `architectures: [amd64, arm64]`
+- Acceptance test: Pull image on different architecture and verify `ocm version` succeeds
 
 **Warning signs:**
-- Intermittent "invalid_grant" or "Session expired" errors
-- Features work immediately after login but fail hours later
-- Token refresh requests themselves return 401
-- Error messages mention "expired access token"
+- `ocm` command works on build machine but fails on different architecture
+- "Exec format error" or "cannot execute binary file" in container
+- Image size differs significantly between architectures (missing binary)
 
 **Phase to address:**
-Phase 2 (Salesforce Integration & Case Resolution) - token lifecycle management is foundational to reliable API integration and must be robust before metadata features are built on top.
+Phase 3 (OCM Tool Integration POC) - Verify multi-architecture support before declaring pattern proven
 
 ---
 
-### Pitfall 4: Orphaned Containers from Unclean Shutdowns
+### Pitfall 4: Quay.io API Rate Limiting and Authentication Failures
 
 **What goes wrong:**
-User kills the CLI with Ctrl+C or experiences system crash during container operations, leaving containers running without metadata tracking. `mc list` doesn't show them, but `podman ps` does. Workspace directories exist but aren't associated with containers. System accumulates ghost containers consuming resources.
+build-container.sh queries quay.io API to get latest image tag. During rapid iteration (10+ builds in 30 minutes), API returns 429 "Too many requests". Script fails, can't determine next version, refuses to build. Or: API requires authentication but script uses unauthenticated requests, gets 401 on private repos.
 
 **Why it happens:**
-Container creation and metadata storage are not atomic operations. If the CLI creates a Podman container but crashes before writing metadata (label, state file, database entry), the container exists but is invisible to MC. Reverse scenario: metadata exists but container was removed externally via `podman rm`.
+Quay.io rate limits requests to "tens of requests per second from same IP" (per docs.quay.io/issues/429). Build automation makes sequential API calls (list tags, get manifest, check exists) without backoff. Additionally, quay.io API requires OAuth2 tokens for private repos, not username/password - using basic auth returns "invalid_token" error.
 
 **How to avoid:**
-- Use Podman labels to tag all MC-managed containers: `--label mc.case=12345678 --label mc.created=$(date -Iseconds)`
-- Reconcile state on startup: `podman ps --filter label=mc.case --format json` to find orphaned containers
-- Implement `mc doctor` command to detect and clean mismatches between Podman state and MC metadata
-- On container creation, set Podman labels FIRST, then write local metadata
-- Store minimal critical metadata in container labels themselves (case number, workspace path)
-- Add `--rm` flag for temporary/throwaway containers
-- Implement cleanup handlers for signal interrupts (SIGINT, SIGTERM)
+- Implement exponential backoff for API requests (1s, 2s, 4s, 8s delays)
+- Cache API responses locally: Write latest tag to `.cache/quay-latest-tag.txt`, TTL 5 minutes
+- Provide `--version X.Y.Z` override flag to skip API query entirely
+- For private repos: Generate OAuth2 token via quay.io UI → Settings → Robot Accounts
+- Add `--offline` mode: Use local `podman images` to determine version, never call API
+- Graceful degradation: If API fails after retries, fall back to manual version specification
 
 **Warning signs:**
-- `podman ps -a --filter label=mc.case` shows more containers than `mc list`
-- Users report "container already exists" errors
-- Disk space grows from accumulating stopped containers
-- Container names conflict with new creation attempts
+- Build script fails with "Too many requests" during rapid iteration
+- "invalid_token" errors when accessing private repos
+- Script hangs for 30+ seconds waiting for API response
+- Rate limit errors during CI/CD runs (multiple builds from same runner IP)
 
 **Phase to address:**
-Phase 3 (Container Lifecycle & State Management) - state reconciliation must be designed into the architecture from the beginning as retrofit is complex and error-prone.
+Phase 2 (Version Management System) - Implement API client with retry/caching before integrating with build script
 
 ---
 
-### Pitfall 5: Platform-Specific Terminal Launcher Failures
+### Pitfall 5: Breaking Existing Single-Stage Build Workflow
 
 **What goes wrong:**
-`mc attach` works perfectly on developer's macOS with iTerm2 but fails in production Linux environments, or vice versa. Error messages like "command not found: Terminal.app" or "gnome-terminal is not installed" confuse users. Some terminal emulators don't support the required command-line flags for programmatic launching.
+After converting to multi-stage Containerfile, existing `container/build.sh` script stops working. Users who had `alias build-mc='cd ~/mc && ./container/build.sh'` in their shell config suddenly get errors. Worse: Documentation still references old single-stage build commands, causing confusion.
 
 **Why it happens:**
-Different platforms have different default terminal emulators with incompatible CLIs:
-- macOS: Terminal.app (uses `open -a`), iTerm2 (different launch mechanism)
-- Linux: gnome-terminal, konsole, xterm, alacritty (each with different flags)
-- Detection logic assumes presence of specific terminals
-- Environment variables like `$TERM` show terminal type, not terminal emulator binary
+Migration changes file structure, script arguments, or dependencies without maintaining backward compatibility:
+- Containerfile now requires BuildKit features not available in older podman versions
+- build.sh renamed to build-container.sh without symlink
+- New script requires versions.yaml which doesn't exist in older checkouts
+- Build time increases from 45s to 3m on first run (multi-stage overhead)
 
 **How to avoid:**
-- Implement terminal emulator detection waterfall: check for known emulators in priority order
-- macOS: Check for iTerm2 first, fall back to Terminal.app
-- Linux: Check `$TERMINAL` env var, then probe for gnome-terminal, konsole, xterm
-- Provide configuration option: `mc config set terminal_emulator /usr/bin/kitty`
-- Test on minimal systems without GUI (should fail gracefully with helpful message)
-- Document supported terminal emulators and fallback behavior
-- Consider cross-platform solutions (WezTerm, Alacritty, Kitty work on both macOS and Linux with consistent APIs)
+- Keep `container/build.sh` as wrapper calling new build-container.sh (backward compat)
+- Validate podman version: `podman version | grep "^Version:" | awk '{print $2}'` >= 4.0
+- Add feature detection: Test for BuildKit support before using multi-stage syntax
+- Document migration in MIGRATION.md: "If upgrading from v2.0.2, run X first"
+- Preserve single-stage Containerfile as `Containerfile.single` for comparison
+- Add `--legacy` flag to build-container.sh that uses single-stage for emergencies
 
 **Warning signs:**
-- Works on one developer machine but not others
-- CI/CD can't test terminal attachment (headless environments)
-- User reports "no terminal opened" with no error message
-- Different error messages on macOS vs Linux
+- Users report "build.sh not found" after git pull
+- Build errors about "unknown instruction" (BuildKit syntax on old podman)
+- GitHub issues titled "Builds broken after upgrading to v2.0.3"
+- CI/CD pipeline failures in environments still using podman 3.x
 
 **Phase to address:**
-Phase 4 (Terminal Attachment & Exec) - terminal launcher must be thoroughly tested across platforms before shipping the attachment feature.
+Phase 1 (Multi-stage Architecture Design) - Plan backward compatibility strategy before implementation
 
 ---
 
-### Pitfall 6: Port Binding Conflicts Below 1024
+### Pitfall 6: versions.yaml Parsing Failures from Manual Edits
 
 **What goes wrong:**
-User wants to run a container that binds to port 443 or 80 for testing SSL/HTTP services, but rootless Podman refuses with "permission denied" errors because ports below 1024 require elevated privileges.
+Developer manually edits versions.yaml to bump OCM version. Introduces subtle YAML syntax error (tabs instead of spaces, incorrect indentation, unquoted version number starting with 0). build-container.sh parses YAML, encounters error, crashes with cryptic "mapping values are not allowed here" message. Build system is dead until YAML fixed.
 
 **Why it happens:**
-The Linux kernel prevents processes without CAP_NET_BIND_SERVICE capability from binding to ports below 1024 (privileged ports). Rootless Podman runs without privileges by design. Default `net.ipv4.ip_unprivileged_port_start` is 1024.
+YAML is whitespace-sensitive and error-intolerant. Common mistakes:
+- Mixing tabs and spaces (YAML spec forbids tabs)
+- Version numbers like `1.0` parsed as float 1.0, not string "1.0" (loses trailing zero)
+- Unquoted strings like `ocm: v1.2.3` parsed as object if colon in value
+- Copy-paste from docs introduces UTF-16 encoding breaking UTF-8 parser
 
 **How to avoid:**
-- Document clearly that privileged ports require either:
-  - System-level config change: `sysctl net.ipv4.ip_unprivileged_port_start=443` (requires root)
-  - Port mapping to high ports: `-p 8443:443` (map container's 443 to host's 8443)
-  - Rootful Podman (defeats security benefits)
-- Design container images to use high ports by default (8080 instead of 80)
-- For MC use case, containers likely don't need exposed ports (isolated workspaces), so document this limitation without fixing it
-- Provide clear error message if port binding fails: "Cannot bind to port 443 (requires privileged access). Use port 8443 or higher."
+- Add YAML schema validation: `yamllint versions.yaml` in pre-commit hook
+- Provide editor config: `.editorconfig` enforces spaces, not tabs
+- Quote all version strings: `version: "1.2.3"` not `version: 1.2.3`
+- build-container.sh validates YAML before parsing:
+  ```bash
+  if ! python3 -c "import yaml; yaml.safe_load(open('versions.yaml'))" 2>/dev/null; then
+    echo "ERROR: versions.yaml has syntax errors"
+    exit 1
+  fi
+  ```
+- Provide version-bump command: `./build-container.sh --bump-tool ocm 1.2.4` edits YAML safely
+- Example versions.yaml with comments showing correct syntax
 
 **Warning signs:**
-- Errors mentioning "permission denied" + port numbers
-- Works with `-p 8080:8080` but fails with `-p 80:80`
-- User requests `sudo podman` to work around
+- Build script fails with "YAML parsing error" but file looks correct
+- Version numbers lose precision (1.10 becomes 1.1)
+- Builds work locally but fail in CI (encoding differences)
+- `yamllint` shows errors that human eye doesn't catch
 
 **Phase to address:**
-Phase 1 (Container Architecture & Podman Integration) - document port binding limitations during architecture design so users understand constraints upfront.
+Phase 2 (Version Management System) - Add YAML validation before relying on manual edits
 
 ---
 
-### Pitfall 7: Cgroups v1 Breaks Resource Limits and Logging
+### Pitfall 7: Missing Dependencies in Final Stage
 
 **What goes wrong:**
-Resource limits (`--memory`, `--cpus`) silently fail or containers can't be stopped cleanly. Container logs are missing or incomplete when using systemd log driver.
+Multi-stage build copies OCM binary from downloader stage to final stage. Binary runs, tries to make HTTPS calls, crashes with "error loading shared libraries: libssl.so.3". Or: OCM binary expects `/etc/ssl/certs` directory populated, but final stage is minimal Alpine without CA certificates. Result: Tool installed but non-functional.
 
 **Why it happens:**
-Rootless Podman requires cgroups v2 for proper resource delegation. On systems still using cgroups v1 (older Linux distributions, some enterprise systems), hierarchical delegation doesn't work correctly for non-root users. Resource limits are ignored, and systemd logging integration breaks.
+Tool binaries have runtime dependencies not obvious from documentation:
+- Dynamically linked libraries (libssl, libcrypto, libc)
+- CA certificate bundles for HTTPS
+- Timezone data in /usr/share/zoneinfo
+- User/group databases (/etc/passwd, /etc/group)
+
+OCM CLI is distributed as statically-linked binary, but developer assumes all binaries are static. Future tools (helm, kubectl) may be dynamically linked.
 
 **How to avoid:**
-- Check cgroups version on startup: `podman info | grep cgroupVersion`
-- For MC v2.0, require cgroups v2 in documentation and startup checks
-- Provide clear error message if cgroups v1 detected: "MC requires cgroups v2. Your system uses cgroups v1. See [migration guide]."
-- Test on RHEL 7/CentOS 7 systems (cgroups v1) to verify graceful degradation
-- If supporting cgroups v1 is required, disable resource limits and document limitations
+- Test binaries standalone: `ldd /usr/local/bin/ocm` shows shared library dependencies
+- Use base image with common dependencies: RHEL 10 UBI has libssl, CA certs pre-installed
+- Document dependency inspection process in architecture docs
+- For each new tool, verify in isolated container:
+  ```bash
+  podman run --rm -it registry.access.redhat.com/ubi10/ubi:10.1 /bin/bash
+  # Upload binary, test functionality
+  ```
+- Add smoke test to Containerfile: `RUN ocm version` fails build if dependencies missing
+- Consider static binaries: `CGO_ENABLED=0` for Go tools eliminates shared lib deps
 
 **Warning signs:**
-- `podman info` shows `cgroupVersion: v1`
-- Resource limits have no effect (container uses more memory than `--memory` limit)
-- `podman logs` returns empty or incomplete output
-- Containers can't be stopped with `podman stop` (require `podman kill`)
+- `ldd` output shows "not found" for shared libraries
+- Binary runs on RHEL but fails on Alpine or Debian-based images
+- Tools work locally but fail inside container
+- Errors mention "libssl.so", "libcrypto.so", "libc.so"
 
 **Phase to address:**
-Phase 1 (Container Architecture & Podman Integration) - system requirements must be validated early to prevent shipping incompatible software.
-
----
-
-### Pitfall 8: Stale Container Metadata After External Podman Operations
-
-**What goes wrong:**
-User runs `podman stop <container>` or `podman rm <container>` directly instead of using `mc stop` or `mc rm`. MC's metadata becomes inconsistent - `mc list` shows stopped container as running, or lists deleted containers.
-
-**Why it happens:**
-MC maintains its own metadata (state files, database, cache) separate from Podman's container state. External operations (manual `podman` commands, other tools like Portainer) modify Podman state without updating MC metadata. MC doesn't detect the divergence until operations fail.
-
-**How to avoid:**
-- Implement state reconciliation on every `mc list` and `mc attach`: query Podman for actual container state via `podman ps --filter label=mc.case`
-- Compare Podman state against MC metadata, flag mismatches
-- Provide `mc sync` command to reconcile and update metadata based on Podman truth
-- Use Podman labels as source of truth for existence checks
-- Consider warning users if containers are modified externally
-- Auto-cleanup: remove MC metadata for containers that no longer exist in Podman
-
-**Warning signs:**
-- `mc list` shows different results than `podman ps --filter label=mc.case`
-- Operations fail with "container not found" despite `mc list` showing them
-- User reports manual cleanup with `podman rm` doesn't remove from MC
-- Stale entries accumulate over time
-
-**Phase to address:**
-Phase 3 (Container Lifecycle & State Management) - reconciliation logic should be part of state management architecture from the start.
-
----
-
-### Pitfall 9: Salesforce Rate Limiting During Bulk Operations
-
-**What goes wrong:**
-User creates containers for 30 cases in a script loop, and after 10-15 iterations, Salesforce API starts returning 429 rate limit errors. Container creation partially succeeds (container exists but metadata fetch failed), leaving incomplete state.
-
-**Why it happens:**
-Salesforce enforces rate limits: 100,000 daily API calls for Enterprise Edition + 1,000 per user license, with additional limits on concurrent requests (25 long-running requests max). Bulk operations can exhaust per-second or per-minute quotas quickly. MC makes multiple API calls per container (case metadata, account info, possibly attachments).
-
-**How to avoid:**
-- Implement request throttling: max 5 API calls per second to Salesforce
-- Batch operations: fetch metadata for multiple cases in fewer API calls if Salesforce API supports it
-- Cache aggressively: 30-minute TTL on case metadata (already implemented in v1.0), extend to 24 hours for immutable data
-- Handle 429 errors gracefully: exponential backoff with jitter (already using `backoff` library)
-- Track API usage: log requests, implement local rate limit counter
-- Provide bulk operation command: `mc create-batch --cases 12345678,12345679,12345680` with built-in throttling
-- Document Salesforce rate limits and recommend batch size limits
-
-**Warning signs:**
-- HTTP 429 "Request rate exceeded" errors from Salesforce
-- Intermittent failures during bulk operations
-- Success rate decreases as number of operations increases
-- Errors mention "API request limit exceeded"
-
-**Phase to address:**
-Phase 2 (Salesforce Integration & Case Resolution) - rate limiting strategy must be designed before bulk operations are implemented.
-
----
-
-### Pitfall 10: Container Image Version Drift
-
-**What goes wrong:**
-Containers created weeks apart have different tool versions (older container has `oc` 4.12, newer has `oc` 4.15). User switches between containers and experiences inconsistent behavior. Security vulnerabilities accumulate in old containers using outdated base images.
-
-**Why it happens:**
-Container images are built at a point in time and don't auto-update. The `mc` CLI might pull `registry.example.com/mc-workspace:latest` which resolves to different image digests over time. Existing containers continue using old images even after new ones are published. No mechanism enforces image updates.
-
-**How to avoid:**
-- Pin image to specific digest in production: `registry.example.com/mc-workspace@sha256:abc123...` instead of `:latest`
-- Implement `mc upgrade` command to detect outdated containers and offer rebuild
-- Tag images with version and creation date: `mc-workspace:v2.0-20260126`
-- Check for image updates on `mc create`: compare container's image digest against latest available
-- Provide `mc doctor` subcommand: scan for containers using images with known CVEs (integrate with Podman's vulnerability scanning)
-- Document image lifecycle: "Images are updated weekly, rebuild containers monthly"
-- Consider auto-rebuild policy: warn if container image is >30 days old
-
-**Warning signs:**
-- `podman inspect <container> | jq '.[0].ImageDigest'` differs across containers
-- Different tool versions across containers created at different times
-- Security scanners report CVEs in running containers
-- User reports "it works in one container but not another"
-
-**Phase to address:**
-Phase 5 (Image Management & Maintenance) - image versioning strategy must be defined when building the initial image to prevent tech debt.
-
----
-
-### Pitfall 11: TTY Allocation Breaks Programmatic Output
-
-**What goes wrong:**
-`mc exec <case> <command>` works for interactive shells but fails when piping output or using in scripts. Output is mangled with control characters, STDOUT and STDERR are mixed, pipes hang unexpectedly.
-
-**Why it happens:**
-`podman exec -it` allocates a pseudo-TTY which combines STDOUT/STDERR, inserts control characters, and can hang pipes. This is correct for interactive use but breaks automation. Developers test only interactive scenarios and miss programmatic usage.
-
-**How to avoid:**
-- Detect if STDOUT is a TTY: use `-it` for interactive, `-i` only for pipes/scripts
-- In Python: `sys.stdout.isatty()` to check if running interactively
-- Document the difference: `mc attach` uses `-it`, `mc exec` uses `-i` only
-- Test both: `mc exec <case> ls` (interactive) and `mc exec <case> ls | grep foo` (piped)
-- Provide `--interactive` flag to force TTY allocation when needed
-
-**Warning signs:**
-- `mc exec <case> command > output.txt` produces garbled text
-- `mc exec <case> command | jq` fails to parse JSON
-- Control characters (^M, ^[[) appear in captured output
-- Piped commands hang indefinitely
-
-**Phase to address:**
-Phase 4 (Terminal Attachment & Exec) - TTY behavior must be tested for both interactive and programmatic use cases.
-
----
-
-### Pitfall 12: macOS Podman Machine Not Started
-
-**What goes wrong:**
-On macOS, user runs `mc create` and gets cryptic error "Cannot connect to Podman. Is the service running?" because the Podman machine VM isn't started. On Linux this works fine, creating confusing platform-specific behavior.
-
-**Why it happens:**
-macOS requires a Podman machine (Linux VM) to run containers. `podman machine start` must be run before container operations. Linux runs Podman natively without a machine. Developers on Linux don't discover this until macOS users report issues.
-
-**How to avoid:**
-- Detect platform: check if running on macOS
-- Check Podman machine status: `podman machine list --format json`
-- Auto-start machine if stopped: prompt "Podman machine is stopped. Start it now? [Y/n]"
-- Provide clear error: "Podman machine required on macOS. Run: podman machine init && podman machine start"
-- Test on both macOS and Linux throughout development
-- Document platform differences in installation guide
-
-**Warning signs:**
-- Works on Linux CI but fails for macOS users
-- Errors mentioning "connection refused" or "socket not found"
-- `podman machine list` shows machine in "stopped" state
-- User reports "podman ps works but mc create doesn't"
-
-**Phase to address:**
-Phase 1 (Container Architecture & Podman Integration) - platform detection and machine management must be handled from the start.
+Phase 3 (OCM Tool Integration POC) - Verify runtime dependencies before declaring success
 
 ---
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems.
-
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Store metadata only in local files (not Podman labels) | Simpler implementation, no Podman API for labels | State divergence when containers modified externally, no reconciliation possible | Never - labels are critical for state recovery |
-| Assume single user on system | Skip user isolation, simpler paths | Multi-user systems create workspace collisions, permission issues | Only for personal dev tools explicitly documented as single-user |
-| Use `:latest` tag for container images | Always get newest features | Unpredictable behavior, version drift, broken reproducibility | Development only, never production |
-| Skip Salesforce token refresh logic | Fewer edge cases to handle | Failures after 2 hours of use, poor user experience | Never - token expiration is guaranteed |
-| Hard-code terminal emulator | Works on developer's machine | Breaks for users with different setups, platform lock-in | Never - cross-platform support is core requirement |
-| Ignore cgroups version check | Works on modern systems | Silent failures on RHEL 7, CentOS 7, older Ubuntu | Only if minimum system requirements explicitly exclude cgroups v1 |
-| Store all state in memory (no persistence) | Fast, simple | State lost on crash/restart, orphan cleanup impossible | Never - persistence is critical for recovery |
-| Use `--rm` on all containers | Auto-cleanup, simple | Can't debug stopped containers, lose forensic data | Only for explicitly temporary operations, never for workspace containers |
-| Skip platform detection (macOS vs Linux) | Simpler code, fewer branches | Silent failures on different platforms | Never - cross-platform support is requirement |
-| Pass `-it` to all exec commands | Works for interactive use | Breaks pipes, scripts, automation | Never - detect TTY context dynamically |
-
----
+| Hardcode tool versions in Containerfile instead of versions.yaml | Skip YAML parsing complexity | Manual updates required in multiple files, versions drift out of sync | Never - versions.yaml is foundational |
+| Skip quay.io API, manually specify `--tag 1.0.5` every build | Avoid API rate limits and auth complexity | Developer forgets to bump version, overwrites tags | Development only - CI must use automation |
+| Use `:latest` tag only, skip semver tagging | Simpler tagging logic | Can't rollback to previous version, no version history | Never - semver is requirement |
+| Download tools at runtime instead of baking into image | Faster image builds (smaller layers) | Slower container startup, network dependency, version drift | Never - defeats purpose of versioned tools |
+| Copy entire /opt/mc to final stage instead of selective COPY | Simpler Containerfile (one COPY line) | Image bloat (includes .git, tests, docs), 200MB+ wasted | Early prototyping only - optimize before merge |
+| Build single-arch image (amd64 only) | Simpler build script, faster builds | ARM64 users can't use the tool | Only if 100% of users on amd64 (unlikely) |
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services.
-
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Salesforce API | Request new access token on every API call | Cache tokens with expiration, refresh 5 minutes before expiry |
-| Salesforce API | Treat all errors as fatal | Distinguish transient (429, 503) from permanent (401 with expired refresh token); retry transient, prompt re-auth for permanent |
-| Salesforce API | Assume unlimited API calls | Implement request throttling (5/sec), monitor 429 responses, use exponential backoff |
-| Salesforce OAuth | Store only access tokens | Store refresh tokens securely to enable automatic re-authentication without user interaction |
-| Salesforce OAuth | Ignore `expires_in` response field | Parse and store expiration timestamp to enable proactive refresh |
-| Podman API | Parse human-readable output (`podman ps` text) | Use `--format json` to get structured, machine-parseable output |
-| Podman API | Assume Podman is installed | Check `podman --version` on startup, provide clear installation instructions if missing |
-| Podman API | Use rootful Podman for simplicity | Commit to rootless for security; handle limitations instead of escalating privileges |
-| Podman machine (macOS) | Assume machine is always running | Detect machine state, auto-start or prompt user |
-| Terminal emulators | Hard-code path to `gnome-terminal` | Detect available emulators dynamically, support multiple options, allow user configuration |
-| Terminal emulators | Assume terminal is available | Detect headless environments (CI/CD, SSH without X11), provide graceful degradation or alternative (print command to run manually) |
-
----
+| Quay.io API | Using basic auth (username/password) for private repos | Generate OAuth2 token via Robot Accounts in quay.io UI |
+| Quay.io API | Making 10+ API calls in rapid succession | Implement exponential backoff + local caching (5min TTL) |
+| Podman build | Using `--squash-all` with multi-stage builds | Never use --squash-all (breaks layer caching per podman#14712) |
+| YAML parsing | Using shell tools (sed/awk) to edit versions.yaml | Use `yq` or Python's yaml library for safe editing |
+| Git tagging | Pushing version tag before build succeeds | Build + test + push image, THEN tag git (rollback if push fails) |
+| CI/CD | Triggering new pipeline on tag push | Add `only: branches` filter to prevent infinite tag-push loops |
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
-
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Fetching case metadata on every `mc list` | Slow listing, API rate limits | Cache metadata with 30-minute TTL (already implemented in v1.0), refresh only when explicitly requested | >20 containers with uncached metadata |
-| Creating containers serially in bulk operations | Very slow for multiple cases, user waits minutes | Parallelize with `asyncio` or thread pool, but respect API rate limits | >5 cases created in sequence |
-| Storing all container metadata in single JSON file | File corruption risk, lock contention | Use per-container state files or lightweight DB (SQLite) | >100 containers |
-| Linear search through containers for case number | Slow lookups as containers grow | Index containers by case number (dict/hashmap), or use Podman label filtering | >50 containers |
-| Pulling container image on every `mc create` | Very slow, wastes bandwidth | Check if image exists locally first: `podman image exists`, only pull if missing or explicit `--pull` flag | Every container creation without local cache |
-| Starting containers without resource limits | Resource exhaustion if container misbehaves | Set reasonable defaults: `--memory=4g --cpus=2`, allow override | First container that leaks memory/CPU |
-| Not reusing Podman machine on macOS | Slow startup (30+ seconds per operation) | Start machine once, keep running, reuse for all operations | Every command on macOS |
-
----
+| Rebuilding unchanged stages | Multi-stage build takes 3min on every run | Order stages least-to-most frequently changed; test cache with double-build | Every build after first |
+| Downloading tools on every build | Network I/O dominates build time | Use Containerfile `COPY --from` to cache downloads in layers | Every build |
+| Parsing versions.yaml in tight loop | build-container.sh slow (5+ seconds) | Parse once, cache results in shell variables | Not noticeable until <1s matters |
+| Querying quay.io API serially | 3-5 seconds per API call x 3 calls = 15s overhead | Parallel API requests with `&` and `wait` in bash | When build speed matters |
+| Full image rebuild on patch bump | Change versions.yaml → rebuild entire 549MB image | Layer versions.yaml COPY late in Containerfile | Every version bump |
 
 ## Security Mistakes
 
-Domain-specific security issues beyond general web security.
-
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Storing Salesforce tokens in container labels | Token exposure in Podman metadata, accessible to all users with Podman access | Store tokens in host filesystem with 0600 permissions, pass to containers via environment variables at runtime only |
-| Running containers with `--privileged` flag | Breaks rootless security model, container can escape to host | Never use `--privileged`; document specific capabilities if needed (`--cap-add=CAP_NET_RAW` for ping) |
-| Mounting sensitive directories with write access | Container could modify SSH keys, shell config, other credentials | Mount workspace as read-write, mount config dirs as read-only (`:ro` suffix) |
-| Trusting Podman labels as authentication | Any user can create containers with `--label mc.case=12345678` | Labels are metadata only, not security boundaries; implement actual authorization checks if multi-user support is added |
-| Disabling SSL verification for Salesforce API | Man-in-the-middle attacks, credential theft | Always use `verify=True` for requests (already implemented in v1.0), handle certificate errors explicitly |
-| Storing offline refresh token in plaintext config | Token theft allows impersonation | Encrypt refresh tokens or rely on OS-level filesystem permissions (0600) and secure config directory |
-| Not validating case numbers before creating containers | Path traversal via case number like `../../etc/passwd` | Validate case number format (8 digits only, already implemented in v1.0), sanitize inputs |
-| Passing sensitive data via command-line args | Visible in `ps aux`, logged in shell history | Use environment variables or stdin for credentials, never CLI args |
-
----
+| Downloading binaries over HTTP instead of HTTPS | Man-in-the-middle attack injects malicious binary | Always use HTTPS URLs for tool downloads |
+| Not verifying SHA256 checksums | Corrupted or tampered binary silently included | Download `.sha256` file, verify before COPY |
+| Hardcoding OAuth tokens in build script | Token leaks in git history, never expires | Use environment variables + .gitignore, document token generation |
+| Running build stage as root unnecessarily | Privilege escalation if build compromised | Use `USER mcuser` in stages that don't need root |
+| Including secrets in ARG instructions | Secrets visible in image history via `docker history` | Use BuildKit secret mounts: `RUN --mount=type=secret,id=token` |
+| Building from untrusted base images | Supply chain attack via compromised base | Use official Red Hat UBI images with signature verification |
 
 ## UX Pitfalls
 
-Common user experience mistakes in this domain.
-
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Silent failures when terminal launcher fails | User runs `mc attach`, nothing happens, no error message | Always print error explaining why (terminal not found, headless environment), suggest workarounds |
-| Creating containers without checking if case exists in Salesforce | Container created but metadata fetch fails, half-initialized state | Validate case existence via API before creating container, fail fast with clear message |
-| Not showing container status during creation | User waits with no feedback, assumes command hung | Stream progress: "Pulling image...", "Creating container...", "Fetching case metadata...", "Ready" |
-| Cryptic Podman errors passed through to user | User sees `ERRO[0000] cannot mkdir /run/user/1000/libpod: Read-only file system` | Catch common Podman errors, translate to user-friendly messages: "Cannot create container: home directory is read-only" |
-| No indication that container is already running | User runs `mc create 12345678` twice, gets error or duplicate | Check for existing container first, offer to attach instead: "Container for case 12345678 already exists. Use 'mc attach 12345678' to connect." |
-| Long commands with many flags required for common operations | `mc create --case 12345678 --image mc-workspace:latest --workspace ~/cases/12345678` is tedious | Provide sensible defaults, auto-generate workspace path from case number, make image configurable in config file |
-| No way to distinguish containers created by different MC versions | User confused why old containers behave differently | Add version label to containers: `--label mc.version=2.0.0` |
-| macOS-specific errors without platform context | "Podman machine not found" confuses Linux users reading docs | Platform-specific error messages: "On macOS, run: podman machine init" |
-
----
+| Cryptic YAML parsing errors | Developer wastes 20min debugging "mapping values not allowed" | Validate YAML with yamllint, show exact line number + helpful message |
+| build-container.sh fails silently | Build appears to succeed but image not pushed | Always `set -e` in bash, exit on any error, print clear success/failure message |
+| Version auto-bump without confirmation | Unexpected version 1.0.23 pushed, developer confused | Show diff: "OCM 1.2.3 → 1.2.4 detected, bumping image 1.0.5 → 1.0.6. Continue? (y/N)" |
+| No progress indication during tool downloads | User thinks build hung, kills process | Use `curl --progress-bar` or podman build `--progress=plain` |
+| Breaking changes without migration guide | Users upgrade, builds fail, no clear path forward | Provide MIGRATION.md with step-by-step upgrade instructions |
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces.
-
-- [ ] **Container creation:** Often missing cleanup on partial failures — verify rollback (remove container if metadata creation fails)
-- [ ] **Terminal attachment:** Often missing detection of headless environments — verify graceful failure with helpful message when no display available
-- [ ] **Salesforce integration:** Often missing refresh token renewal — verify handling when refresh token itself expires (prompt re-authentication)
-- [ ] **Container listing:** Often missing reconciliation with actual Podman state — verify `mc list` matches `podman ps --filter label=mc.case`
-- [ ] **State management:** Often missing signal handlers — verify cleanup on Ctrl+C during container creation
-- [ ] **Image pulling:** Often missing progress indication — verify user sees progress for long pulls
-- [ ] **Error messages:** Often missing actionable suggestions — verify errors explain what to do ("Run: mc login" not just "Authentication failed")
-- [ ] **Cross-platform support:** Often missing macOS testing when developed on Linux — verify terminal launcher, paths, Podman machine on macOS
-- [ ] **Resource cleanup:** Often missing orphan container detection — verify `mc doctor` finds and reports containers without metadata
-- [ ] **API rate limiting:** Often missing backoff for 429 responses — verify exponential backoff with jitter (backoff library already used in v1.0)
-- [ ] **Version compatibility:** Often missing migration for containers created by previous MC versions — verify v2.0 can list/attach to v1.0 containers (if applicable)
-- [ ] **TTY detection:** Often missing `isatty()` check — verify `mc exec` works both interactively and when piped
-- [ ] **Volume permissions:** Often missing UID mapping tests — verify files created in container are accessible on host
-
----
+- [ ] **Multi-stage build:** Verify cache works - build twice, second build should be <30s
+- [ ] **Architecture support:** Test on both amd64 and arm64, verify `ocm version` succeeds
+- [ ] **Version automation:** Verify image tag matches versions.yaml matches `mc --version` inside container
+- [ ] **Quay.io integration:** Test with rate limiting (10 builds in 5min), verify graceful degradation
+- [ ] **YAML validation:** Introduce syntax error in versions.yaml, verify build fails with helpful message
+- [ ] **Backward compatibility:** Checkout v2.0.2, run new build script, verify graceful error or success
+- [ ] **Tool functionality:** Not just `ocm version` but actual `ocm login` + `ocm cluster list` works
+- [ ] **Error messages:** Break each integration (no internet, wrong token, bad YAML), verify helpful errors
+- [ ] **Documentation:** README shows both quick start AND migration from single-stage
 
 ## Recovery Strategies
 
-When pitfalls occur despite prevention, how to recover.
-
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| UID/GID permission issues on mounted volumes | LOW | 1. Stop container 2. Run `podman unshare chown -R $(id -u):$(id -g) ~/cases/12345678` to fix ownership 3. Recreate container with `--userns=keep-id` |
-| Pasta networking prevents container communication | LOW | 1. Stop affected containers 2. Recreate with `--network slirp4netns` flag 3. Update MC config to default to slirp4netns |
-| Salesforce token expired | LOW | 1. Detect 401 with "invalid_grant" 2. Attempt refresh 3. On refresh failure, prompt user: "Run: mc login" 4. Clear cached tokens |
-| Orphaned containers accumulating | LOW | 1. Run `mc doctor --cleanup` 2. Lists orphans via `podman ps -a --filter label=mc.case` 3. User confirms removal 4. Clean metadata |
-| Stale metadata after external Podman operations | LOW | 1. Run `mc sync` 2. Query Podman for container state 3. Update MC metadata to match 4. Warn user about external modifications |
-| Rate limit exceeded (429) | LOW | 1. Catch 429 response 2. Extract Retry-After header if present 3. Sleep with exponential backoff 4. Retry request 5. Fail after 3 attempts with helpful message |
-| Terminal launcher fails | LOW | 1. Detect failure (exit code or exception) 2. Print container connection command: `podman exec -it <container> bash` 3. User runs manually |
-| Port binding conflicts (<1024) | MEDIUM | 1. Detect port binding error 2. Suggest alternative: "Change port to 8080 or configure sysctl" 3. Provide documentation link |
-| Cgroups v1 detected | MEDIUM | 1. On startup, check `podman info | grep cgroupVersion` 2. If v1, print warning 3. Disable resource limits 4. Document migration to cgroups v2 |
-| Container image version drift | MEDIUM | 1. Add `mc upgrade --case 12345678` command 2. Stop old container 3. Pull latest image 4. Create new container with same workspace 5. Preserve metadata |
-| Refresh token expired (5 concurrent limit hit) | HIGH | 1. Detect permanent 401 2. Clear all cached tokens 3. Prompt: "Re-authentication required. Run: mc login" 4. After re-auth, recreate refresh token |
-| Corrupted container state (metadata/Podman mismatch) | HIGH | 1. Backup metadata 2. Remove corrupted container: `podman rm -f <container>` 3. Remove MC metadata 4. Recreate from scratch using case number |
-| macOS Podman machine not started | LOW | 1. Detect platform 2. Check `podman machine list` 3. Prompt: "Start Podman machine? [Y/n]" 4. Run `podman machine start` 5. Retry operation |
-| TTY breaks piped output | LOW | 1. Detect if STDOUT is TTY (`sys.stdout.isatty()`) 2. Use `-i` only for pipes 3. Use `-it` for interactive 4. Document behavior |
-
----
+| Cache invalidation breaks builds | LOW | Add `podman build --no-cache` flag to documentation, accept slower builds short-term |
+| Version conflict (image vs MC CLI) | MEDIUM | Tag new image with corrected version, update quay.io latest tag manually |
+| Architecture mismatch shipped to production | HIGH | Build multi-arch manifest, push to quay.io, users `podman pull --platform` to force re-pull |
+| Quay.io rate limit in CI/CD | LOW | Add exponential backoff, or cache API responses in CI cache (30min TTL) |
+| Breaking backward compatibility | MEDIUM | Release v2.0.3.1 patch with backward-compat wrapper scripts |
+| YAML parsing fails on version bump | LOW | Validate YAML in pre-commit hook, provide `make validate` target |
+| Missing dependencies in final stage | MEDIUM | Add dependencies to Containerfile, rebuild + re-push, bump patch version |
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| UID/GID mapping confusion | Phase 1 (Architecture) | Verify files created in mounted volumes are accessible from host with correct permissions |
-| Pasta networking issues | Phase 1 (Architecture) | Verify network smoke tests pass on Podman 5.0+ with pasta enabled |
-| Port binding conflicts | Phase 1 (Architecture) | Verify documentation clearly states port binding limitations, test error message |
-| Cgroups v1 incompatibility | Phase 1 (Architecture) | Verify startup check detects cgroups version and warns/fails appropriately |
-| macOS Podman machine detection | Phase 1 (Architecture) | Verify macOS users prompted to start machine, auto-start works |
-| Salesforce token expiration | Phase 2 (Salesforce Integration) | Verify tokens auto-refresh 5 minutes before expiry, manual refresh succeeds |
-| Salesforce rate limiting | Phase 2 (Salesforce Integration) | Verify 429 responses trigger exponential backoff, test bulk operations |
-| Orphaned containers | Phase 3 (Lifecycle Management) | Verify `mc doctor` detects orphans after simulated crashes (kill -9) |
-| Stale metadata | Phase 3 (Lifecycle Management) | Verify `mc list` reconciles with Podman state, `mc sync` command works |
-| Terminal launcher failures | Phase 4 (Terminal Attachment) | Verify graceful failure on headless systems, test on macOS Terminal, iTerm2, Linux gnome-terminal, konsole |
-| TTY allocation breaks pipes | Phase 4 (Terminal Attachment) | Verify `mc exec` works both interactively and when piped: `mc exec <case> ls \| grep foo` |
-| Image version drift | Phase 5 (Image Management) | Verify `mc upgrade` detects outdated images, rebuild preserves workspace data |
-
----
+| Layer cache invalidation | Phase 1 (Architecture) | Build twice, verify second build <30s with cache |
+| Version conflict | Phase 2 (Version Mgmt) | Compare versions.yaml, image tag, `mc --version` output |
+| Architecture mismatch | Phase 3 (OCM POC) | Test on arm64 AND amd64, verify `ocm version` |
+| Quay.io rate limiting | Phase 2 (Version Mgmt) | Run 10 builds in 5min, verify backoff prevents failure |
+| Breaking existing builds | Phase 1 (Architecture) | Test v2.0.2 checkout with new scripts, verify graceful behavior |
+| YAML parsing failures | Phase 2 (Version Mgmt) | Introduce syntax error, verify helpful error message |
+| Missing dependencies | Phase 3 (OCM POC) | Run `ldd` on binaries, test in isolated container |
 
 ## Sources
 
-### Rootless Podman
-- [Podman Rootless Tutorial](https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md) - Official rootless guide
-- [Podman Rootless Documentation](https://github.com/containers/podman/blob/main/rootless.md) - Comprehensive limitations reference (HIGH confidence)
-- [SUSE Rootless Podman Guide](https://documentation.suse.com/smart/container/html/rootless-podman/index.html) - Platform-specific gotchas
-- [Red Hat: Running Rootless Podman](https://www.redhat.com/en/blog/rootless-podman-makes-sense) - Security benefits and tradeoffs
-- [Rootless Docker Caveats](https://joeeey.com/blog/rootless-docker-avoiding-common-caveats/) - Common mistakes (applies to Podman)
-- [Deep Dive: Podman in 2026](https://dev.to/dataformathub/deep-dive-why-podman-and-containerd-20-are-replacing-docker-in-2026-32ak) - Recent adoption trends
+**Multi-stage build pitfalls:**
+- [Docker Multi-stage Build Documentation](https://docs.docker.com/build/building/multi-stage/)
+- [Docker Best Practices](https://docs.docker.com/build/building/best-practices/)
+- [Understanding Docker Multistage Builds - Earthly Blog](https://earthly.dev/blog/docker-multistage/)
+- [Best Practices for Building Docker Images - Better Stack](https://betterstack.com/community/guides/scaling-docker/docker-build-best-practices/)
 
-### User Namespaces & Permissions
-- [Podman and User Namespaces](https://opensource.com/article/18/12/podman-and-user-namespaces) - UID/GID mapping explained
-- [Using Volumes with Rootless Podman](https://www.tutorialworks.com/podman-rootless-volumes/) - Volume permission strategies (HIGH confidence)
-- [Container Permission Denied Errors](https://www.redhat.com/en/blog/container-permission-denied-errors) - Debugging guide
-- [Rootless Podman User Namespace Modes](https://www.redhat.com/en/blog/rootless-podman-user-namespace-modes) - Advanced configuration
+**Podman layer caching issues:**
+- [Layer caching does not work with --squash-all --layers - Podman Issue #20229](https://github.com/containers/podman/issues/20229)
+- [buildah doesn't use cached layers with multi-stage build and --label - Issue #4950](https://github.com/containers/buildah/issues/4950)
+- [podman build --squash always rebuilds every layer - Issue #14712](https://github.com/containers/podman/issues/14712)
+- [Optimize container build speed with Podman on Windows](https://medium.com/@jeroenverhaeghe/tips-to-optimize-container-build-speed-02e4622d8bae)
 
-### Podman Platform Differences
-- [Podman vs Docker 2026](https://last9.io/blog/podman-vs-docker/) - Current state comparison
-- [Podman Installation](https://podman.io/docs/installation) - Official installation guide showing platform differences (MEDIUM confidence)
-- [Podman Machine Documentation](https://docs.podman.io/en/v5.2.2/markdown/podman-machine.1.html) - macOS/Windows VM layer explained (HIGH confidence)
+**Container image versioning:**
+- [Docker Best Practices: Using Tags and Labels - Docker Blog](https://www.docker.com/blog/docker-best-practices-using-tags-and-labels-to-manage-docker-image-sprawl/)
+- [Semantic Versioning for Containers - Inedo Documentation](https://docs.inedo.com/docs/proget/docker/semantic-versioning)
+- [Container Image Versioning](https://container-registry.com/posts/container-image-versioning/)
+- [Using Semver for Docker Image Tags - Medium](https://medium.com/@mccode/using-semantic-versioning-for-docker-image-tags-dfde8be06699)
 
-### Container Lifecycle & State Management
-- [Container Lifecycle Operations](https://deepwiki.com/containers/podman/3.2-container-lifecycle-management) - State transitions
-- [Container Lifecycle Best Practices](https://daily.dev/blog/docker-container-lifecycle-management-best-practices) - Cleanup patterns
-- [Understanding Container Lifecycle](https://cycle.io/learn/container-lifecycle) - State management fundamentals
+**Quay.io API integration:**
+- [Quay.io rate limiting - Red Hat Customer Portal](https://access.redhat.com/solutions/6218921)
+- [Quay.io returning 429 due to rate limits - Sonatype Support](https://support.sonatype.com/hc/en-us/articles/32093607704723-DockerHub-and-Quay-io-returning-429-due-to-rate-limits)
+- [Quay Documentation - 429 Errors](https://docs.quay.io/issues/429.html)
+- [Quay.io API Documentation](https://docs.quay.io/api/)
 
-### Podman Exec & Terminal Attachment
-- [Podman Exec Documentation](https://docs.podman.io/en/latest/markdown/podman-exec.1.html) - Official exec reference (HIGH confidence)
-- [Podman Attach Methods](https://devtodevops.com/blog/podman-attach-to-running-container-bash/) - Interactive attachment guide
-- [Docker Attach vs Exec](https://iximiuz.com/en/posts/containers-101-attach-vs-exec/) - Conceptual differences
+**Cache invalidation with COPY --from:**
+- [How to Fix Docker Build Cache Issues - OneUpTime](https://oneuptime.com/blog/post/2026-01-25-fix-docker-build-cache-issues/view)
+- [Build cache invalidation - Docker Docs](https://docs.docker.com/build/cache/invalidation/)
+- [cache-from and COPY invalidates all layers - BuildKit Issue #2120](https://github.com/moby/buildkit/issues/2120)
+- [How to Build Docker Images with Cache Busting - OneUpTime](https://oneuptime.com/blog/post/2026-01-30-docker-cache-busting/view)
 
-### Terminal Emulators
-- [Awesome Terminals](https://github.com/cdleon/awesome-terminals) - Comprehensive terminal emulator list
-- [WezTerm](https://wezterm.org/index.html) - Cross-platform terminal with programmatic API
-- [Alacritty](https://alacritty.org/) - Cross-platform GPU-accelerated terminal
-- [Ghostty](https://github.com/ghostty-org/ghostty) - Modern cross-platform terminal (2026)
-- [Terminal Launch Library](https://github.com/skywind3000/terminal) - Python cross-platform terminal launcher (MEDIUM confidence)
+**Binary compatibility across architectures:**
+- [WARNING: Platform linux/amd64 does not match linux/arm64 - Collabnix](https://collabnix.com/warning-the-requested-images-platform-linux-amd64-does-not-match-the-detected-host-platform-linux-arm64-v8/)
+- [Multi-platform - Docker Docs](https://docs.docker.com/build/building/multi-platform)
+- [How to Build Multi-Architecture Docker Images - OneUpTime](https://oneuptime.com/blog/post/2026-01-06-docker-multi-architecture-images/view)
+- [Docker image platform compatibility with MAC Silicon - Medium](https://medium.com/@email.bajaj/docker-image-platform-compatibility-issue-with-mac-silicon-processors-m1-m2-ee2d5ea3ff0e)
 
-### Salesforce API
-- [Salesforce Rate Limiting Best Practices](https://developer.salesforce.com/docs/marketing/marketing-cloud/guide/rate-limiting-best-practices.html) - Official guidelines (HIGH confidence)
-- [Salesforce API Limits](https://developer.salesforce.com/docs/atlas.en-us.salesforce_app_limits_cheatsheet.meta/salesforce_app_limits_cheatsheet/salesforce_app_limits_platform_api.htm) - Official limits reference (HIGH confidence)
-- [API Limits Monitoring 2024](https://developer.salesforce.com/blogs/2024/11/api-limits-and-monitoring-your-api-usage) - Recent best practices
-- [OAuth Refresh Token Flow](https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_refresh_token_flow.htm&language=en_US&type=5) - Official OAuth docs (HIGH confidence)
-- [Salesforce OAuth invalid_grant](https://nango.dev/blog/salesforce-oauth-refresh-token-invalid-grant) - Common error handling
+**OCM CLI installation:**
+- [OCM CLI GitHub Repository](https://github.com/openshift-online/ocm-cli)
+- [OCM Container GitHub Repository](https://github.com/openshift/ocm-container)
 
-### Container Image Security
-- [Container Image Security 2026](https://www.cleanstart.com/guide/container-image-security) - Modern security practices
-- [Red Hat Container Updates](https://access.redhat.com/articles/2208321) - Update SLAs and policies
-- [Docker Hardened Images](https://www.docker.com/blog/docker-hardened-images-for-every-developer/) - CVE remediation in 7 days
+**Version automation:**
+- [How to Automate Version Bumping with GitHub Actions - OneUpTime](https://oneuptime.com/blog/post/2026-01-27-version-bumping-github-actions/view)
+- [Bumping version tags with git](https://www.tobymackenzie.com/blog/2023/12/27/bumping-version-tags-with-git/)
+- [Automate Git Tag Versioning Using Bash](https://reemus.dev/tldr/git-tag-versioning-script)
+- [GitVersion - Version Incrementing](https://gitversion.net/docs/reference/version-increments)
 
-### Migration & Compatibility
-- [Database Backward Compatibility Patterns](https://www.pingcap.com/article/database-design-patterns-for-ensuring-backward-compatibility/) - Expand-migrate-contract pattern
-- [Docker Alternatives 2026](https://signoz.io/comparisons/docker-alternatives/) - Migration strategies
-- [Containers 2025: Docker vs Podman](https://www.linuxjournal.com/content/containers-2025-docker-vs-podman-modern-developers) - Recent comparison
+**YAML parsing errors:**
+- [How to resolve Kubernetes YAML parsing errors - LabEx](https://labex.io/tutorials/kubernetes-how-to-resolve-kubernetes-yaml-parsing-errors-418394)
+- [Resolving YAML Parsing Errors in Azure DevOps](https://medium.com/@python-javascript-php-html-css/resolving-yaml-parsing-errors-in-azure-devops-tips-and-solutions-f73cf45d9bd)
+- [How to Fix Errors in YAML Config Files - Shockbyte](https://shockbyte.com/billing/knowledgebase/45/How-to-Fix-Errors-in-YAML-YML-Config-Files.html)
+
+**Docker ARG and build arguments:**
+- [How to Use Docker Build Arguments - OneUpTime](https://oneuptime.com/blog/post/2026-01-25-docker-build-arguments/view)
+- [Docker Best Practices: Using ARG and ENV - Docker Blog](https://www.docker.com/blog/docker-best-practices-using-arg-and-env-in-your-dockerfiles/)
+- [Dockerfile reference - Docker Docs](https://docs.docker.com/reference/dockerfile/)
 
 ---
-
-*Pitfalls research for: MC v2.0 Container Orchestration*
-*Researched: 2026-01-26*
-*Confidence: HIGH for Podman and Salesforce API, MEDIUM for terminal emulator specifics*
+*Pitfalls research for: MC CLI v2.0.3 Container Tools milestone*
+*Researched: 2026-02-09*

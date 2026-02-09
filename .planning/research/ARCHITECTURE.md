@@ -1,721 +1,823 @@
-# Architecture Research: Window Tracking Integration
+# Architecture Research: Multi-Stage Container Builds and Version Management
 
-**Domain:** Terminal automation with persistent window registry
-**Researched:** 2026-02-04
+**Domain:** Container build tooling with automated versioning for containerized development environments
+**Researched:** 2026-02-09
 **Confidence:** HIGH
 
-## Problem Context
+## Executive Summary
 
-The existing terminal automation system needs window tracking to prevent duplicate terminal windows. Currently, `mc case 12345678` creates a new terminal window every time it's run, even if one already exists for that case. The root cause is an iTerm2 AppleScript limitation: session names get overwritten when commands execute, making title-based searching unreliable.
+Multi-stage container builds integrate cleanly with MC's existing Podman-based workflow by separating build-time dependencies from runtime artifacts, enabling efficient layer caching and independent version management. The architecture introduces three new components in the `container/` directory: a multi-stage Containerfile, a versions.yaml config, and a build-container.sh automation script. These additions require minimal changes to existing Python container management code, preserving the established pull-then-create workflow while adding intelligent build capabilities.
 
-**Key constraint:** Must integrate with existing architecture without breaking current functionality.
 
-## Current Architecture
-
-### System Overview
+## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   CLI Entry Point (mc case)                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌────────────────┐    ┌──────────────────┐                 │
-│  │ attach.py      │───▶│ launcher.py      │                 │
-│  │ Orchestration  │    │ Platform detect  │                 │
-│  └────────┬───────┘    └────────┬─────────┘                 │
-│           │                     │                            │
-│           │          ┌──────────┴──────────┐                 │
-│           │          │                     │                 │
-│           │    ┌─────▼──────┐      ┌──────▼──────┐          │
-│           │    │ macos.py   │      │ linux.py    │          │
-│           │    │ iTerm2/    │      │ gnome-      │          │
-│           │    │ Terminal   │      │ terminal    │          │
-│           │    └────────────┘      └─────────────┘          │
-│           │                                                  │
-├───────────┴──────────────────────────────────────────────────┤
-│                   Container Management                        │
-├─────────────────────────────────────────────────────────────┤
-│  ┌────────────────┐    ┌──────────────────┐                 │
-│  │ manager.py     │───▶│ state.py         │                 │
-│  │ Lifecycle ops  │    │ StateDatabase    │                 │
-│  └────────────────┘    └──────────────────┘                 │
-│                                                               │
-├─────────────────────────────────────────────────────────────┤
-│                      Persistence Layer                        │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │   SQLite Database (containers.db)                    │    │
-│  │   - container metadata                                │    │
-│  │   - workspace paths                                   │    │
-│  │   - reconciliation with Podman                        │    │
-│  └──────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Build-Time Components                             │
+│  (container/ directory - new and modified files)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────────────┐    │
+│  │ versions.yaml│  │build-container│  │ Containerfile (multi-   │    │
+│  │  - image: x.y│  │    .sh       │  │  stage with 3+ stages)  │    │
+│  │  - mc: x.y.z │──│ reads config │──│  1. mc-builder          │    │
+│  │  - tools:    │  │ queries quay │  │  2. ocm-downloader      │    │
+│  │    ocm: x.y  │  │ auto-bumps   │  │  3. final (runtime)     │    │
+│  └──────────────┘  └──────────────┘  └─────────────────────────┘    │
+│                           │                      │                   │
+│                           ↓                      ↓                   │
+│                  ┌────────────────────────────────────┐              │
+│                  │   Podman build (layer caching)     │              │
+│                  └────────────────────────────────────┘              │
+├─────────────────────────────────────────────────────────────────────┤
+│                    Registry Storage                                  │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  quay.io/rhn_support_dsquirre/mc-container                    │   │
+│  │  - :latest (rolling tag)                                      │   │
+│  │  - :1.0.0, :1.0.1, :1.1.0 (semver versioned tags)            │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────────┤
+│                    Runtime Components                                │
+│  (src/mc/container/ - NO changes needed)                             │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  ContainerManager._ensure_image()                             │   │
+│  │  1. Check local: mc-rhel10:latest exists?                     │   │
+│  │  2. If not: Pull from quay.io/rhn_support_dsquirre/...        │   │
+│  │  3. Tag as mc-rhel10:latest                                   │   │
+│  │  4. Create container with workspace mount                     │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+## Multi-Stage Containerfile Architecture
 
-| Component | Responsibility | Current Implementation |
-|-----------|----------------|------------------------|
-| `attach.py` | Orchestration workflow for terminal attachment | Python module with `attach_terminal()` function |
-| `launcher.py` | Platform detection and launcher selection | Protocol-based interface with `get_launcher()` factory |
-| `macos.py` | macOS terminal launching (iTerm2, Terminal.app) | AppleScript execution via `osascript` subprocess |
-| `linux.py` | Linux terminal launching (gnome-terminal, etc.) | Direct subprocess execution with CLI flags |
-| `manager.py` | Container lifecycle (create, start, stop, delete) | `ContainerManager` class with Podman client |
-| `state.py` | SQLite-based state persistence | `StateDatabase` class with WAL mode, connection pooling |
+### Stage Structure and Responsibilities
 
-## Existing State Management Pattern
+| Stage | Base Image | Responsibility | Artifacts Produced | Layer Caching Benefit |
+|-------|------------|----------------|-------------------|----------------------|
+| **mc-builder** | registry.access.redhat.com/ubi10/ubi:10.1 | Install build dependencies, copy MC source, install MC in editable mode | Installed MC CLI at /opt/mc | Cached unless MC source or pyproject.toml changes |
+| **ocm-downloader** | registry.access.redhat.com/ubi10/ubi-minimal:10.1 | Download versioned OCM binary from GitHub releases | /tmp/ocm binary | Cached unless OCM version in versions.yaml changes |
+| **final (runtime)** | registry.access.redhat.com/ubi10/ubi:10.1 | Copy MC from builder, copy OCM from downloader, install runtime dependencies, configure user | Complete runtime image (mc-rhel10:latest) | Only rebuilds when earlier stages change or runtime config changes |
 
-### StateDatabase Architecture
+### Containerfile Pattern
 
-**Location:** `src/mc/container/state.py`
+```dockerfile
+# Stage 1: mc-builder - Build MC CLI from source
+FROM registry.access.redhat.com/ubi10/ubi:10.1 AS mc-builder
+RUN dnf install -y python3-pip && dnf clean all
+RUN pip3 install --no-cache-dir setuptools wheel
+COPY . /opt/mc
+RUN pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
 
-**Key characteristics:**
-- SQLite with WAL (Write-Ahead Logging) mode for concurrency
-- Context manager pattern for connection lifecycle
-- Reconciliation pattern to detect external changes
-- Platform-aware database location (platformdirs)
+# Stage 2: ocm-downloader - Fetch versioned OCM tool
+FROM registry.access.redhat.com/ubi10/ubi-minimal:10.1 AS ocm-downloader
+ARG OCM_VERSION=0.1.71
+RUN microdnf install -y tar gzip && microdnf clean all
+RUN curl -L "https://github.com/openshift-online/ocm-cli/releases/download/v${OCM_VERSION}/ocm-linux-amd64" \
+    -o /tmp/ocm && chmod +x /tmp/ocm
 
-**Schema:**
-```sql
-CREATE TABLE containers (
-    case_number TEXT PRIMARY KEY,
-    container_id TEXT NOT NULL,
-    workspace_path TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-)
-CREATE INDEX idx_container_id ON containers(container_id)
-CREATE INDEX idx_created_at ON containers(created_at)
+# Stage 3: final - Assemble runtime image
+FROM registry.access.redhat.com/ubi10/ubi:10.1
+# Install runtime dependencies (no build tools)
+RUN dnf install -y python3-pip vim nano wget openssl && dnf clean all
+# Copy MC from builder stage
+COPY --from=mc-builder /opt/mc /opt/mc
+COPY --from=mc-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=mc-builder /usr/local/bin/mc /usr/local/bin/mc
+# Copy OCM from downloader stage
+COPY --from=ocm-downloader /tmp/ocm /usr/local/bin/ocm
+# User setup, workspace, entrypoint (unchanged from current Containerfile)
+RUN groupadd --system mcuser && useradd --system --gid mcuser --home-dir /home/mcuser --create-home mcuser
+RUN mkdir -p /case && chown mcuser:mcuser /case
+COPY --chmod=755 container/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENV MC_RUNTIME_MODE=agent
+USER mcuser
+WORKDIR /case
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash"]
 ```
 
-**Connection Management:**
+### Layer Caching Optimization
+
+**Key Principle:** Order instructions from least-frequently-changed to most-frequently-changed.
+
+**Caching Behavior:**
+1. **mc-builder stage:** Rebuilds when `COPY . /opt/mc` detects source changes or when pyproject.toml dependencies change
+2. **ocm-downloader stage:** Rebuilds only when OCM_VERSION ARG changes (version bump in versions.yaml)
+3. **final stage:** COPY --from instructions invalidate cache only when source stages rebuild
+
+**Build Speed Benefits:**
+- First build: Full build time (~3-5 minutes for all stages)
+- MC source change: Rebuilds mc-builder + final (~2-3 minutes), ocm-downloader cached
+- OCM version change: Rebuilds ocm-downloader + final (~1 minute), mc-builder cached
+- Containerfile-only change (labels, env): Rebuilds final only (~30 seconds)
+
+## Version Management Architecture
+
+### versions.yaml Schema
+
+```yaml
+# Image version (independent semver, NOT tied to MC CLI version)
+image:
+  version: "1.0.0"  # x.y.z semver
+  description: "RHEL 10 UBI container with MC CLI and essential tools"
+
+# MC CLI version (for reference, read from pyproject.toml)
+mc:
+  version: "2.0.3"  # Read from pyproject.toml, not modified by build script
+  source: "pyproject.toml"
+
+# Tool versions (triggers auto-patch-bump when changed)
+tools:
+  ocm:
+    version: "0.1.71"
+    url: "https://github.com/openshift-online/ocm-cli/releases/download/v{VERSION}/ocm-linux-amd64"
+    description: "OpenShift Cluster Manager CLI"
+  # Future tools:
+  # oc:
+  #   version: "4.15.0"
+  #   url: "https://mirror.openshift.com/pub/openshift-v4/clients/oc/{VERSION}/linux/oc.tar.gz"
+```
+
+**Schema Rationale:**
+- **image.version:** Independent from MC CLI version allows container updates (new tools, base image updates) without MC code changes
+- **mc.version:** Reference only, proves which MC version is in the image
+- **tools:** Each tool as key with version + URL pattern, making it easy to add new tools
+
+### Version Bumping Logic
+
+**Automatic (patch):**
+- Trigger: Any version change in `tools:` section
+- Logic: Increment `image.version` patch (1.0.0 → 1.0.1)
+- Rationale: New tool version = new image build needed, but API-compatible change
+
+**Manual (minor):**
+- Trigger: New tool added to `tools:` section (developer runs `build-container.sh --minor`)
+- Logic: Increment `image.version` minor (1.0.1 → 1.1.0)
+- Rationale: New capability added, feature release
+
+**Manual (major):**
+- Trigger: Breaking change (base image upgrade RHEL 10 → 11, MC incompatible change)
+- Logic: Increment `image.version` major (1.1.0 → 2.0.0)
+- Rationale: Signals incompatibility to users
+
+
+## build-container.sh Responsibilities
+
+### Core Workflow
+
+```
+1. Read versions.yaml
+   ├─ Parse current image.version
+   ├─ Extract tool versions (OCM_VERSION, etc.)
+   └─ Validate schema
+
+2. Query Quay.io for latest published tag
+   ├─ API: GET https://quay.io/api/v1/repository/rhn_support_dsquirre/mc-container/tag/
+   ├─ Parse JSON response for tags
+   └─ Find highest semver tag (ignore "latest")
+
+3. Compare versions and decide bump
+   ├─ If tools versions changed since last Quay.io tag: auto-bump patch
+   ├─ If --minor flag: bump minor
+   ├─ If --major flag: bump major
+   └─ Update versions.yaml with new image.version
+
+4. Build image with Podman
+   ├─ Pass tool versions as build args (--build-arg OCM_VERSION=0.1.71)
+   ├─ Tag with new semver: mc-rhel10:1.0.1
+   └─ Tag with latest: mc-rhel10:latest
+
+5. Push to Quay.io (if --push flag)
+   ├─ podman push quay.io/rhn_support_dsquirre/mc-container:1.0.1
+   └─ podman push quay.io/rhn_support_dsquirre/mc-container:latest
+```
+
+### Script Interface
+
+```bash
+# Usage patterns
+./container/build-container.sh                    # Build locally, auto-bump patch if tools changed
+./container/build-container.sh --minor            # Force minor version bump
+./container/build-container.sh --push             # Build and push to quay.io
+./container/build-container.sh --no-bump          # Build without version change (testing)
+./container/build-container.sh --check-only       # Dry-run: show what version would be assigned
+```
+
+### Quay.io API Integration
+
+**Endpoint:** `GET https://quay.io/api/v1/repository/{namespace}/{repo}/tag/`
+
+**Authentication:**
+- Public repos: No auth needed for tag listing
+- Private repos: Use Bearer token from environment (`QUAY_TOKEN`)
+
+**Response Parsing:**
+```json
+{
+  "tags": [
+    {
+      "name": "latest",
+      "manifest_digest": "sha256:abc123...",
+      "last_modified": "Sat, 08 Feb 2026 12:34:56 -0000"
+    },
+    {
+      "name": "1.0.0",
+      "manifest_digest": "sha256:def456...",
+      "last_modified": "Fri, 07 Feb 2026 10:20:30 -0000"
+    }
+  ]
+}
+```
+
+**Querying Latest Semver:**
+1. Filter tags to semver format only (regex: `^[0-9]+\.[0-9]+\.[0-9]+$`)
+2. Sort by semver rules (use `sort -V` or semver-tool)
+3. Return highest version
+
+**Error Handling:**
+- Network failure: Warn, default to manual version from versions.yaml
+- Empty repository: Default to 1.0.0 for first image
+- Auth failure: Exit with clear error message
+
+## Integration with Existing Container Management
+
+### ContainerManager._ensure_image() - NO CHANGES NEEDED
+
+**Current behavior (preserved):**
 ```python
-@contextmanager
-def _connection(self) -> Iterator[sqlite3.Connection]:
-    # Special handling for :memory: databases (persistent connection)
-    # File-based databases: new connection per operation
-    # Auto-commit on success, rollback on exception
+def _ensure_image(self, image_name: str, registry_image: str) -> None:
+    # 1. Check if image exists locally first (fast path)
+    try:
+        self.podman.client.images.get(image_name)  # mc-rhel10:latest
+        return  # Image exists, use it
+    except Exception:
+        pass  # Image not found locally
+
+    # 2. Try pulling from registry
+    try:
+        self.podman.client.images.pull(registry_image)  # quay.io/.../mc-container:latest
+        pulled_image = self.podman.client.images.get(registry_image)
+        pulled_image.tag("mc-rhel10", "latest")  # Tag as mc-rhel10:latest
+    except Exception as pull_error:
+        raise RuntimeError(f"Image not available. Build locally: podman build...")
 ```
 
-**Reconciliation Pattern:**
-```python
-def reconcile(self, podman_container_ids: set[str]) -> None:
-    """Compare state database with Podman reality.
+**Why no changes needed:**
+- Always pulls `:latest` tag from registry (gets newest image automatically)
+- Multi-stage build is transparent to runtime - final image has same structure
+- Local tag `mc-rhel10:latest` remains consistent naming convention
+- OCM tool just appears at `/usr/local/bin/ocm` in the container
 
-    Delete state entries for containers that no longer exist in Podman.
-    Called before operations to ensure consistency.
-    """
+### Image Pull Workflow Impact
+
+**Before (v2.0.2 - single stage):**
+1. User runs `mc case 12345678`
+2. ContainerManager.create() calls _ensure_image()
+3. Pulls `quay.io/rhn_support_dsquirre/mc-container:latest` (549 MB)
+4. Tags as `mc-rhel10:latest`
+5. Creates container from `mc-rhel10:latest`
+
+**After (v2.0.3 - multi-stage):**
+1. User runs `mc case 12345678`
+2. ContainerManager.create() calls _ensure_image()
+3. Pulls `quay.io/rhn_support_dsquirre/mc-container:latest` (final stage only, ~540 MB)
+4. Tags as `mc-rhel10:latest`
+5. Creates container from `mc-rhel10:latest` (now includes OCM at /usr/local/bin/ocm)
+
+**Key difference:** Pulled image is slightly smaller (no build dependencies) and includes OCM tool. No code changes to ContainerManager.
+
+## File Organization
+
+### container/ Directory Structure (New and Modified)
+
+```
+container/
+├── Containerfile              # MODIFIED: Convert to multi-stage (mc-builder, ocm-downloader, final)
+├── versions.yaml              # NEW: Version config (image: 1.0.0, mc: 2.0.3, tools: ocm: 0.1.71)
+├── build-container.sh         # NEW: Automation script (reads versions.yaml, queries quay.io, builds)
+├── build.sh                   # EXISTING: Simple build script (keep for backward compat, or deprecate)
+├── entrypoint.sh              # UNCHANGED: Runtime entrypoint
+└── run.sh                     # UNCHANGED: Local container run helper
 ```
 
-**Usage pattern in ContainerManager:**
-```python
-def create(self, case_number, workspace_path, customer_name):
-    # 1. Reconcile state with Podman
-    self._reconcile()
+**File Ownership:**
+- `Containerfile`: Build instructions, owned by container architecture
+- `versions.yaml`: Single source of truth for versions, owned by release process
+- `build-container.sh`: Build automation, owned by container tooling
+- `build.sh`: Legacy/simple build, consider deprecating or updating to call build-container.sh
+- `entrypoint.sh`: Runtime behavior, unchanged
+- `run.sh`: Local testing helper, unchanged
 
-    # 2. Check state database for existing container
-    existing = self.state.get_container(case_number)
+### src/mc/container/ Python Code - NO CHANGES
 
-    # 3. Create/start container
-    container = self.podman.client.containers.create(...)
+**Modules remain unchanged:**
+- `manager.py`: ContainerManager class, _ensure_image() preserved
+- `models.py`: ContainerMetadata dataclass
+- `state.py`: StateDatabase for container registry
+- `__init__.py`: Package exports
 
-    # 4. Record in state database
-    self.state.add_container(case_number, container.id, workspace_path)
+**Rationale:** Multi-stage build is a build-time concern, not a runtime concern. Python code manages running containers, not building images.
+
+## Build vs Runtime Separation
+
+### Build-Time Concerns (container/ directory)
+
+**Components:**
+- Multi-stage Containerfile
+- versions.yaml config
+- build-container.sh script
+- Podman build execution
+
+**Responsibilities:**
+- Fetch dependencies (pip, curl)
+- Compile/package MC CLI
+- Download tool binaries
+- Assemble final image
+- Tag and push to registry
+
+**Environment:** Developer machine or CI/CD pipeline
+
+### Runtime Concerns (src/mc/container/ Python code)
+
+**Components:**
+- ContainerManager class
+- PodmanClient wrapper
+- StateDatabase
+- Terminal automation
+
+**Responsibilities:**
+- Pull image from registry
+- Create container instances
+- Mount workspace volumes
+- Execute commands in containers
+- Track container state
+
+**Environment:** User's host machine running MC CLI
+
+### Clean Separation Benefits
+
+1. **Testability:** Build scripts tested independently from container runtime logic
+2. **Iteration Speed:** Change build process without touching Python code (and vice versa)
+3. **Responsibility:** Build team owns container/, runtime team owns src/mc/container/
+4. **Debugging:** Build failures vs runtime failures have different troubleshooting paths
+
+
+## Architectural Patterns
+
+### Pattern 1: Builder-Downloader-Final
+
+**What:** Three-stage pattern where builder compiles code, downloader fetches binaries, final assembles runtime image
+
+**When to use:**
+- Application needs compilation (Python, Go, Java)
+- Multiple external binaries needed
+- Want to minimize final image size
+
+**Trade-offs:**
+- **Pros:** Small final image, clear separation, efficient caching
+- **Cons:** More complex Containerfile, longer initial build time
+
+**Example (from above):**
+```dockerfile
+FROM ubi AS mc-builder    # Compiles MC CLI
+FROM ubi-minimal AS ocm-downloader  # Downloads OCM binary
+FROM ubi AS final         # Assembles runtime
+COPY --from=mc-builder ...
+COPY --from=ocm-downloader ...
 ```
 
-## Recommended Window Registry Architecture
+### Pattern 2: ARG-Based Version Injection
 
-### Integration Strategy: Extend StateDatabase
+**What:** Pass versions as build arguments, allowing same Containerfile to build different versions
 
-**Recommendation:** Add window tracking table to existing StateDatabase rather than creating separate registry.
+**When to use:**
+- Tool versions change frequently
+- Want to track versions in config file
+- Need reproducible builds
 
-**Rationale:**
-1. **Consistency:** Same database location, connection management, WAL mode
-2. **Simplicity:** No additional file to manage or coordinate
-3. **Atomicity:** Can update container + window state in single transaction
-4. **Reuse patterns:** Reconciliation, cleanup, connection pooling already implemented
-5. **Platform-aware:** Inherits platformdirs configuration (macOS: `~/Library/Application Support/mc/containers.db`, Linux: `~/.local/share/mc/containers.db`)
+**Trade-offs:**
+- **Pros:** Version controlled in YAML, easy to audit, no Containerfile edits
+- **Cons:** Must pass ARGs correctly, ARG changes invalidate cache
 
-### Proposed Schema Extension
-
-```sql
--- Add to existing database schema
-CREATE TABLE IF NOT EXISTS window_registry (
-    case_number TEXT PRIMARY KEY,
-    window_id TEXT NOT NULL,
-    tab_id TEXT,  -- Optional: for tab-specific tracking
-    platform TEXT NOT NULL,  -- 'darwin' or 'linux'
-    terminal TEXT NOT NULL,  -- 'iTerm2', 'Terminal.app', 'gnome-terminal', etc.
-    created_at INTEGER NOT NULL,
-    last_verified_at INTEGER NOT NULL,
-    FOREIGN KEY (case_number) REFERENCES containers(case_number) ON DELETE CASCADE
-)
-CREATE INDEX IF NOT EXISTS idx_window_id ON window_registry(window_id)
-CREATE INDEX IF NOT EXISTS idx_last_verified ON window_registry(last_verified_at)
+**Example:**
+```dockerfile
+ARG OCM_VERSION=0.1.71  # Default, overridden by build-container.sh
+RUN curl -L "https://github.com/.../v${OCM_VERSION}/ocm-linux-amd64" ...
 ```
 
-**Schema rationale:**
-- `window_id`: Platform-specific window identifier (AppleScript ID on macOS, X11 window ID on Linux)
-- `tab_id`: Optional for multi-tab scenarios (iTerm2 can have multiple tabs per window)
-- `platform` + `terminal`: Support cross-platform and multi-terminal scenarios
-- `last_verified_at`: For cleanup of stale entries (windows closed externally)
-- `FOREIGN KEY` + `ON DELETE CASCADE`: Automatically remove window registry when container deleted
+### Pattern 3: Registry-Queried Auto-Versioning
 
-### Component Integration Points
+**What:** Query registry for latest published version, auto-increment if changes detected
 
-#### 1. StateDatabase Extension
+**When to use:**
+- Continuous delivery pipeline
+- Prevent version conflicts
+- Automate release tagging
 
-**File:** `src/mc/container/state.py`
+**Trade-offs:**
+- **Pros:** No manual version management, prevents duplicates
+- **Cons:** Requires network access to registry, more complex build script
 
-**New methods:**
-```python
-class StateDatabase:
-    def _ensure_schema(self) -> None:
-        """Extend to create window_registry table"""
-        # Existing containers table creation
-        # + New window_registry table creation
-
-    def store_window(self, case_number: str, window_id: str,
-                     platform: str, terminal: str, tab_id: str | None = None) -> None:
-        """Store window ID for case."""
-
-    def get_window(self, case_number: str) -> dict | None:
-        """Retrieve window metadata by case number."""
-
-    def remove_window(self, case_number: str) -> None:
-        """Remove window registry entry."""
-
-    def cleanup_stale_windows(self, active_window_ids: set[str]) -> None:
-        """Reconciliation pattern for windows.
-
-        Similar to reconcile() for containers, but for windows.
-        Checks if windows still exist and removes stale entries.
-        """
+**Example (from build-container.sh):**
+```bash
+LATEST_TAG=$(curl -s https://quay.io/api/v1/repository/.../tag/ | jq -r '.tags[].name' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+NEXT_VERSION=$(increment_patch "$LATEST_TAG")  # 1.0.0 → 1.0.1
 ```
-
-#### 2. MacOSLauncher Extension
-
-**File:** `src/mc/terminal/macos.py`
-
-**Integration point:** Capture window ID during creation
-
-**Modified methods:**
-```python
-class MacOSLauncher:
-    def __init__(self, terminal=None, state_db=None):
-        self.terminal = terminal or self._detect_terminal()
-        self.state_db = state_db  # NEW: inject StateDatabase
-
-    def launch(self, options: LaunchOptions) -> str:
-        """Launch terminal and return window ID.
-
-        NEW: Returns window_id instead of None
-        Stores window ID in state database if provided
-        """
-        # Build AppleScript
-        script = self._build_iterm_script_with_id_capture(options)
-
-        # Execute and capture output (window ID)
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        window_id = result.stdout.strip()
-
-        # Store in database if available
-        if self.state_db:
-            case_number = self._extract_case_number(options.title)
-            self.state_db.store_window(
-                case_number=case_number,
-                window_id=window_id,
-                platform="darwin",
-                terminal=self.terminal,
-                tab_id=None  # Could be extracted if needed
-            )
-
-        return window_id
-
-    def _build_iterm_script_with_id_capture(self, options) -> str:
-        """Modified to return window ID at end."""
-        return f'''
-tell application "iTerm"
-    activate
-    create window with default profile
-    tell current session of current window
-        set name to "{escaped_title}"
-        delay 0.1
-        write text "{escaped_command}"
-    end tell
-    -- Capture and return window ID
-    return id of current window
-end tell
-'''
-
-    def find_window_by_case(self, case_number: str) -> bool:
-        """NEW: Registry-based window search.
-
-        Replaces find_window_by_title() for reliable detection.
-        """
-        if not self.state_db:
-            return False
-
-        # Look up window from registry
-        window_data = self.state_db.get_window(case_number)
-        if not window_data:
-            return False
-
-        window_id = window_data['window_id']
-
-        # Verify window still exists
-        return self._window_exists_by_id(window_id)
-
-    def _window_exists_by_id(self, window_id: str) -> bool:
-        """Check if window ID exists in iTerm2."""
-        script = f'''
-tell application "iTerm"
-    repeat with theWindow in windows
-        if id of theWindow is "{window_id}" then
-            return true
-        end if
-    end repeat
-    return false
-end tell
-'''
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        return result.stdout.strip() == "true"
-
-    def focus_window_by_case(self, case_number: str) -> bool:
-        """NEW: Registry-based window focus."""
-        # Similar to find_window_by_case but with focus action
-```
-
-#### 3. LinuxLauncher Extension
-
-**File:** `src/mc/terminal/linux.py`
-
-**Challenge:** Linux window IDs require X11 integration
-
-**Approach:**
-```python
-class LinuxLauncher:
-    def __init__(self, terminal=None, state_db=None):
-        self.terminal = terminal or self._detect_terminal()
-        self.state_db = state_db
-
-    def launch(self, options: LaunchOptions) -> str | None:
-        """Launch terminal, attempt to capture window ID.
-
-        Linux window ID capture is best-effort (requires wmctrl or xdotool).
-        """
-        # Launch terminal
-        process = subprocess.Popen([self.terminal, ...])
-
-        # Wait briefly for window to appear
-        time.sleep(0.5)
-
-        # Try to capture window ID using wmctrl
-        window_id = self._find_window_id_by_title(options.title)
-
-        # Store if available
-        if window_id and self.state_db:
-            case_number = self._extract_case_number(options.title)
-            self.state_db.store_window(
-                case_number=case_number,
-                window_id=window_id,
-                platform="linux",
-                terminal=self.terminal
-            )
-
-        return window_id
-
-    def _find_window_id_by_title(self, title: str) -> str | None:
-        """Best-effort window ID discovery using wmctrl.
-
-        Returns None if wmctrl not available or window not found.
-        """
-        if not shutil.which("wmctrl"):
-            return None
-
-        try:
-            result = subprocess.run(
-                ["wmctrl", "-l"],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            # Parse wmctrl output: "0x0280001c  0 hostname Title Here"
-            for line in result.stdout.splitlines():
-                if title in line:
-                    window_id = line.split()[0]
-                    return window_id
-        except Exception:
-            pass
-
-        return None
-```
-
-**Note:** Linux implementation is optional/best-effort. Primary focus is macOS where the problem is acute.
-
-#### 4. attach_terminal Workflow Integration
-
-**File:** `src/mc/terminal/attach.py`
-
-**Modified workflow:**
-```python
-def attach_terminal(
-    case_number: str,
-    config_manager: ConfigManager,
-    api_client: RedHatAPIClient,
-    container_manager: ContainerManager,
-) -> None:
-    # ... existing setup (validate, fetch metadata, create container) ...
-
-    # Get terminal launcher with state database
-    launcher = get_launcher(state_db=container_manager.state)
-
-    # NEW: Check for existing window using registry
-    if launcher.find_window_by_case(case_number):
-        logger.info("Found existing terminal for case %s, focusing window", case_number)
-        if launcher.focus_window_by_case(case_number):
-            print(f"Focused existing terminal for case {case_number}")
-            return  # Early exit - no new window needed
-        else:
-            logger.warning("Failed to focus existing window, will launch new one")
-
-    # Launch new terminal (stores window ID internally)
-    launch_options = LaunchOptions(
-        title=window_title,
-        command=exec_command,
-        auto_focus=True
-    )
-    window_id = launcher.launch(launch_options)
-    logger.info("Terminal launched with window_id: %s", window_id)
-```
-
-**Key changes:**
-1. Pass `state_db` to launcher initialization
-2. Use `find_window_by_case()` instead of `find_window_by_title()`
-3. Use `focus_window_by_case()` instead of `focus_window_by_title()`
-4. Early exit when existing window found and focused
-5. Window ID automatically stored by `launcher.launch()`
 
 ## Data Flow
 
-### Create Flow (First Launch)
+### Build Flow (Developer/CI Pipeline)
+
+```
+Developer edits versions.yaml (bump OCM version)
+    ↓
+Run: ./container/build-container.sh
+    ↓
+build-container.sh reads versions.yaml
+    ↓
+Query Quay.io API for latest tag (e.g., 1.0.0)
+    ↓
+Detect tool version change → auto-bump patch (1.0.0 → 1.0.1)
+    ↓
+Update versions.yaml with new image.version
+    ↓
+Podman build with multi-stage Containerfile
+    │
+    ├─ Stage 1 (mc-builder): Install MC CLI
+    ├─ Stage 2 (ocm-downloader): Download OCM v0.1.71
+    └─ Stage 3 (final): Copy artifacts, configure runtime
+    ↓
+Tag image: mc-rhel10:latest, mc-rhel10:1.0.1
+    ↓
+(Optional) Push to Quay.io: quay.io/.../mc-container:1.0.1 and :latest
+```
+
+### Runtime Flow (End User)
 
 ```
 User runs: mc case 12345678
     ↓
-attach_terminal()
+ContainerManager.create() called
     ↓
-launcher.find_window_by_case("12345678")
+_ensure_image() checks for local image: mc-rhel10:latest
+    ↓ (not found)
+Pull from registry: quay.io/.../mc-container:latest
     ↓
-state_db.get_window("12345678")  → None (first time)
+Podman pulls final stage only (no builder/downloader stages)
     ↓
-launcher.launch(options)
+Tag as: mc-rhel10:latest
     ↓
-Execute AppleScript: create window + return ID
+Create container with workspace mount
     ↓
-window_id = "itterm2-window-1-12345"
-    ↓
-state_db.store_window("12345678", window_id, "darwin", "iTerm2")
-    ↓
-SQLite INSERT: window_registry table
-    ↓
-Return to user (terminal appears)
-```
-
-### Focus Flow (Subsequent Launch)
-
-```
-User runs: mc case 12345678 (again)
-    ↓
-attach_terminal()
-    ↓
-launcher.find_window_by_case("12345678")
-    ↓
-state_db.get_window("12345678")  → {window_id: "...", platform: "darwin"}
-    ↓
-launcher._window_exists_by_id(window_id)
-    ↓
-Execute AppleScript: check if window ID exists  → True
-    ↓
-launcher.focus_window_by_case("12345678")
-    ↓
-Execute AppleScript: select window by ID
-    ↓
-Print: "Focused existing terminal for case 12345678"
-    ↓
-Early return (no new window created)
-```
-
-### Cleanup Flow (Reconciliation)
-
-```
-Periodic or on-demand trigger
-    ↓
-launcher.cleanup_stale_windows()
-    ↓
-Get all window IDs from state_db
-    ↓
-For each window_id:
-    ↓
-    Check if window exists (AppleScript/wmctrl)
-    ↓
-    If NOT exists:
-        ↓
-        state_db.remove_window(case_number)
-        ↓
-        SQLite DELETE from window_registry
-```
-
-## Architectural Patterns
-
-### Pattern 1: Reconciliation Pattern
-
-**What:** Periodically compare state database with external reality (Podman, iTerm2) and remove orphaned entries.
-
-**When to use:** Any persistent state that can be modified externally (user closes window, kills container).
-
-**Trade-offs:**
-- **Pro:** Prevents state drift, recovers from external changes
-- **Pro:** Self-healing system
-- **Con:** Requires periodic execution or trigger on operations
-- **Con:** Potential race conditions if reconciliation runs during operations
-
-**Example:**
-```python
-class StateDatabase:
-    def reconcile_containers(self, podman_container_ids: set[str]) -> None:
-        """Existing container reconciliation."""
-        with self._connection() as conn:
-            rows = conn.execute("SELECT case_number, container_id FROM containers").fetchall()
-            for row in rows:
-                if row["container_id"] not in podman_container_ids:
-                    conn.execute("DELETE FROM containers WHERE case_number = ?", (row["case_number"],))
-
-    def reconcile_windows(self, launcher) -> None:
-        """NEW: Window reconciliation."""
-        with self._connection() as conn:
-            rows = conn.execute("SELECT case_number, window_id FROM window_registry").fetchall()
-            for row in rows:
-                if not launcher._window_exists_by_id(row["window_id"]):
-                    conn.execute("DELETE FROM window_registry WHERE case_number = ?", (row["case_number"],))
-```
-
-### Pattern 2: Dependency Injection for State
-
-**What:** Inject StateDatabase into launchers instead of creating new instances.
-
-**When to use:** When multiple components need to share state management.
-
-**Trade-offs:**
-- **Pro:** Single source of truth, no database file conflicts
-- **Pro:** Easier testing (inject mock database)
-- **Pro:** Lifecycle managed by caller
-- **Con:** More complex initialization
-- **Con:** Tighter coupling between components
-
-**Example:**
-```python
-# Before (independent)
-launcher = MacOSLauncher()
-launcher.launch(options)  # No state tracking
-
-# After (injected)
-state_db = StateDatabase()  # Shared instance
-launcher = MacOSLauncher(state_db=state_db)
-launcher.launch(options)  # Automatically stores window ID
-```
-
-### Pattern 3: Platform-Specific Registry with Fallback
-
-**What:** Track windows when platform supports it, gracefully degrade when not.
-
-**When to use:** Cross-platform features where capability varies.
-
-**Trade-offs:**
-- **Pro:** Best experience on supported platforms
-- **Pro:** Doesn't break unsupported platforms
-- **Con:** Feature parity issues
-- **Con:** Testing complexity
-
-**Example:**
-```python
-def find_window_by_case(self, case_number: str) -> bool:
-    # Try registry-based search first
-    if self.state_db:
-        window_data = self.state_db.get_window(case_number)
-        if window_data:
-            return self._window_exists_by_id(window_data['window_id'])
-
-    # Fallback to title-based search (unreliable but better than nothing)
-    return self._find_window_by_title_legacy(case_number)
+User inside container: ocm version (works! /usr/local/bin/ocm exists)
 ```
 
 ## Scaling Considerations
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1-100 cases | Single SQLite database, no cleanup needed (manual close suffices) |
-| 100-1000 cases | Add periodic reconciliation (cleanup stale windows weekly), consider index optimization |
-| 1000+ cases | Partition window_registry by time (archive old entries), add TTL for auto-cleanup |
+### Adding More Tools (e.g., oc, kubectl, rosa)
 
-### Scaling Priorities
+**Current (1 tool - OCM):**
+- 1 downloader stage
+- 1 COPY --from in final stage
+- 1 entry in versions.yaml
 
-1. **First bottleneck:** Database lock contention if many parallel `mc case` invocations
-   - **Fix:** WAL mode already enabled, handles concurrent reads + 1 writer
-   - **Monitor:** If `database is locked` errors appear, increase timeout or add retry logic
+**Scaling to 5 tools:**
 
-2. **Second bottleneck:** Stale entry accumulation (windows closed manually, not cleaned up)
-   - **Fix:** Periodic reconciliation job (cron or on-demand via `mc container reconcile`)
-   - **Monitor:** `SELECT COUNT(*) FROM window_registry` vs expected active count
+**Option A: Separate stage per tool (recommended)**
+```dockerfile
+FROM ubi-minimal AS ocm-downloader
+ARG OCM_VERSION
+RUN curl -L ... -o /tmp/ocm
+
+FROM ubi-minimal AS oc-downloader
+ARG OC_VERSION
+RUN curl -L ... -o /tmp/oc
+
+FROM ubi-minimal AS kubectl-downloader
+ARG KUBECTL_VERSION
+RUN curl -L ... -o /tmp/kubectl
+
+FROM ubi AS final
+COPY --from=ocm-downloader /tmp/ocm /usr/local/bin/
+COPY --from=oc-downloader /tmp/oc /usr/local/bin/
+COPY --from=kubectl-downloader /tmp/kubectl /usr/local/bin/
+```
+
+**Pros:**
+- Independent caching per tool
+- Parallel downloads during build
+- Easy to debug failures
+
+**Cons:**
+- More stages (not a real problem, Podman handles this well)
+
+**Option B: Single downloader stage for all tools**
+```dockerfile
+FROM ubi-minimal AS tool-downloader
+ARG OCM_VERSION
+ARG OC_VERSION
+RUN curl -L ... -o /tmp/ocm && \
+    curl -L ... -o /tmp/oc && \
+    ...
+```
+
+**Pros:**
+- Fewer stages
+- Simpler Containerfile
+
+**Cons:**
+- Cache invalidated if ANY tool version changes
+- Sequential downloads (slower)
+- Harder to isolate failures
+
+**Recommendation:** Use Option A (separate stages) for better caching and parallel builds.
+
+### versions.yaml Scaling
+
+**Adding 5 tools:**
+```yaml
+tools:
+  ocm:
+    version: "0.1.71"
+    url: "https://github.com/openshift-online/ocm-cli/releases/download/v{VERSION}/ocm-linux-amd64"
+  oc:
+    version: "4.15.0"
+    url: "https://mirror.openshift.com/pub/openshift-v4/clients/oc/{VERSION}/linux/oc.tar.gz"
+  kubectl:
+    version: "1.29.1"
+    url: "https://dl.k8s.io/release/v{VERSION}/bin/linux/amd64/kubectl"
+  rosa:
+    version: "1.2.35"
+    url: "https://github.com/openshift/rosa/releases/download/v{VERSION}/rosa-linux-amd64"
+  helm:
+    version: "3.14.0"
+    url: "https://get.helm.sh/helm-v{VERSION}-linux-amd64.tar.gz"
+```
+
+**Schema scales cleanly:** Each tool is a separate key with version + URL pattern. build-container.sh iterates over all tools to generate build args.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Separate Window Registry File
+### Anti-Pattern 1: Version Coupling
 
-**What people do:** Create `window_registry.db` separate from `containers.db`
-
-**Why it's wrong:**
-- Requires coordinating two database files
-- No transactional guarantees across files
-- Can't use FOREIGN KEY to cascade deletes
-- Duplicate connection management code
-- Race conditions between databases
-
-**Do this instead:** Extend existing `StateDatabase` with `window_registry` table
-
-### Anti-Pattern 2: Storing Window Titles Instead of IDs
-
-**What people do:** Store window title in registry, search by title
+**What people do:** Tie image version to MC CLI version (image: "2.0.3" == mc: "2.0.3")
 
 **Why it's wrong:**
-- Defeats purpose: titles still get overwritten by iTerm2
-- Original problem remains unsolved
-- Adds complexity without benefit
+- Forces image rebuild for every MC code change
+- Can't update tools without MC code change
+- Version 2.0.3-with-OCM-0.1.71 vs 2.0.3-with-OCM-0.1.72 becomes impossible to track
 
-**Do this instead:** Store immutable window IDs that persist regardless of title changes
+**Do this instead:** Independent image semver (image: "1.0.1") tracks container changes, mc: "2.0.3" is reference only
 
-### Anti-Pattern 3: Blocking Launch Waiting for Window ID
+### Anti-Pattern 2: Hardcoded Versions in Containerfile
 
 **What people do:**
-```python
-# Wait for window to appear before returning
-launcher.launch(options)
-time.sleep(5)  # Hope window appears
-window_id = find_window_by_title(title)
+```dockerfile
+RUN curl -L "https://github.com/.../v0.1.71/ocm-linux-amd64" -o /tmp/ocm
 ```
 
 **Why it's wrong:**
-- Race conditions (window might not appear in 5s)
-- Blocks CLI unnecessarily (bad UX)
-- Fragile timing assumptions
+- Must edit Containerfile to change version (error-prone)
+- No single source of truth for versions
+- Can't auto-bump or track changes
 
-**Do this instead:** Capture window ID synchronously from AppleScript return value
+**Do this instead:** Use ARG + versions.yaml
+```dockerfile
+ARG OCM_VERSION=0.1.71
+RUN curl -L "https://github.com/.../v${OCM_VERSION}/ocm-linux-amd64" -o /tmp/ocm
+```
+
+### Anti-Pattern 3: Installing Build Tools in Final Image
+
+**What people do:**
+```dockerfile
+FROM ubi
+RUN dnf install -y gcc make python3-devel  # Build dependencies
+COPY . /opt/mc
+RUN pip install /opt/mc
+```
+
+**Why it's wrong:**
+- Final image bloated with unnecessary build tools
+- Security risk (compilers in production image)
+- Wastes registry bandwidth
+
+**Do this instead:** Use builder stage, copy only artifacts to final
+```dockerfile
+FROM ubi AS builder
+RUN dnf install -y gcc make python3-devel
+RUN pip install /opt/mc
+
+FROM ubi AS final
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+# No build tools in final image
+```
+
+### Anti-Pattern 4: Pulling Latest Tool Versions at Build Time
+
+**What people do:**
+```dockerfile
+RUN curl -L "https://github.com/.../releases/latest/download/ocm-linux-amd64" -o /tmp/ocm
+```
+
+**Why it's wrong:**
+- Non-reproducible builds (OCM version changes, image breaks)
+- Can't audit what version is in an image
+- No warning when tools update with breaking changes
+
+**Do this instead:** Pin exact versions in versions.yaml, update explicitly
+```yaml
+tools:
+  ocm:
+    version: "0.1.71"  # Explicit version, auditable
+```
+
 
 ## Integration Points
 
-### External Dependencies
+### External Services
 
 | Service | Integration Pattern | Notes |
 |---------|---------------------|-------|
-| iTerm2 | AppleScript via `osascript` subprocess | ID capture via script return value |
-| Terminal.app | AppleScript via `osascript` subprocess | Same pattern as iTerm2 |
-| gnome-terminal | Direct subprocess launch | Window ID via `wmctrl` (best-effort) |
-| Podman | Python API via `podman-py` | Container reconciliation pattern |
-| SQLite | Python `sqlite3` stdlib | WAL mode, contextmanager pattern |
+| Quay.io Registry | REST API (JSON) | GET /api/v1/repository/{namespace}/{repo}/tag/ for querying tags; authenticated push via podman login |
+| GitHub Releases | HTTPS download | Direct binary download from releases URLs, checksum validation recommended but optional |
+| Podman | CLI via subprocess | build-container.sh invokes `podman build`, `podman tag`, `podman push` commands |
+| PyPI | pip install | mc-builder stage installs MC CLI dependencies, pinned in pyproject.toml |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| attach.py ↔ launcher.py | Function calls with LaunchOptions | Injected state_db dependency |
-| launcher.py ↔ state.py | Direct method calls | store_window(), get_window(), reconcile_windows() |
-| state.py ↔ SQLite | SQL via sqlite3 | Connection pooling, transaction management |
-| attach.py ↔ manager.py | Shared state_db instance | Both use container_manager.state |
+| build-container.sh ↔ versions.yaml | File I/O (YAML parsing) | Read version config, write updated image.version after auto-bump |
+| build-container.sh ↔ Quay.io API | HTTP GET (curl + jq) | Query latest tag, compare with local version |
+| Containerfile ↔ build-container.sh | Build args | Pass OCM_VERSION, other tool versions as --build-arg flags |
+| ContainerManager ↔ Podman registry | podman-py API | Pull image, tag image, no awareness of build process |
 
-## Implementation Phases
+## Recommended Build Order
 
-### Phase 1: Database Schema Extension (1 hour)
-- Add `window_registry` table to StateDatabase schema
-- Add `store_window()`, `get_window()`, `remove_window()` methods
-- Add unit tests for window registry CRUD operations
-- **Success criteria:** Tests pass, backward compatible with existing containers table
+### Phase 1: Multi-Stage Containerfile (Foundational)
 
-### Phase 2: MacOSLauncher Window ID Capture (2 hours)
-- Modify `_build_iterm_script()` to return window ID
-- Update `launch()` to capture and store window ID
-- Add `_window_exists_by_id()` helper
-- **Success criteria:** Window ID captured and stored in database after launch
+**Why first:** Validates build pattern works before adding automation complexity
 
-### Phase 3: Registry-Based Search and Focus (2 hours)
-- Add `find_window_by_case()` method
-- Add `focus_window_by_case()` method
-- Update `attach_terminal()` to use registry-based search
-- **Success criteria:** Second `mc case XXXXX` invocation focuses existing window
+**Tasks:**
+1. Convert current Containerfile to 3-stage pattern (mc-builder, ocm-downloader, final)
+2. Hardcode OCM version initially (ARG OCM_VERSION=0.1.71)
+3. Build locally: `podman build -t mc-rhel10:test -f container/Containerfile .`
+4. Verify: Run container, check `ocm version` works
+5. Compare image sizes: current single-stage vs new multi-stage
 
-### Phase 4: Reconciliation and Cleanup (1 hour)
-- Add `reconcile_windows()` to StateDatabase
-- Trigger reconciliation in `attach_terminal()` or periodic job
-- **Success criteria:** Manually closed windows are removed from registry
+**Success criteria:**
+- Image builds successfully
+- OCM tool present at /usr/local/bin/ocm
+- Image size comparable or smaller than single-stage
+- Layer caching works (rebuild after MC source change only rebuilds mc-builder + final)
 
-### Phase 5: Linux Support (Optional, 2 hours)
-- Implement `_find_window_id_by_title()` using wmctrl
-- Add Linux window ID capture to LinuxLauncher
-- Fallback gracefully when wmctrl unavailable
-- **Success criteria:** Linux duplicate prevention works when wmctrl installed
+### Phase 2: versions.yaml Config (Version Management)
 
-### Phase 6: Testing and Documentation (2 hours)
-- Update `test_duplicate_terminal_prevention_regression` to verify fix
-- Add integration tests for window registry
-- Document window tracking architecture
-- Update UAT 5.2 status
-- **Success criteria:** All tests pass, documentation complete
+**Why second:** Establishes single source of truth before automation
 
-## Migration Path
+**Tasks:**
+1. Create `container/versions.yaml` with initial schema (image: 1.0.0, mc: 2.0.3, tools: ocm: 0.1.71)
+2. Update Containerfile to use ARG OCM_VERSION (no default, must be passed)
+3. Manually build with: `podman build --build-arg OCM_VERSION=0.1.71 ...`
+4. Verify versions.yaml is parseable (test with `yq` or Python YAML parser)
 
-### Backward Compatibility
+**Success criteria:**
+- versions.yaml validates against schema
+- Containerfile builds with --build-arg OCM_VERSION
+- Image contains correct OCM version specified in YAML
 
-**Existing behavior:** Continues to work if `state_db` not injected into launcher.
+### Phase 3: build-container.sh Script (Automation Core)
 
-**Upgrade path:**
-1. Deploy schema changes (adds table, doesn't modify existing tables)
-2. Update launcher initialization to inject `state_db`
-3. Existing windows won't be tracked (first launch after upgrade creates entry)
-4. Users see benefit immediately on next `mc case` invocation
+**Why third:** Automates what was proven manually in phases 1-2
 
-**Rollback:** Remove `state_db` injection, system reverts to old behavior (duplicate windows tolerated).
+**Tasks:**
+1. Create `container/build-container.sh` with basic functionality:
+   - Read versions.yaml (parse YAML in bash using `yq` or Python)
+   - Extract tool versions (OCM_VERSION)
+   - Run podman build with --build-arg flags
+   - Tag image as mc-rhel10:latest
+2. No version bumping yet, just automation of manual build
+3. Test: `./container/build-container.sh` produces same image as manual build
+
+**Success criteria:**
+- Script runs without errors
+- Produces correctly tagged image
+- All build args passed correctly
+- Image identical to manual build
+
+### Phase 4: Quay.io Integration (Version Querying)
+
+**Why fourth:** Adds external dependency, needs core automation working first
+
+**Tasks:**
+1. Add Quay.io API query to build-container.sh:
+   - GET https://quay.io/api/v1/repository/rhn_support_dsquirre/mc-container/tag/
+   - Parse JSON response (curl + jq)
+   - Extract semver tags, find highest version
+2. Add --check-only flag to show current vs latest version without building
+3. Test against live Quay.io registry
+
+**Success criteria:**
+- Script successfully queries Quay.io API
+- Correctly identifies latest semver tag
+- Handles empty repository gracefully (defaults to 1.0.0)
+- Reports network errors clearly
+
+### Phase 5: Auto-Versioning Logic (Intelligent Bumping)
+
+**Why fifth:** Most complex logic, needs all previous pieces working
+
+**Tasks:**
+1. Implement version comparison (local versions.yaml vs Quay.io latest)
+2. Detect tool version changes (compare current OCM version vs version in last published image)
+3. Auto-increment patch version if tool changes detected
+4. Support manual --minor and --major flags
+5. Write updated version back to versions.yaml
+
+**Success criteria:**
+- Detects tool version changes correctly
+- Auto-bumps patch version (1.0.0 → 1.0.1)
+- Manual bumps work (--minor: 1.0.1 → 1.1.0)
+- versions.yaml updated with new image.version
+
+### Phase 6: Registry Push (Publishing)
+
+**Why last:** Only needed after build process is proven reliable
+
+**Tasks:**
+1. Add --push flag to build-container.sh
+2. Tag image with both semver and latest
+3. Push to Quay.io: `podman push quay.io/rhn_support_dsquirre/mc-container:1.0.1`
+4. Push latest tag: `podman push quay.io/rhn_support_dsquirre/mc-container:latest`
+5. Verify pushed image is pullable by ContainerManager
+
+**Success criteria:**
+- Images pushed successfully to Quay.io
+- Both versioned and :latest tags present
+- ContainerManager can pull new image
+- User can run `mc case XXXXX` and get container with OCM tool
+
+## Verification Strategy
+
+### Build-Time Verification
+
+**Test Scenarios:**
+1. **Clean build:** Delete all local images, run build-container.sh, verify image created
+2. **Incremental build (MC change):** Edit MC source, rebuild, verify only mc-builder + final stages rebuild
+3. **Incremental build (tool change):** Bump OCM version in versions.yaml, rebuild, verify only ocm-downloader + final stages rebuild
+4. **Version auto-bump:** Change OCM version, run build-container.sh, verify image.version incremented from 1.0.0 to 1.0.1
+5. **Registry push:** Run build-container.sh --push, verify both :1.0.1 and :latest tags on Quay.io
+
+### Runtime Verification
+
+**Test Scenarios:**
+1. **Fresh pull:** Delete local mc-rhel10:latest, run `mc case 12345678`, verify image pulled from registry
+2. **OCM tool present:** Inside container, run `ocm version`, verify correct version displayed
+3. **MC CLI works:** Inside container, run `mc --version`, verify MC 2.0.3
+4. **Workspace mount:** Verify /case directory mounted correctly with proper permissions
+5. **Backward compatibility:** Existing v2.0.2 user workflow unchanged (no Python code changes)
+
+### Integration Verification
+
+**Test Scenarios:**
+1. **Quay.io API query:** Run `build-container.sh --check-only`, verify latest version detected
+2. **Build arg passing:** Verify OCM_VERSION passed correctly to Containerfile (check image labels or run `ocm version`)
+3. **Layer caching:** Time builds with cache hit vs cache miss, verify speedup
+4. **Multi-platform:** Build on macOS, push to registry, pull on Linux, verify works (both arm64 and amd64 if needed)
 
 ## Sources
 
-### Architecture Patterns
-- [Kubernetes and Reconciliation Patterns](https://hkassaei.com/posts/kubernetes-and-reconciliation-patterns/) - Reconciliation loop pattern for state management
-- [The Principle of Reconciliation](https://www.chainguard.dev/unchained/the-principle-of-reconciliation) - Declarative state and idempotency
-- [Registry Pattern - GeeksforGeeks](https://www.geeksforgeeks.org/system-design/registry-pattern/) - Registry pattern for resource management
-- [Python Registry Pattern](https://dev.to/dentedlogic/stop-writing-giant-if-else-chains-master-the-python-registry-pattern-ldm) - Python implementation patterns
+**Multi-Stage Container Builds:**
+- [Multi-stage builds - Docker Docs](https://docs.docker.com/build/building/multi-stage/)
+- [How to Build Images with Podman - OneUptime Blog 2026](https://oneuptime.com/blog/post/2026-01-27-podman-build/view)
+- [Advanced multi-stage build patterns - Medium](https://medium.com/@tonistiigi/advanced-multi-stage-build-patterns-6f741b852fae)
+- [Understanding Multi-Stage Docker Builds - Blacksmith](https://www.blacksmith.sh/blog/understanding-multi-stage-docker-builds)
 
-### SQLite and State Management
-- [SQLite Architecture](https://sqlite.org/arch.html) - Official SQLite architecture documentation
-- [Offline-first frontend apps 2025: IndexedDB and SQLite](https://blog.logrocket.com/offline-first-frontend-apps-2025-indexeddb-sqlite/) - State management patterns
-- [Appropriate Uses For SQLite](https://sqlite.org/whentouse.html) - When to use SQLite vs other databases
+**Container Layer Caching with Podman:**
+- [Optimize container build speed with Podman - Medium](https://medium.com/@jeroenverhaeghe/tips-to-optimize-container-build-speed-02e4622d8bae)
+- [Deep Dive: Why Podman and containerd 2.0 are Replacing Docker in 2026 - DEV Community](https://dev.to/dataformathub/deep-dive-why-podman-and-containerd-20-are-replacing-docker-in-2026-32ak)
+- [Understanding Podman Build: A Technical Deep Dive - Tao's Blog](https://www.ubitools.com/podman-build-technical-guide/)
+- [Speeding Up Container Image Builds with Remote Cache - Martin Heinz](https://martinheinz.dev/blog/61)
 
-### System Design
-- [AI System Design Patterns for 2026](https://zenvanriel.nl/ai-engineer-blog/ai-system-design-patterns-2026/) - Idempotency patterns for preventing duplicate operations
-- [Manager Design Pattern](https://www.eventhelix.com/design-patterns/manager/) - Managing multiple entities of the same type
+**Version Management and Automation:**
+- [Automating Docker Image Versioning with GitHub Actions - DEV Community](https://dev.to/msrabon/automating-docker-image-versioning-build-push-and-scanning-using-github-actions-388n)
+- [Container Image Versioning - Container Registry](https://container-registry.com/posts/container-image-versioning/)
+- [How to Implement ArgoCD Image Updater Automation - OneUptime 2026](https://oneuptime.com/blog/post/2026-01-27-argocd-image-updater/view)
 
-### Project Context
-- `.planning/PHASE_PROPOSAL_WINDOW_TRACKING.md` - Original phase proposal for window tracking
-- `.planning/INTEGRATION_TEST_FIX_REPORT.md` - Root cause analysis of iTerm2 AppleScript limitation
-- `src/mc/container/state.py` - Existing StateDatabase implementation
-- `src/mc/terminal/macos.py` - Current MacOSLauncher implementation
+**Semver Auto-Increment in Bash:**
+- [semver-tool: semver bash implementation - GitHub](https://github.com/fsaintjacques/semver-tool)
+- [Automate Git Tag Versioning Using Bash - reemus.dev](https://reemus.dev/tldr/git-tag-versioning-script)
+- [shell-semver: Increment semantic versioning strings - GitHub](https://github.com/fmahnke/shell-semver)
+- [Incrementing a Semantic Version String in Bash - Henry Schmale](https://www.henryschmale.org/2019/04/30/incr-semver.html)
+
+**Quay.io API:**
+- [Quay.io API Documentation](https://docs.quay.io/api/)
+- [Get tags from a particular image in quay.io registry - OpenShift Tips](https://openshift.tips/images/)
+- [Use Project Quay - Documentation](https://docs.projectquay.io/use_quay.html)
+- [Working with tags - Red Hat Quay Documentation](https://docs.redhat.com/en/documentation/red_hat_quay/3.10/html/about_quay_io/working-with-tags)
 
 ---
-*Architecture research for: Window tracking integration for terminal automation*
-*Researched: 2026-02-04*
+
+*Architecture research for: Multi-stage container builds and version management*
+*Researched: 2026-02-09*
