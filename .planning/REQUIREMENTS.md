@@ -88,13 +88,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MULTI-01 | Phase 20 | Pending |
-| MULTI-02 | Phase 20 | Pending |
-| MULTI-03 | Phase 20 | Pending |
-| MULTI-04 | Phase 20 | Pending |
-| MULTI-05 | Phase 20 | Pending |
-| MULTI-06 | Phase 20 | Pending |
-| MULTI-07 | Phase 20 | Pending |
+| MULTI-01 | Phase 20 | Complete |
+| MULTI-02 | Phase 20 | Complete |
+| MULTI-03 | Phase 20 | Complete |
+| MULTI-04 | Phase 20 | Complete |
+| MULTI-05 | Phase 20 | Complete |
+| MULTI-06 | Phase 20 | Complete |
+| MULTI-07 | Phase 20 | Complete |
 | VER-01 | Phase 21 | Pending |
 | VER-02 | Phase 21 | Pending |
 | VER-03 | Phase 21 | Pending |
