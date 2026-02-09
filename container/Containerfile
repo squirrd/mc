@@ -5,7 +5,7 @@
 #
 # Build:
 #   podman build -t mc-rhel10:latest -f container/Containerfile .
-#   podman build --build-arg OCM_VERSION=0.34.0 -t mc-rhel10:latest -f container/Containerfile .
+#   podman build --build-arg OCM_VERSION=1.0.10 -t mc-rhel10:latest -f container/Containerfile .
 #
 # Run:
 #   podman run --rm -it -v /path/to/workspace:/case:U mc-rhel10:latest
@@ -18,7 +18,7 @@ FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS ocm-downloader
 # ARG for OCM version - placed before dependencies to accept build script injection (Phase 22)
 # When build script injects new version via --build-arg, downstream layers are invalidated
 # This is correct behavior: version changes require downloading new binary
-ARG OCM_VERSION=0.35.0
+ARG OCM_VERSION=1.0.10
 
 # Install download tools
 RUN microdnf install -y curl tar gzip && \
@@ -28,12 +28,13 @@ RUN microdnf install -y curl tar gzip && \
 # Fail fast on download or checksum mismatch
 RUN set -e && \
     cd /tmp && \
-    curl -fsSL "https://github.com/open-component-model/ocm/releases/download/v${OCM_VERSION}/ocm-${OCM_VERSION}-linux-amd64.tar.gz" -o ocm.tar.gz && \
-    curl -fsSL "https://github.com/open-component-model/ocm/releases/download/v${OCM_VERSION}/ocm-${OCM_VERSION}-linux-amd64.tar.gz.sha256" -o expected.sha256 && \
-    echo "$(cat expected.sha256)  ocm.tar.gz" | sha256sum --check && \
-    tar -xzf ocm.tar.gz && \
-    chmod +x ocm && \
-    mv ocm /usr/local/bin/ocm && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; elif [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && \
+    curl -fsSL "https://github.com/openshift-online/ocm-cli/releases/download/v${OCM_VERSION}/ocm-linux-${ARCH}" -o ocm-linux-${ARCH} && \
+    curl -fsSL "https://github.com/openshift-online/ocm-cli/releases/download/v${OCM_VERSION}/ocm-linux-${ARCH}.sha256" -o ocm-linux-${ARCH}.sha256 && \
+    sha256sum --check ocm-linux-${ARCH}.sha256 && \
+    chmod +x ocm-linux-${ARCH} && \
+    mv ocm-linux-${ARCH} /usr/local/bin/ocm && \
     rm -rf /tmp/*
 
 # =============================================================================
