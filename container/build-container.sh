@@ -333,6 +333,32 @@ detect_architecture() {
 }
 
 #------------------------------------------------------------------------------
+# Output Formatting
+#------------------------------------------------------------------------------
+
+# Output results in JSON format
+output_json() {
+  local latest_version="$1"
+  local version_exists="$2"
+  local registry_digest="$3"
+
+  cat <<EOF
+{
+  "image_version": "$IMAGE_VERSION",
+  "latest_registry_version": ${latest_version:+"\"$latest_version\""}${latest_version:-null},
+  "version_exists_on_registry": $version_exists,
+  "registry_digest": ${registry_digest:+"\"$registry_digest\""}${registry_digest:-null},
+  "mc_version": "$MC_VERSION",
+  "tools": {
+$(for tool_name in "${!TOOL_VERSIONS[@]}"; do
+    echo "    \"$tool_name\": \"${TOOL_VERSIONS[$tool_name]}\""
+  done | paste -sd ',' -)
+  }
+}
+EOF
+}
+
+#------------------------------------------------------------------------------
 # Build Orchestration
 #------------------------------------------------------------------------------
 perform_build() {
@@ -372,6 +398,9 @@ perform_build() {
 
   # Dry-run or execute
   if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[DRY-RUN] Registry query would be performed:"
+    echo "  Target registry: $REGISTRY_REPO"
+    echo ""
     echo "[DRY-RUN] Would execute:"
     printf '%s ' "${build_cmd[@]}"
     printf '\n'
@@ -394,11 +423,17 @@ perform_build() {
     # Calculate elapsed time
     local elapsed=$SECONDS
 
-    # Success message
-    echo "Build completed successfully in ${elapsed}s"
-    echo "Created tags:"
-    echo "  - $image_tag"
-    echo "  - $latest_tag"
+    # Output results
+    if [[ "$JSON_OUTPUT" == "true" ]]; then
+      # JSON output mode
+      output_json "$LATEST_REGISTRY_VERSION" "$VERSION_EXISTS" "$REGISTRY_DIGEST"
+    else
+      # Human-readable output
+      echo "Build completed successfully in ${elapsed}s"
+      echo "Created tags:"
+      echo "  - $image_tag"
+      echo "  - $latest_tag"
+    fi
   fi
 }
 
@@ -447,16 +482,64 @@ done
 preflight_checks
 
 # Read and validate versions
-echo "Reading versions.yaml..."
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+  echo "Reading versions.yaml..."
+fi
 extract_and_validate_versions
 
 # Detect architecture
 detect_architecture
 
+# Query registry for version staleness (skip in dry-run mode)
+LATEST_REGISTRY_VERSION=""
+VERSION_EXISTS=false
+REGISTRY_DIGEST=""
+
+if [[ "$DRY_RUN" != "true" ]]; then
+  # Show message only in non-JSON mode
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo "Querying quay.io registry..."
+  fi
+
+  # Get latest registry version
+  LATEST_REGISTRY_VERSION=$(query_latest_registry_version) || true
+
+  # Check if current version exists on registry
+  if check_version_exists "$IMAGE_VERSION"; then
+    VERSION_EXISTS=true
+    REGISTRY_DIGEST=$(get_registry_digest "$IMAGE_VERSION")
+  else
+    VERSION_EXISTS=false
+    REGISTRY_DIGEST=""
+  fi
+
+  # Display comparison results (only in non-JSON mode)
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    if [[ -n "$LATEST_REGISTRY_VERSION" ]]; then
+      echo "  Latest on quay.io: $LATEST_REGISTRY_VERSION"
+    else
+      echo "  Latest on quay.io: No versions published"
+    fi
+
+    echo "  Local version: $IMAGE_VERSION"
+
+    if [[ "$VERSION_EXISTS" == "true" ]]; then
+      echo "  Version $IMAGE_VERSION exists on registry"
+      if [[ "$VERBOSE" == "true" ]]; then
+        echo "  Registry digest: $REGISTRY_DIGEST"
+      fi
+    else
+      echo "  Version $IMAGE_VERSION not found on registry (new version)"
+    fi
+  fi
+fi
+
 # Show build info
-echo "Starting build..."
-echo "  Image version: $IMAGE_VERSION"
-echo "  MC CLI version: $MC_VERSION"
+if [[ "$JSON_OUTPUT" != "true" ]]; then
+  echo "Starting build..."
+  echo "  Image version: $IMAGE_VERSION"
+  echo "  MC CLI version: $MC_VERSION"
+fi
 
 # Perform build
 perform_build
