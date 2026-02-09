@@ -15,10 +15,14 @@ set -euo pipefail
 # Global flags
 DRY_RUN=false
 VERBOSE=false
+JSON_OUTPUT=false
 
 # File paths
 VERSIONS_FILE="container/versions.yaml"
 SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+
+# Registry configuration
+REGISTRY_REPO="${REGISTRY_REPO:-quay.io/dsquirre/mc-rhel10}"
 
 # Version variables (populated by extraction function)
 IMAGE_VERSION=""
@@ -35,9 +39,11 @@ Usage: build-container.sh [OPTIONS]
 Build MC container image with version injection from versions.yaml
 
 OPTIONS:
-  --dry-run     Preview build without executing (validation only)
-  --verbose     Show detailed build output
-  --help        Display this help message
+  --dry-run           Preview build without executing (validation only)
+  --verbose           Show detailed build output
+  --json              Output results in JSON format for CI/CD
+  --registry REPO     Override registry repository (default: quay.io/dsquirre/mc-rhel10)
+  --help              Display this help message
 
 EXAMPLES:
   # Normal build
@@ -49,9 +55,17 @@ EXAMPLES:
   # Build with detailed output
   ./build-container.sh --verbose
 
+  # Query different registry
+  ./build-container.sh --registry quay.io/myorg/myimage --dry-run
+
+  # Machine-readable JSON output
+  ./build-container.sh --json
+
 REQUIREMENTS:
   - podman (running machine on macOS/Windows)
   - yq (mikefarah/yq Go version)
+  - skopeo (for registry queries)
+  - jq (for JSON parsing)
   - container/versions.yaml file
 
 OUTPUT:
@@ -80,6 +94,24 @@ preflight_checks() {
       echo "Install from: https://github.com/mikefarah/yq" >&2
       failed=true
     fi
+  fi
+
+  # Check skopeo
+  if ! command -v skopeo &> /dev/null; then
+    echo "Error: skopeo is not installed" >&2
+    echo "Install from: https://github.com/containers/skopeo" >&2
+    echo "  macOS: brew install skopeo" >&2
+    echo "  Linux: dnf install skopeo (RHEL/Fedora) or apt install skopeo (Debian/Ubuntu)" >&2
+    failed=true
+  fi
+
+  # Check jq
+  if ! command -v jq &> /dev/null; then
+    echo "Error: jq is not installed" >&2
+    echo "Install from: https://jqlang.org" >&2
+    echo "  macOS: brew install jq" >&2
+    echo "  Linux: dnf install jq or apt install jq" >&2
+    failed=true
   fi
 
   # Check podman
@@ -164,6 +196,116 @@ extract_and_validate_versions() {
     # Store in associative array
     TOOL_VERSIONS["$tool_name"]="$tool_version"
   done <<< "$TOOL_NAMES"
+}
+
+#------------------------------------------------------------------------------
+# Registry Query Functions
+#------------------------------------------------------------------------------
+
+# Query registry for latest semantic version tag
+# Returns: highest semantic version, or empty string if no versions published
+query_latest_registry_version() {
+  local max_attempts=5
+  local base_delay=1
+  local attempt=1
+
+  while [[ $attempt -le $max_attempts ]]; do
+    # Try to list tags from registry
+    local response
+    local exit_code
+
+    response=$(skopeo list-tags "docker://${REGISTRY_REPO}" 2>&1) || exit_code=$?
+
+    if [[ -z "${exit_code:-}" ]]; then
+      # Success - parse tags
+      local latest_version
+      latest_version=$(echo "$response" | \
+        jq -r '.Tags[]' 2>/dev/null | \
+        grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | \
+        sort -V | \
+        tail -1)
+
+      echo "${latest_version:-}"
+      return 0
+
+    elif [[ "$response" =~ "429" ]] || [[ "$response" =~ "Too Many Requests" ]]; then
+      # Rate limited - check for retry-after header or use exponential backoff
+      local delay=$((base_delay * (1 << (attempt - 1))))
+      local jitter=$((RANDOM % (delay / 2 + 1)))
+      local total_delay=$((delay + jitter))
+
+      if [[ "$VERBOSE" == "true" ]]; then
+        echo "Rate limited by registry, retrying in ${total_delay}s (attempt $attempt/$max_attempts)..." >&2
+      fi
+
+      sleep "$total_delay"
+      ((attempt++))
+
+    elif [[ "$response" =~ "unauthorized" ]] || [[ "$response" =~ "authentication required" ]]; then
+      # Authentication failure - fail immediately
+      echo "Error: Authentication failed for registry $REGISTRY_REPO" >&2
+      echo "Run: podman login quay.io" >&2
+      return 1
+
+    else
+      # Other error - fail
+      echo "Error: Failed to query registry: $response" >&2
+      return 1
+    fi
+  done
+
+  # Max retries exceeded
+  echo "Error: Max retries exceeded querying registry" >&2
+  return 1
+}
+
+# Check if specific version exists on registry
+# Args: version (e.g., "1.0.5")
+# Returns: 0 if exists, 1 if not found
+check_version_exists() {
+  local version="$1"
+
+  if skopeo inspect "docker://${REGISTRY_REPO}:${version}" &>/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Get manifest digest for specific version
+# Args: version (e.g., "1.0.5")
+# Returns: digest string (sha256:...) or empty if version not found
+get_registry_digest() {
+  local version="$1"
+
+  local digest
+  digest=$(skopeo inspect "docker://${REGISTRY_REPO}:${version}" 2>/dev/null | \
+    jq -r '.Digest // empty')
+
+  echo "${digest:-}"
+}
+
+# Compare local build with registry
+# Returns: 0 if match, 1 if differ
+compare_with_registry() {
+  local version="$1"
+  local local_digest="$2"
+
+  # Get registry digest
+  local registry_digest
+  registry_digest=$(get_registry_digest "$version")
+
+  if [[ -z "$registry_digest" ]]; then
+    # Version not found on registry
+    return 1
+  fi
+
+  # Compare digests
+  if [[ "$local_digest" == "$registry_digest" ]]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 #------------------------------------------------------------------------------
@@ -272,6 +414,18 @@ while [[ $# -gt 0 ]]; do
     --verbose)
       VERBOSE=true
       shift
+      ;;
+    --json)
+      JSON_OUTPUT=true
+      shift
+      ;;
+    --registry)
+      if [[ -z "${2:-}" ]]; then
+        echo "Error: --registry requires a value" >&2
+        exit 1
+      fi
+      REGISTRY_REPO="$2"
+      shift 2
       ;;
     --help)
       show_usage
