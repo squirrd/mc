@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 
 Phase: 22 of 25 (Build Automation Core)
 Plan: 1 of 1 (complete)
-Status: Phase complete (automated build script with version injection)
-Last activity: 2026-02-09 — Completed 22-01-PLAN.md: build-container.sh with yq extraction, semver validation, podman orchestration
+Status: Phase complete and verified (all 6 success criteria met)
+Last activity: 2026-02-10 — Phase 22 verified: build-container.sh created, version extraction/validation automated, dual tagging functional
 
 Progress: [████████████████████░░░░] 87% (47/~48 total plans across all milestones)
 
@@ -39,9 +39,9 @@ Progress: [████████████████████░░░
 - Phase 22 completed in 4 minutes (build automation with yq and podman)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
-- Trend: Ultra-fast iteration on container tooling phases
+- Trend: Fast iteration on focused phases
 
-*Updated: 2026-02-09 after Phase 22 completion*
+*Updated: 2026-02-10 after Phase 22 completion*
 
 ## Accumulated Context
 
@@ -75,10 +75,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 **Phase 22 execution decisions:**
 - Manual while-loop argument parsing for long-form flags (--dry-run, --verbose, --help) instead of getopts
 - Comprehensive preflight validation: yq version (mikefarah/yq vs Python yq), podman machine status on macOS, versions.yaml existence
-- SECONDS builtin for build time tracking (zero subprocess overhead)
-- Default quiet mode (podman --quiet) for CI-friendly output, verbose flag available for debugging
-- Architecture detection supports both macOS (arm64) and Linux (aarch64/x86_64) with normalization to standard names
-- Removed plan's amd64-only restriction: Containerfile supports both architectures, no artificial limitation needed
+- Removed artificial amd64-only restriction: Containerfile already supports arm64, artificial limitation would break macOS Apple Silicon
+- Multi-architecture support: x86_64→amd64, arm64/aarch64→arm64 normalization for cross-platform compatibility
+- CI-friendly defaults: Quiet mode (--quiet) by default, verbose flag for debugging, build time tracking with SECONDS builtin
+- Dry-run performs full validation: Same preflight checks + version extraction to ensure reliable CI pipeline preview
 
 ### Pending Todos
 
@@ -90,10 +90,10 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-09
-Stopped at: Completed Phase 22 Plan 01
+Last session: 2026-02-10
+Stopped at: Phase 22 verified and complete
 Resume file: None
-Next action: `/gsd:discuss-phase 23` to gather context for Quay Registry Integration
+Next action: `/gsd:discuss-phase 23` to gather context for Quay.io Integration phase
 
 ---
-*Phase 22 complete: Automated build orchestration with version injection, dual tagging, dry-run preview*
+*Phase 22 complete: build-container.sh with yq extraction, semver validation, podman orchestration, dual tagging, dry-run preview*
