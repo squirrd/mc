@@ -10,31 +10,20 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.2 (2026-02-08)
+**Latest Release:** v2.0.3 (2026-02-10)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
 - ✓ Automatic Red Hat API integration for case metadata resolution
 - ✓ Container lifecycle management (create, list, stop, delete, exec)
 - ✓ New terminal window attachment for seamless multi-case workflow
-- ✓ Container image with essential tools (mc, RHEL 10 UBI base)
-- ✓ Quay.io registry integration with auto-pull and local fallback
+- ✓ Container image with multi-stage architecture and efficient layer caching
+- ✓ Quay.io registry integration with auto-pull, auto-versioning, and digest-based publishing
 - ✓ Modern distribution via uv tool (pipx/uv tool install git+)
 - ✓ Window ID tracking system eliminating duplicate terminal windows (macOS and Linux X11)
 - ✓ Self-healing window registry with automatic cleanup and reconcile command
+- ✓ Build automation with version management and intelligent patch bumping
 - ✓ Production-ready test suite: 530 tests passing with 74.65% coverage
-
-## Current Milestone: v2.0.3 Container Tools
-
-**Goal:** Multi-stage container architecture with efficient layer caching and versioned tool management
-
-**Target features:**
-- Multi-stage Containerfile (mc-builder → tool-downloader stages → final image)
-- Independent image versioning (semver x.y.z) separate from MC CLI version
-- versions.yaml config file tracking image, mc, and tool versions
-- build-container.sh script with auto-patch-bump and quay.io integration
-- OCM CLI tool as proof-of-concept (verify pattern before scaling to other tools)
-- Efficient rebuilds: only changed stages rebuild, not entire image
 
 ## Requirements
 
@@ -121,34 +110,25 @@ Shipped in v1.0 (2026-01-22):
 - ✓ OAuth token management (offline token to access token) — existing (enhanced with caching in v1.0)
 - ✓ Workspace file structure generation based on case data — existing
 
+Shipped in v2.0.3 (2026-02-10):
+
+**Container Tools:**
+- ✓ Multi-stage Containerfile with three named stages (ocm-downloader, mc-builder, final) — v2.0.3
+- ✓ ARG parameter injection architecture for build script automation — v2.0.3
+- ✓ Layer caching optimization achieving 12-layer cache reuse on unchanged rebuilds — v2.0.3
+- ✓ Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.2) — v2.0.3
+- ✓ versions.yaml config file tracking image, MC, and tool versions — v2.0.3
+- ✓ build-container.sh script with yq version extraction and podman orchestration — v2.0.3
+- ✓ Registry query capability via skopeo with exponential backoff retry — v2.0.3
+- ✓ Intelligent auto-versioning with digest-based patch bumping — v2.0.3
+- ✓ Automatic publishing to quay.io when image content changes — v2.0.3
+- ✓ OCM CLI tool integration with architecture-aware downloads (amd64/arm64) — v2.0.3
+- ✓ SHA256 checksum verification for downloaded tool binaries — v2.0.3
+- ✓ Multi-stage pattern proven scalable for additional tools — v2.0.3
+
 ### Active
 
-v2.0.3 Container Tools milestone:
-
-**Multi-stage Architecture:**
-- [ ] Convert single-stage Containerfile to multi-stage pattern
-- [ ] mc-builder stage packages MC CLI from source
-- [ ] tool-downloader stages fetch versioned binaries
-- [ ] Final stage copies artifacts with minimal layers
-
-**Version Management:**
-- [ ] Image versioning independent from MC CLI version (semver x.y.z)
-- [ ] versions.yaml config file (image, mc, tools sections)
-- [ ] Auto-patch-bump when tool versions change
-- [ ] Manual minor bump when new tools added
-
-**Build Tooling:**
-- [ ] build-container.sh script reads versions.yaml
-- [ ] Query quay.io API for latest image tag
-- [ ] Auto-bump patch version if tool versions changed
-- [ ] Support --push flag for quay.io publishing
-- [ ] Tag both versioned (1.0.0) and latest
-
-**OCM Tool Integration (POC):**
-- [ ] OCM downloader stage fetches versioned binary
-- [ ] OCM available in final image at /usr/local/bin/ocm
-- [ ] `ocm version` returns expected version from versions.yaml
-- [ ] Verify multi-stage pattern scales to additional tools
+No active requirements - ready for next milestone via `/gsd:new-milestone`
 
 ### Out of Scope
 
@@ -162,28 +142,32 @@ v2.0.3 Container Tools milestone:
 
 ## Context
 
-**Current State (v2.0.2 shipped 2026-02-08):**
+**Current State (v2.0.3 shipped 2026-02-10):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
-- 7,349 lines of production Python code (cumulative v1.0 + v2.0 + v2.0.1 + v2.0.2)
+- 7,349 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
 - External dependencies: Red Hat API, Podman, SQLite
-- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, wmctrl/xdotool (Linux X11)
+- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, wmctrl/xdotool (Linux X11), skopeo, yq
 - Configuration: TOML-based (~/mc/config/config.toml) with auto-migration
 - Type-safe: mypy strict mode passing with 100% type coverage
+- Container build: Multi-stage architecture with automated versioning and registry publishing
 
 **Key Features:**
 - Container orchestration with per-case isolated workspaces
 - Automatic terminal attachment (iTerm2, Terminal.app, gnome-terminal, konsole)
 - Container lifecycle management (create, list, stop, delete, exec)
+- Multi-stage container builds with 12-layer cache optimization
+- Build automation with intelligent auto-versioning and registry publishing
+- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.2)
 - Red Hat API integration with 5-minute cache TTL
 - SQLite state persistence and reconciliation
 - Parallel downloads (8 concurrent threads) with rich progress bars
 - Structured logging with sensitive data redaction
 - Comprehensive error handling with retry logic
-- Security hardening (SSL verification, token caching, input validation)
+- Security hardening (SSL verification, token caching, input validation, SHA256 checksums)
 - Modern Python 3.11+ syntax with full type hints
 
-**Directory Structure (consolidated v2.0.1):**
+**Directory Structure (v2.0.3):**
 ```
 ~/mc/
 ├── config/
@@ -191,13 +175,20 @@ v2.0.3 Container Tools milestone:
 │   └── cache/               # Case metadata cache (SQLite)
 ├── state/
 │   └── containers.db        # Container state (SQLite)
-└── cases/
-    └── <customer>/
-        └── <case>/          # Case workspaces
+├── .registry-auth/
+│   └── auth.json            # Registry credentials (gitignored)
+├── cases/
+│   └── <customer>/
+│       └── <case>/          # Case workspaces
+└── container/
+    ├── Containerfile        # Multi-stage build
+    ├── versions.yaml        # Version configuration
+    ├── build-container.sh   # Build automation
+    └── test-integration     # OCM verification
 ```
 
 **Known Technical Debt:**
-- None - v2.0.2 achieved zero test failures and zero tech debt
+- None - v2.0.3 achieved zero test failures and zero tech debt
 
 ## Constraints
 
@@ -227,4 +218,4 @@ v2.0.3 Container Tools milestone:
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-09 after starting v2.0.3 milestone*
+*Last updated: 2026-02-10 after v2.0.3 milestone completion*

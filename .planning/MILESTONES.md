@@ -1,5 +1,33 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.3 Container Tools (Shipped: 2026-02-10)
+
+**Delivered:** Multi-stage container architecture with efficient layer caching and versioned tool management
+
+**Phases completed:** 20-25 (6 phases, 9 plans total)
+
+**Key accomplishments:**
+
+- Multi-stage Containerfile with three named stages (ocm-downloader, mc-builder, final) achieving 12-layer cache optimization for fast rebuilds
+- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.2) enabling tool updates without code releases
+- Build automation pipeline with yq version extraction, semver validation, and podman orchestration supporting dry-run and verbose modes
+- Registry integration with skopeo query, exponential backoff retry logic, and digest-based change detection
+- Intelligent auto-versioning with patch bumping based on digest comparison and automatic publishing to quay.io
+- OCM CLI proof-of-concept with architecture-aware downloads (amd64/arm64), SHA256 verification, and functional validation
+
+**Stats:**
+
+- 45 files created/modified
+- 972 lines of Bash/YAML (container infrastructure)
+- 6 phases, 9 plans (including 2 gap closure plans)
+- 14 hours from phase 20 start to phase 25 complete (2026-02-09, 21:14 → 2026-02-10, 11:30)
+
+**Git range:** `5c6fdeb` (feat(20-01): multi-stage Containerfile) → `1088286` (docs(25): complete Registry Publishing & OCM Verification phase)
+
+**What's next:** Start next milestone via `/gsd:new-milestone`
+
+---
+
 ## v2.0.2 Window Tracking (Shipped: 2026-02-08)
 
 **Delivered:** Eliminate duplicate terminal windows by implementing window ID tracking system
