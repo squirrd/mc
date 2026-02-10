@@ -12,6 +12,10 @@
 
 set -euo pipefail
 
+# Detect MC base directory (repository root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MC_BASE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 # Global flags
 DRY_RUN=false
 VERBOSE=false
@@ -157,6 +161,44 @@ preflight_checks() {
   if [[ "$failed" == "true" ]]; then
     exit 1
   fi
+}
+
+#------------------------------------------------------------------------------
+# Registry Authentication Validation
+#------------------------------------------------------------------------------
+validate_registry_auth() {
+  local registry="$1"
+  local authfile="${MC_BASE}/.registry-auth/auth.json"
+
+  # Check if auth file exists
+  if [[ ! -f "$authfile" ]]; then
+    echo "Error: Registry auth file not found: $authfile" >&2
+    echo "" >&2
+    echo "To authenticate with quay.io:" >&2
+    echo "  podman login quay.io --authfile=${authfile}" >&2
+    echo "" >&2
+    echo "This stores credentials persistently for automated builds." >&2
+    return 1
+  fi
+
+  # Verify credentials exist and are valid for registry
+  if ! podman login --authfile="${authfile}" --get-login "${registry}" >/dev/null 2>&1; then
+    echo "Error: No valid credentials found for ${registry}" >&2
+    echo "" >&2
+    echo "To authenticate:" >&2
+    echo "  podman login ${registry} --authfile=${authfile}" >&2
+    echo "" >&2
+    echo "For Quay.io robot accounts, use:" >&2
+    echo "  Username: <org>+<robot-name>" >&2
+    echo "  Password: Robot token from Quay.io dashboard" >&2
+    return 1
+  fi
+
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo "✓ Registry credentials validated for ${registry}"
+  fi
+
+  return 0
 }
 
 #------------------------------------------------------------------------------
@@ -411,6 +453,11 @@ auto_version_and_push() {
   # Reset timer
   SECONDS=0
 
+  # Validate registry credentials before building
+  if ! validate_registry_auth "$REGISTRY_REPO"; then
+    exit 1
+  fi
+
   # Parse minor version into components
   IFS='.' read -r MAJOR MINOR <<< "$MINOR_VERSION"
 
@@ -567,8 +614,8 @@ auto_version_and_push() {
     echo "Pushing $IMAGE_VERSION to registry..."
   fi
 
-  podman push "$version_tag" "docker://${REGISTRY_REPO}:${IMAGE_VERSION}"
-  podman push "$latest_tag" "docker://${REGISTRY_REPO}:latest"
+  podman push --authfile="${MC_BASE}/.registry-auth/auth.json" "$version_tag" "docker://${REGISTRY_REPO}:${IMAGE_VERSION}"
+  podman push --authfile="${MC_BASE}/.registry-auth/auth.json" "$latest_tag" "docker://${REGISTRY_REPO}:latest"
 
   pushed=true
 
