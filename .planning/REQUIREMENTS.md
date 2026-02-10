@@ -107,18 +107,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUILD-03 | Phase 22 | Complete |
 | BUILD-04 | Phase 22 | Complete |
 | BUILD-05 | Phase 22 | Complete |
-| BUILD-06 | Phase 25 | Pending |
+| BUILD-06 | Phase 25 | Complete |
 | BUILD-07 | Phase 23 | Complete |
 | BUILD-08 | Phase 24 | Complete |
 | BUILD-09 | Phase 22 | Complete |
 | BUILD-10 | Phase 22 | Complete |
-| TOOL-01 | Phase 25 | Pending |
-| TOOL-02 | Phase 25 | Pending |
-| TOOL-03 | Phase 25 | Pending |
-| TOOL-04 | Phase 25 | Pending |
-| TOOL-05 | Phase 25 | Pending |
-| TOOL-06 | Phase 25 | Pending |
-| TOOL-07 | Phase 25 | Pending |
+| TOOL-01 | Phase 25 | Complete |
+| TOOL-02 | Phase 25 | Complete |
+| TOOL-03 | Phase 25 | Complete |
+| TOOL-04 | Phase 25 | Complete |
+| TOOL-05 | Phase 25 | Complete |
+| TOOL-06 | Phase 25 | Complete |
+| TOOL-07 | Phase 25 | Complete |
 
 **Coverage:**
 - v2.0.3 requirements: 28 total
