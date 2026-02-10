@@ -548,6 +548,11 @@ auto_version_and_push() {
     build_cmd+=("--build-arg" "${arg_name}=${TOOL_VERSIONS[$tool_name]}")
   done
 
+  # Add SOURCE_DATE_EPOCH for reproducible builds
+  # This makes Python bytecode (.pyc), gzip timestamps, and other build artifacts deterministic
+  # Use a fixed epoch (2024-01-01 00:00:00 UTC) for all builds with same source
+  build_cmd+=("--build-arg" "SOURCE_DATE_EPOCH=1704067200")
+
   # Add context path
   build_cmd+=(.)
 
@@ -582,26 +587,52 @@ auto_version_and_push() {
   # Execute build
   "${build_cmd[@]}"
 
-  # Get local image digest
-  local local_digest
-  local_digest=$(podman inspect "$temp_tag" 2>/dev/null | jq -r '.[0].Digest')
+  # Strategy: Push to test tag, compare registry manifests, then decide bump/push
+  # Can't compare local vs registry because podman push recompresses layers
+  # Must compare post-push registry digest with previous version's registry digest
 
-  if [[ -z "$local_digest" ]]; then
-    echo "Error: Failed to get digest for built image" >&2
-    exit 1
-  fi
-
-  # Compare digests if registry version exists
   local bumped=false
   local pushed=false
 
   if [[ "$current_patch" -ge 0 ]]; then
-    # Get registry digest for comparison
-    local registry_digest
-    registry_digest=$(get_registry_digest "$latest_registry_tag")
+    # Previous version exists - push to test tag and compare
+    local test_tag="mc-rhel10:test-digest"
+    local test_registry_tag="test-digest"
 
-    if [[ "$local_digest" == "$registry_digest" ]]; then
-      # Digests match - no-op
+    podman tag "$temp_tag" "$test_tag"
+
+    if [[ "$JSON_OUTPUT" != "true" ]]; then
+      echo "Pushing to test tag for digest comparison..."
+    fi
+
+    # Push test tag to registry (with retry handling)
+    podman push \
+      --retry 5 \
+      --retry-delay 2s \
+      --authfile="${REGISTRY_AUTH_FILE}" \
+      "$test_tag" \
+      "docker://${REGISTRY_REPO}:${test_registry_tag}" &>/dev/null
+
+    # Get digest of what was just pushed
+    local test_digest
+    test_digest=$(skopeo inspect "docker://${REGISTRY_REPO}:${test_registry_tag}" 2>/dev/null | \
+      jq -r '.Digest')
+
+    # Get digest of previous version
+    local prev_digest
+    prev_digest=$(skopeo inspect "docker://${REGISTRY_REPO}:${latest_registry_tag}" 2>/dev/null | \
+      jq -r '.Digest')
+
+    if [[ "$test_digest" == "$prev_digest" ]]; then
+      # Digests match - image is identical, clean up test tag
+      if [[ "$JSON_OUTPUT" != "true" ]]; then
+        echo "Image unchanged (manifest match), cleaning up test tag..."
+      fi
+
+      # Delete test tag from registry
+      skopeo delete "docker://${REGISTRY_REPO}:${test_registry_tag}" \
+        --authfile="${REGISTRY_AUTH_FILE}" &>/dev/null || true
+
       local elapsed=$SECONDS
 
       if [[ "$JSON_OUTPUT" == "true" ]]; then
@@ -613,9 +644,14 @@ auto_version_and_push() {
       return 0
     fi
 
+    # Digests differ - delete test tag and proceed with version bump
     if [[ "$JSON_OUTPUT" != "true" ]]; then
       echo "Image changed (digest mismatch), bumping version..."
     fi
+
+    skopeo delete "docker://${REGISTRY_REPO}:${test_registry_tag}" \
+      --authfile="${REGISTRY_AUTH_FILE}" &>/dev/null || true
+
   else
     if [[ "$JSON_OUTPUT" != "true" ]]; then
       echo "First build for ${MINOR_VERSION}.*, creating initial version..."
@@ -654,9 +690,9 @@ auto_version_and_push() {
   fi
 
   # Add delay before push to separate pre-push API calls from push blob checks
-  # Pre-push queries (find_latest_patch, get_registry_digest, check_version_exists)
-  # make multiple API calls to quay.io. Immediate push adds blob mount checks which
-  # can exceed "few requests per second" rate limit when combined.
+  # Pre-push queries (find_latest_patch, check_version_exists) make multiple
+  # API calls to quay.io. Immediate push adds blob mount checks which can
+  # exceed "few requests per second" rate limit when combined.
   # 10 second delay allows rate limit window to reset between query and push phases.
   sleep 10
 
