@@ -144,14 +144,14 @@ tools:
 ### List tags on registry:
 
 ```bash
-skopeo list-tags docker://quay.io/dsquirre/mc-rhel10
+skopeo list-tags docker://quay.io/rhn_support_dsquirre/mc-container
 ```
 
 ### Inspect image:
 
 ```bash
-podman pull quay.io/dsquirre/mc-rhel10:latest
-podman run --rm quay.io/dsquirre/mc-rhel10:latest ocm version
+podman pull quay.io/rhn_support_dsquirre/mc-container:latest
+podman run --rm quay.io/rhn_support_dsquirre/mc-container:latest ocm version
 ```
 
 ## Testing

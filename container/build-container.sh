@@ -27,7 +27,8 @@ SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 MINOR_VERSION_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
 # Registry configuration
-REGISTRY_REPO="${REGISTRY_REPO:-quay.io/dsquirre/mc-rhel10}"
+REGISTRY_REPO="${REGISTRY_REPO:-quay.io/rhn_support_dsquirre/mc-container}"
+REGISTRY_AUTH_FILE="${REGISTRY_AUTH_FILE:-${HOME}/mc/auth/podman.token}"
 
 # Version variables (populated by extraction function)
 IMAGE_VERSION=""        # Full semantic version (x.y.z) calculated at build time
@@ -48,7 +49,7 @@ OPTIONS:
   --dry-run           Preview build without executing (validation only)
   --verbose           Show detailed build output
   --json              Output results in JSON format for CI/CD
-  --registry REPO     Override registry repository (default: quay.io/dsquirre/mc-rhel10)
+  --registry REPO     Override registry repository (default: quay.io/rhn_support_dsquirre/mc-container)
   --help              Display this help message
 
 EXAMPLES:
@@ -167,35 +168,73 @@ preflight_checks() {
 # Registry Authentication Validation
 #------------------------------------------------------------------------------
 validate_registry_auth() {
-  local registry="$1"
-  local authfile="${MC_BASE}/.registry-auth/auth.json"
+  local repo="$1"
+  local authfile="${REGISTRY_AUTH_FILE}"
+
+  # Extract registry hostname from repository path (e.g., quay.io from quay.io/dsquirre/mc-rhel10)
+  local registry_host
+  registry_host=$(echo "$repo" | cut -d'/' -f1)
+
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo "Validating registry authentication for ${repo}..."
+  fi
+
+  # Ensure auth directory exists
+  local auth_dir
+  auth_dir="$(dirname "${authfile}")"
+  if [[ ! -d "$auth_dir" ]]; then
+    mkdir -p "$auth_dir"
+  fi
 
   # Check if auth file exists
   if [[ ! -f "$authfile" ]]; then
     echo "Error: Registry auth file not found: $authfile" >&2
     echo "" >&2
     echo "To authenticate with quay.io:" >&2
-    echo "  podman login quay.io --authfile=${authfile}" >&2
+    echo "  podman login ${registry_host} --authfile=${authfile}" >&2
     echo "" >&2
-    echo "This stores credentials persistently for automated builds." >&2
+    echo "This stores credentials outside the repository for security." >&2
+    echo "Authentication check: FAILED (auth file missing)" >&2
     return 1
   fi
 
-  # Verify credentials exist and are valid for registry
-  if ! podman login --authfile="${authfile}" --get-login "${registry}" >/dev/null 2>&1; then
-    echo "Error: No valid credentials found for ${registry}" >&2
+  # Verify credentials exist and are valid for registry hostname
+  local username
+  if ! username=$(podman login "${registry_host}" --authfile="${authfile}" --get-login 2>&1); then
+    echo "Error: No valid credentials found for ${registry_host}" >&2
     echo "" >&2
     echo "To authenticate:" >&2
-    echo "  podman login ${registry} --authfile=${authfile}" >&2
+    echo "  podman login ${registry_host} --authfile=${authfile}" >&2
     echo "" >&2
     echo "For Quay.io robot accounts, use:" >&2
     echo "  Username: <org>+<robot-name>" >&2
     echo "  Password: Robot token from Quay.io dashboard" >&2
+    echo "Authentication check: FAILED (no credentials for ${registry_host})" >&2
+    return 1
+  fi
+
+  # Test actual repository access by attempting to list tags
+  local test_output
+  if ! test_output=$(skopeo list-tags --authfile="${authfile}" "docker://${repo}" 2>&1); then
+    echo "Error: Failed to access repository ${repo}" >&2
+    echo "Logged in as '${username}' to ${registry_host} but repository access failed" >&2
+    echo "Registry response: ${test_output}" >&2
+    echo "" >&2
+    echo "This could indicate:" >&2
+    echo "  - User '${username}' lacks permissions for repository ${repo}" >&2
+    echo "  - Invalid or expired credentials" >&2
+    echo "  - Repository does not exist" >&2
+    echo "" >&2
+    echo "For Quay.io, ensure you're using a robot account with write permissions:" >&2
+    echo "  1. Go to https://quay.io/repository/${repo#*/}?tab=settings" >&2
+    echo "  2. Create a robot account with write permissions" >&2
+    echo "  3. Login: podman login ${registry_host} --authfile=${authfile}" >&2
+    echo "Authentication check: FAILED (repository access denied for user ${username})" >&2
     return 1
   fi
 
   if [[ "$JSON_OUTPUT" != "true" ]]; then
-    echo "✓ Registry credentials validated for ${registry}"
+    echo "✓ Registry credentials validated for ${repo} (user: ${username})"
   fi
 
   return 0
@@ -614,8 +653,27 @@ auto_version_and_push() {
     echo "Pushing $IMAGE_VERSION to registry..."
   fi
 
-  podman push --authfile="${MC_BASE}/.registry-auth/auth.json" "$version_tag" "docker://${REGISTRY_REPO}:${IMAGE_VERSION}"
-  podman push --authfile="${MC_BASE}/.registry-auth/auth.json" "$latest_tag" "docker://${REGISTRY_REPO}:latest"
+  # Add delay before push to separate pre-push API calls from push blob checks
+  # Pre-push queries (find_latest_patch, get_registry_digest, check_version_exists)
+  # make multiple API calls to quay.io. Immediate push adds blob mount checks which
+  # can exceed "few requests per second" rate limit when combined.
+  # 10 second delay allows rate limit window to reset between query and push phases.
+  sleep 10
+
+  # Use podman push with retry handling for transient errors
+  podman push \
+    --retry 5 \
+    --retry-delay 2s \
+    --authfile="${REGISTRY_AUTH_FILE}" \
+    "$version_tag" \
+    "docker://${REGISTRY_REPO}:${IMAGE_VERSION}"
+
+  podman push \
+    --retry 5 \
+    --retry-delay 2s \
+    --authfile="${REGISTRY_AUTH_FILE}" \
+    "$latest_tag" \
+    "docker://${REGISTRY_REPO}:latest"
 
   pushed=true
 
