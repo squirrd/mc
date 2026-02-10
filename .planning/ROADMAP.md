@@ -216,17 +216,18 @@ Plans:
 **Depends on**: Phase 24
 **Requirements**: BUILD-06, TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05, TOOL-06, TOOL-07
 **Success Criteria** (what must be TRUE):
-  1. Build script supports --push flag to publish to quay.io registry
-  2. Published image has both versioned tag (1.0.0) and :latest tag
-  3. OCM downloader stage fetches ocm-linux-amd64 binary from GitHub releases using ARG OCM_VERSION
-  4. Running `ocm version` in container returns version matching versions.yaml
-  5. OCM download includes SHA256 checksum verification that fails build on mismatch
-  6. OCM binary is executable and functional (not just present)
-**Plans**: TBD
+  1. Build script validates registry credentials before building (pre-flight check)
+  2. Registry authentication stored persistently in MC base directory
+  3. Published image has both versioned tag (1.0.0) and :latest tag
+  4. OCM downloader stage fetches ocm-linux-amd64 binary from GitHub releases using ARG OCM_VERSION
+  5. Running `ocm version` in container returns version matching versions.yaml
+  6. OCM download includes SHA256 checksum verification that fails build on mismatch
+  7. OCM binary is executable and functional (not just present)
+**Plans**: 2 plans
 
 Plans:
-- [ ] 25-01: TBD
-- [ ] 25-02: TBD
+- [ ] 25-01-PLAN.md — Registry authentication and pre-flight credential validation
+- [ ] 25-02-PLAN.md — OCM integration testing and version verification
 
 ## Progress
 
@@ -260,4 +261,4 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 22. Build Automation Core | v2.0.3 | 1/1 | Complete | 2026-02-10 |
 | 23. Quay.io Integration | v2.0.3 | 1/1 | Complete | 2026-02-10 |
 | 24. Auto-Versioning Logic | v2.0.3 | 2/2 | Complete | 2026-02-10 |
-| 25. Registry Publishing & OCM Verification | v2.0.3 | 0/TBD | Not started | - |
+| 25. Registry Publishing & OCM Verification | v2.0.3 | 0/2 | Not started | - |
