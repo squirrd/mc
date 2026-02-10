@@ -38,16 +38,23 @@ echo "${ACTUAL_OUTPUT}"
 echo ""
 
 # Extract version from output
-# OCM version output format: Version: 1.0.10
-# Alternative format: version.Info{GitVersion:"v1.0.10", ...}
-# Handle both formats
-if [[ "$ACTUAL_OUTPUT" =~ Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+# OCM version output formats:
+#   - Plain version: "1.0.10"
+#   - Labeled format: "Version: 1.0.10"
+#   - Go struct format: "version.Info{GitVersion:"v1.0.10", ...}"
+# Handle all three formats
+if [[ "$ACTUAL_OUTPUT" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  # Plain version number (most common)
+  ACTUAL_VERSION="${BASH_REMATCH[1]}"
+elif [[ "$ACTUAL_OUTPUT" =~ Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+  # Labeled format
   ACTUAL_VERSION="${BASH_REMATCH[1]}"
 elif [[ "$ACTUAL_OUTPUT" =~ GitVersion:\"v([0-9]+\.[0-9]+\.[0-9]+)\" ]]; then
+  # Go struct format
   ACTUAL_VERSION="${BASH_REMATCH[1]}"
 else
   echo "ERROR: Could not parse version from OCM output" >&2
-  echo "Expected format: 'Version: x.y.z' or 'GitVersion:\"vx.y.z\"'" >&2
+  echo "Expected format: 'x.y.z', 'Version: x.y.z', or 'GitVersion:\"vx.y.z\"'" >&2
   exit 1
 fi
 
