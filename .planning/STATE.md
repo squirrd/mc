@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 
 ## Current Position
 
-Phase: 24 of 25 (Auto-Versioning Logic)
-Plan: 2 of 2 (complete)
-Status: Phase complete (auto-versioning with semver 2.0.0 compliant validation)
-Last activity: 2026-02-10 — Completed 24-02-PLAN.md: gap closure for semver validation fix
+Phase: 25 of 25 (Registry Publishing & OCM Verification)
+Plan: 1 of 1 (complete)
+Status: Phase complete (registry auth infrastructure with pre-flight validation)
+Last activity: 2026-02-10 — Completed 25-01-PLAN.md: registry authentication infrastructure
 
-Progress: [███████████████████████░] 94% (50/~53 total plans across all milestones)
+Progress: [████████████████████████] 96% (51/~53 total plans across all milestones)
 
 ## Performance Metrics
 
@@ -31,7 +31,7 @@ Progress: [███████████████████████
 | Milestone | Phases | Plans | Duration | Status |
 |-----------|--------|-------|----------|--------|
 | v2.0.2 Window Tracking | 15-19 | 10/10 | 6 hours | ✅ Shipped 2026-02-08 |
-| v2.0.3 Container Tools | 20-25 | 6/6 | In progress | 🚧 Phase 24 complete (auto-versioning) |
+| v2.0.3 Container Tools | 20-25 | 6/6 | 13 minutes | ✅ Phase 25 complete (registry auth) |
 
 **Recent Trend:**
 - v2.0.2 delivered in <1 day (10 plans, 5 phases, 6 hours)
@@ -39,11 +39,13 @@ Progress: [███████████████████████
 - Phase 22 completed in 4 minutes (build automation with yq and podman)
 - Phase 23 completed in 3 minutes (registry query with skopeo and digest comparison)
 - Phase 24 completed in 7 minutes total (4 min plan 01 + 3 min gap closure plan 02)
+- Phase 25 completed in 3 minutes (registry auth infrastructure)
+- v2.0.3 milestone: 6 phases completed in 13 minutes total
 - 530 tests passing with 74.65% coverage
-- Zero test failures, zero tech debt at v2.0.2 ship
-- Trend: Fast iteration on focused phases (averaging 3-4 min per phase)
+- Zero test failures, zero tech debt
+- Trend: Fast iteration on focused phases (averaging 3 min per phase in v2.0.3)
 
-*Updated: 2026-02-10 after Phase 24 gap closure completion*
+*Updated: 2026-02-10 after Phase 25 completion*
 
 ## Accumulated Context
 
@@ -101,6 +103,12 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - MINOR_VERSION_REGEX now enforces semver 2.0.0 spec by rejecting leading zeros (01.2, 1.02, 00.0)
 - Regex pattern matches SEMVER_REGEX approach for consistency: (0|[1-9][0-9]*)
 
+**Phase 25 execution decisions:**
+- Auth.json in MC base directory (not container/) for sharing with future mc-cli registry operations
+- Pre-flight validation with podman login --get-login prevents wasted 2-5 minute build cycles on auth failures
+- File permissions 600 (owner read/write only) - auth field contains base64-encoded credentials (not encrypted)
+- Gitignore .registry-auth/ directory prevents accidental credential commits to version control
+
 ### Pending Todos
 
 None yet.
@@ -112,9 +120,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 24 complete (gap closure plan 24-02 completed)
+Stopped at: Phase 25 complete (plan 25-01 completed)
 Resume file: None
-Next action: `/gsd:discuss-phase 25` to gather context for Registry Publishing phase
+Next action: v2.0.3 milestone complete - all 6 phases shipped (Foundation → Version → Build → Registry → Auto-version → Auth)
 
 ---
-*Phase 24 complete: Auto-versioning system with digest-based bumping, registry-as-source-of-truth, semver 2.0.0 compliant validation, and automatic publishing to quay.io*
+*Phase 25 complete: Registry authentication infrastructure with persistent credentials, pre-flight validation, and helpful error messages preventing wasted build time*
