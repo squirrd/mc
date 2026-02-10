@@ -204,10 +204,12 @@ Plans:
   3. User can manually update minor version in versions.yaml when adding new tools
   4. Build script validates version numbers follow semantic versioning format
   5. Build script prevents version conflicts (local version already exists on registry)
-**Plans**: 1 plan
+**Plans**: 2 plans
+**Status**: Complete
 
 Plans:
-- [ ] 24-01-PLAN.md — Auto-versioning logic with digest-based bumping and auto-push
+- [x] 24-01-PLAN.md — Auto-versioning logic with digest-based bumping and auto-push
+- [x] 24-02-PLAN.md — Fix semver validation to reject leading zeros (gap closure)
 
 ### Phase 25: Registry Publishing & OCM Verification
 **Goal**: Publish versioned images to quay.io and verify OCM tool integration end-to-end
@@ -257,5 +259,5 @@ Phases execute in numeric order: 20 → 21 → 22 → 23 → 24 → 25
 | 21. Version Management System | v2.0.3 | 1/1 | Complete | 2026-02-09 |
 | 22. Build Automation Core | v2.0.3 | 1/1 | Complete | 2026-02-10 |
 | 23. Quay.io Integration | v2.0.3 | 1/1 | Complete | 2026-02-10 |
-| 24. Auto-Versioning Logic | v2.0.3 | 0/1 | Not started | - |
+| 24. Auto-Versioning Logic | v2.0.3 | 2/2 | Complete | 2026-02-10 |
 | 25. Registry Publishing & OCM Verification | v2.0.3 | 0/TBD | Not started | - |

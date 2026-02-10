@@ -100,8 +100,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VER-03 | Phase 21 | Pending |
 | VER-04 | Phase 21 | Pending |
 | VER-05 | Phase 23 | Complete |
-| VER-06 | Phase 24 | Pending |
-| VER-07 | Phase 24 | Pending |
+| VER-06 | Phase 24 | Complete |
+| VER-07 | Phase 24 | Complete |
 | BUILD-01 | Phase 22 | Complete |
 | BUILD-02 | Phase 22 | Complete |
 | BUILD-03 | Phase 22 | Complete |
@@ -109,7 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUILD-05 | Phase 22 | Complete |
 | BUILD-06 | Phase 25 | Pending |
 | BUILD-07 | Phase 23 | Complete |
-| BUILD-08 | Phase 24 | Pending |
+| BUILD-08 | Phase 24 | Complete |
 | BUILD-09 | Phase 22 | Complete |
 | BUILD-10 | Phase 22 | Complete |
 | TOOL-01 | Phase 25 | Pending |
