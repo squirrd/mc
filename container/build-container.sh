@@ -19,13 +19,15 @@ JSON_OUTPUT=false
 
 # File paths
 VERSIONS_FILE="container/versions.yaml"
-SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+MINOR_VERSION_REGEX='^[0-9]+\.[0-9]+$'
 
 # Registry configuration
 REGISTRY_REPO="${REGISTRY_REPO:-quay.io/dsquirre/mc-rhel10}"
 
 # Version variables (populated by extraction function)
-IMAGE_VERSION=""
+IMAGE_VERSION=""        # Full semantic version (x.y.z) calculated at build time
+MINOR_VERSION=""        # Minor version (x.y) from versions.yaml
 MC_VERSION=""
 declare -A TOOL_VERSIONS
 
@@ -73,6 +75,22 @@ OUTPUT:
   - mc-rhel10:<version> (from versions.yaml)
   - mc-rhel10:latest
 EOF
+}
+
+#------------------------------------------------------------------------------
+# Semantic Version Validation
+#------------------------------------------------------------------------------
+validate_semver() {
+  local version="$1"
+
+  # Semver 2.0.0 specification regex:
+  # - (0|[1-9][0-9]*) = 0 or non-zero integer without leading zeros
+  # - Must have all three components: major.minor.patch
+  if [[ "$version" =~ $SEMVER_REGEX ]]; then
+    return 0  # valid
+  else
+    return 1  # invalid
+  fi
 }
 
 #------------------------------------------------------------------------------
@@ -145,12 +163,12 @@ preflight_checks() {
 # Version Extraction and Validation
 #------------------------------------------------------------------------------
 extract_and_validate_versions() {
-  # Extract image and MC versions
-  IMAGE_VERSION=$(yq '.image.version' "$VERSIONS_FILE")
+  # Extract minor version from versions.yaml (x.y format)
+  MINOR_VERSION=$(yq '.image.version' "$VERSIONS_FILE")
   MC_VERSION=$(yq '.mc.version' "$VERSIONS_FILE")
 
-  # Validate image version extraction
-  if [[ -z "$IMAGE_VERSION" ]] || [[ "$IMAGE_VERSION" == "null" ]]; then
+  # Validate minor version extraction
+  if [[ -z "$MINOR_VERSION" ]] || [[ "$MINOR_VERSION" == "null" ]]; then
     echo "Error: Could not read image.version from $VERSIONS_FILE" >&2
     exit 1
   fi
@@ -161,13 +179,14 @@ extract_and_validate_versions() {
     exit 1
   fi
 
-  # Validate image version format
-  if [[ ! "$IMAGE_VERSION" =~ $SEMVER_REGEX ]]; then
-    echo "Error: Invalid image version format: $IMAGE_VERSION (expected x.y.z)" >&2
+  # Validate minor version format (x.y)
+  if [[ ! "$MINOR_VERSION" =~ $MINOR_VERSION_REGEX ]]; then
+    echo "Error: Invalid image version format: $MINOR_VERSION (expected x.y, not x.y.z)" >&2
+    echo "Note: Patch version is auto-calculated from registry state" >&2
     exit 1
   fi
 
-  # Validate MC version format
+  # Validate MC version format (full semantic version)
   if [[ ! "$MC_VERSION" =~ $SEMVER_REGEX ]]; then
     echo "Error: Invalid MC version format: $MC_VERSION (expected x.y.z)" >&2
     exit 1
@@ -308,6 +327,31 @@ compare_with_registry() {
   fi
 }
 
+# Find latest patch version for given minor version
+# Args: minor_version (e.g., "1.0")
+# Returns: patch number (e.g., 17) or -1 if no tags found
+find_latest_patch() {
+  local minor_version="$1"
+
+  # Query registry for all tags matching x.y.z pattern with our minor version
+  local latest_tag
+  latest_tag=$(skopeo list-tags "docker://${REGISTRY_REPO}" 2>/dev/null | \
+    jq -r '.Tags[]' 2>/dev/null | \
+    grep -E "^${minor_version}\.[0-9]+$" | \
+    sort -V | \
+    tail -1)
+
+  if [[ -n "$latest_tag" ]]; then
+    # Extract patch number from x.y.z
+    local patch
+    IFS='.' read -r _ _ patch <<< "$latest_tag"
+    echo "$patch"
+  else
+    # No tags found for this minor version
+    echo "-1"
+  fi
+}
+
 #------------------------------------------------------------------------------
 # Architecture Detection
 #------------------------------------------------------------------------------
@@ -338,16 +382,18 @@ detect_architecture() {
 
 # Output results in JSON format
 output_json() {
-  local latest_version="$1"
-  local version_exists="$2"
-  local registry_digest="$3"
+  local new_version="$1"
+  local bumped="$2"
+  local pushed="$3"
+  local latest_registry="$4"
 
   cat <<EOF
 {
-  "image_version": "$IMAGE_VERSION",
-  "latest_registry_version": ${latest_version:+"\"$latest_version\""}${latest_version:-null},
-  "version_exists_on_registry": $version_exists,
-  "registry_digest": ${registry_digest:+"\"$registry_digest\""}${registry_digest:-null},
+  "minor_version": "$MINOR_VERSION",
+  "new_version": ${new_version:+"\"$new_version\""}${new_version:-null},
+  "bumped": $bumped,
+  "pushed": $pushed,
+  "latest_registry_version": ${latest_registry:+"\"$latest_registry\""}${latest_registry:-null},
   "mc_version": "$MC_VERSION",
   "tools": {
 $(for tool_name in "${!TOOL_VERSIONS[@]}"; do
@@ -361,20 +407,48 @@ EOF
 #------------------------------------------------------------------------------
 # Build Orchestration
 #------------------------------------------------------------------------------
-perform_build() {
+auto_version_and_push() {
   # Reset timer
   SECONDS=0
 
-  # Define image tags
-  local image_tag="mc-rhel10:${IMAGE_VERSION}"
-  local latest_tag="mc-rhel10:latest"
+  # Parse minor version into components
+  IFS='.' read -r MAJOR MINOR <<< "$MINOR_VERSION"
+
+  # Query registry for latest patch version (skip in dry-run)
+  local current_patch=-1
+  local latest_registry_tag=""
+
+  if [[ "$DRY_RUN" != "true" ]]; then
+    if [[ "$JSON_OUTPUT" != "true" ]]; then
+      echo "Querying registry for latest ${MINOR_VERSION}.* version..."
+    fi
+
+    current_patch=$(find_latest_patch "$MINOR_VERSION")
+
+    if [[ "$current_patch" -ge 0 ]]; then
+      latest_registry_tag="${MINOR_VERSION}.${current_patch}"
+      if [[ "$JSON_OUTPUT" != "true" ]]; then
+        echo "  Latest on registry: $latest_registry_tag"
+      fi
+    else
+      if [[ "$JSON_OUTPUT" != "true" ]]; then
+        echo "  Latest on registry: No ${MINOR_VERSION}.* tags found (first build)"
+      fi
+    fi
+  fi
+
+  # Build image with temporary tag
+  local temp_tag="mc-rhel10:temp"
+
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo "Building image..."
+  fi
 
   # Build command array
   local build_cmd=(
     podman build
     --file container/Containerfile
-    --tag "$image_tag"
-    --tag "$latest_tag"
+    --tag "$temp_tag"
   )
 
   # Add MC_VERSION build arg
@@ -398,42 +472,118 @@ perform_build() {
 
   # Dry-run or execute
   if [[ "$DRY_RUN" == "true" ]]; then
-    echo "[DRY-RUN] Registry query would be performed:"
-    echo "  Target registry: $REGISTRY_REPO"
+    echo "[DRY-RUN] Would query registry for latest ${MINOR_VERSION}.* version"
     echo ""
-    echo "[DRY-RUN] Would execute:"
+    echo "[DRY-RUN] Would execute build:"
     printf '%s ' "${build_cmd[@]}"
     printf '\n'
     echo ""
     echo "[DRY-RUN] Parsed versions:"
-    echo "  Image version: $IMAGE_VERSION"
+    echo "  Minor version: $MINOR_VERSION"
     echo "  MC CLI version: $MC_VERSION"
     for tool_name in "${!TOOL_VERSIONS[@]}"; do
       echo "  ${tool_name} version: ${TOOL_VERSIONS[$tool_name]}"
     done
     echo ""
-    echo "[DRY-RUN] Would create tags:"
-    echo "  - $image_tag"
-    echo "  - $latest_tag"
+    echo "[DRY-RUN] Would compare digest with registry"
+    echo "[DRY-RUN] If digest differs:"
+    echo "  Would bump to: ${MINOR_VERSION}.<patch+1>"
+    echo "  Would tag: mc-rhel10:${MINOR_VERSION}.<patch+1> and mc-rhel10:latest"
+    echo "  Would push to: $REGISTRY_REPO"
     exit 0
-  else
-    # Execute build
-    "${build_cmd[@]}"
+  fi
 
-    # Calculate elapsed time
-    local elapsed=$SECONDS
+  # Execute build
+  "${build_cmd[@]}"
 
-    # Output results
-    if [[ "$JSON_OUTPUT" == "true" ]]; then
-      # JSON output mode
-      output_json "$LATEST_REGISTRY_VERSION" "$VERSION_EXISTS" "$REGISTRY_DIGEST"
-    else
-      # Human-readable output
-      echo "Build completed successfully in ${elapsed}s"
-      echo "Created tags:"
-      echo "  - $image_tag"
-      echo "  - $latest_tag"
+  # Get local image digest
+  local local_digest
+  local_digest=$(podman inspect "$temp_tag" 2>/dev/null | jq -r '.[0].Digest')
+
+  if [[ -z "$local_digest" ]]; then
+    echo "Error: Failed to get digest for built image" >&2
+    exit 1
+  fi
+
+  # Compare digests if registry version exists
+  local bumped=false
+  local pushed=false
+
+  if [[ "$current_patch" -ge 0 ]]; then
+    # Get registry digest for comparison
+    local registry_digest
+    registry_digest=$(get_registry_digest "$latest_registry_tag")
+
+    if [[ "$local_digest" == "$registry_digest" ]]; then
+      # Digests match - no-op
+      local elapsed=$SECONDS
+
+      if [[ "$JSON_OUTPUT" == "true" ]]; then
+        output_json "" false false "$latest_registry_tag"
+      else
+        echo "Image unchanged (digest match), skipping bump and push"
+        echo "Build completed in ${elapsed}s (no-op)"
+      fi
+      return 0
     fi
+
+    if [[ "$JSON_OUTPUT" != "true" ]]; then
+      echo "Image changed (digest mismatch), bumping version..."
+    fi
+  else
+    if [[ "$JSON_OUTPUT" != "true" ]]; then
+      echo "First build for ${MINOR_VERSION}.*, creating initial version..."
+    fi
+  fi
+
+  # Calculate new version
+  local new_patch=$((current_patch + 1))
+  IMAGE_VERSION="${MAJOR}.${MINOR}.${new_patch}"
+
+  # Validate semantic version format
+  if ! validate_semver "$IMAGE_VERSION"; then
+    echo "Error: Generated invalid version: $IMAGE_VERSION" >&2
+    exit 1
+  fi
+
+  # Check for version conflict
+  if check_version_exists "$IMAGE_VERSION"; then
+    echo "Error: Version $IMAGE_VERSION already exists on registry" >&2
+    echo "This indicates a race condition or logic error" >&2
+    exit 1
+  fi
+
+  # Tag image with version and latest
+  local version_tag="mc-rhel10:${IMAGE_VERSION}"
+  local latest_tag="mc-rhel10:latest"
+
+  podman tag "$temp_tag" "$version_tag"
+  podman tag "$temp_tag" "$latest_tag"
+
+  bumped=true
+
+  # Push to registry
+  if [[ "$JSON_OUTPUT" != "true" ]]; then
+    echo "Pushing $IMAGE_VERSION to registry..."
+  fi
+
+  podman push "$version_tag" "docker://${REGISTRY_REPO}:${IMAGE_VERSION}"
+  podman push "$latest_tag" "docker://${REGISTRY_REPO}:latest"
+
+  pushed=true
+
+  # Calculate elapsed time
+  local elapsed=$SECONDS
+
+  # Output results
+  if [[ "$JSON_OUTPUT" == "true" ]]; then
+    output_json "$IMAGE_VERSION" true true "$latest_registry_tag"
+  else
+    echo "Published $IMAGE_VERSION to $REGISTRY_REPO"
+    echo "Build and push completed in ${elapsed}s"
+    echo "Created tags:"
+    echo "  - $version_tag"
+    echo "  - $latest_tag"
   fi
 }
 
@@ -490,56 +640,5 @@ extract_and_validate_versions
 # Detect architecture
 detect_architecture
 
-# Query registry for version staleness (skip in dry-run mode)
-LATEST_REGISTRY_VERSION=""
-VERSION_EXISTS=false
-REGISTRY_DIGEST=""
-
-if [[ "$DRY_RUN" != "true" ]]; then
-  # Show message only in non-JSON mode
-  if [[ "$JSON_OUTPUT" != "true" ]]; then
-    echo "Querying quay.io registry..."
-  fi
-
-  # Get latest registry version
-  LATEST_REGISTRY_VERSION=$(query_latest_registry_version) || true
-
-  # Check if current version exists on registry
-  if check_version_exists "$IMAGE_VERSION"; then
-    VERSION_EXISTS=true
-    REGISTRY_DIGEST=$(get_registry_digest "$IMAGE_VERSION")
-  else
-    VERSION_EXISTS=false
-    REGISTRY_DIGEST=""
-  fi
-
-  # Display comparison results (only in non-JSON mode)
-  if [[ "$JSON_OUTPUT" != "true" ]]; then
-    if [[ -n "$LATEST_REGISTRY_VERSION" ]]; then
-      echo "  Latest on quay.io: $LATEST_REGISTRY_VERSION"
-    else
-      echo "  Latest on quay.io: No versions published"
-    fi
-
-    echo "  Local version: $IMAGE_VERSION"
-
-    if [[ "$VERSION_EXISTS" == "true" ]]; then
-      echo "  Version $IMAGE_VERSION exists on registry"
-      if [[ "$VERBOSE" == "true" ]]; then
-        echo "  Registry digest: $REGISTRY_DIGEST"
-      fi
-    else
-      echo "  Version $IMAGE_VERSION not found on registry (new version)"
-    fi
-  fi
-fi
-
-# Show build info
-if [[ "$JSON_OUTPUT" != "true" ]]; then
-  echo "Starting build..."
-  echo "  Image version: $IMAGE_VERSION"
-  echo "  MC CLI version: $MC_VERSION"
-fi
-
-# Perform build
-perform_build
+# Execute auto-versioning build and push workflow
+auto_version_and_push
