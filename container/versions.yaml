@@ -1,11 +1,12 @@
 # versions.yaml - Single source of truth for MC container image versioning
 # Format: Semantic Versioning 2.0.0 (https://semver.org)
-# Last updated: 2026-02-09
+# Last updated: 2026-02-10
 
 # Image versioning - independent from MC CLI version
+# Minor version (x.y) manually managed, patch version auto-calculated at build time from registry state
 # Increments on any container change (tool updates, MC updates, Containerfile changes)
 image:
-  version: "1.0.0"
+  version: "1.0"
 
 # MC CLI version bundled in container
 # Synced with pyproject.toml version field
