@@ -20,7 +20,7 @@ JSON_OUTPUT=false
 # File paths
 VERSIONS_FILE="container/versions.yaml"
 SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-MINOR_VERSION_REGEX='^[0-9]+\.[0-9]+$'
+MINOR_VERSION_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
 
 # Registry configuration
 REGISTRY_REPO="${REGISTRY_REPO:-quay.io/dsquirre/mc-rhel10}"
