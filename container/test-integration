@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# test-integration - OCM CLI integration test
+#
+# Verifies OCM binary in container matches version in versions.yaml
+# Non-mocked integration test running actual container
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSIONS_FILE="${SCRIPT_DIR}/versions.yaml"
+IMAGE="${1:-localhost/mc-rhel10:latest}"
+
+echo "=== OCM Integration Test ==="
+echo "Image: ${IMAGE}"
+echo ""
+
+# Extract expected version from versions.yaml
+EXPECTED_VERSION=$(yq eval '.tools.ocm.version' "${VERSIONS_FILE}")
+
+if [[ -z "$EXPECTED_VERSION" ]] || [[ "$EXPECTED_VERSION" == "null" ]]; then
+  echo "ERROR: Could not read OCM version from versions.yaml" >&2
+  exit 1
+fi
+
+echo "Expected OCM version: ${EXPECTED_VERSION}"
+
+# Run ocm version in container
+echo "Running: podman run --rm ${IMAGE} ocm version"
+ACTUAL_OUTPUT=$(podman run --rm "${IMAGE}" ocm version 2>&1) || {
+  echo "ERROR: Failed to run 'ocm version' in container" >&2
+  echo "Output: ${ACTUAL_OUTPUT}" >&2
+  exit 1
+}
+
+echo "OCM version output:"
+echo "${ACTUAL_OUTPUT}"
+echo ""
+
+# Extract version from output
+# OCM version output format: Version: 1.0.10
+# Alternative format: version.Info{GitVersion:"v1.0.10", ...}
+# Handle both formats
+if [[ "$ACTUAL_OUTPUT" =~ Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+  ACTUAL_VERSION="${BASH_REMATCH[1]}"
+elif [[ "$ACTUAL_OUTPUT" =~ GitVersion:\"v([0-9]+\.[0-9]+\.[0-9]+)\" ]]; then
+  ACTUAL_VERSION="${BASH_REMATCH[1]}"
+else
+  echo "ERROR: Could not parse version from OCM output" >&2
+  echo "Expected format: 'Version: x.y.z' or 'GitVersion:\"vx.y.z\"'" >&2
+  exit 1
+fi
+
+echo "Actual OCM version: ${ACTUAL_VERSION}"
+
+# Compare versions (fail hard on mismatch)
+if [[ "${ACTUAL_VERSION}" != "${EXPECTED_VERSION}" ]]; then
+  echo "" >&2
+  echo "ERROR: OCM version mismatch!" >&2
+  echo "  Expected: ${EXPECTED_VERSION}" >&2
+  echo "  Actual:   ${ACTUAL_VERSION}" >&2
+  echo "" >&2
+  echo "This indicates:" >&2
+  echo "  - versions.yaml out of sync with Containerfile ARG" >&2
+  echo "  - Wrong binary downloaded during build" >&2
+  echo "  - SHA256 checksum matched wrong version" >&2
+  exit 1
+fi
+
+echo "✓ OCM version verified: ${ACTUAL_VERSION}"
+echo ""
+
+# Verify binary is functional (not just present)
+echo "=== Verifying OCM binary is functional ==="
+podman run --rm "${IMAGE}" ocm --help >/dev/null 2>&1 || {
+  echo "ERROR: 'ocm --help' failed - binary not functional" >&2
+  exit 1
+}
+
+echo "✓ OCM binary is functional"
+echo ""
+echo "=== All OCM integration tests passed ==="
