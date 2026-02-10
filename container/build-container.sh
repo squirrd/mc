@@ -20,6 +20,7 @@ MC_BASE="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DRY_RUN=false
 VERBOSE=false
 JSON_OUTPUT=false
+LOCAL_ONLY=false
 
 # File paths
 VERSIONS_FILE="container/versions.yaml"
@@ -47,6 +48,7 @@ Build MC container image with version injection from versions.yaml
 
 OPTIONS:
   --dry-run           Preview build without executing (validation only)
+  --local-only        Build image locally and compare digests without pushing to registry
   --verbose           Show detailed build output
   --json              Output results in JSON format for CI/CD
   --registry REPO     Override registry repository (default: quay.io/rhn_support_dsquirre/mc-container)
@@ -58,6 +60,9 @@ EXAMPLES:
 
   # Preview build without executing
   ./build-container.sh --dry-run
+
+  # Test build locally without pushing (useful for testing digest comparison)
+  ./build-container.sh --local-only
 
   # Build with detailed output
   ./build-container.sh --verbose
@@ -587,13 +592,56 @@ auto_version_and_push() {
   # Execute build
   "${build_cmd[@]}"
 
-  # Strategy: Push to test tag, compare registry manifests, then decide bump/push
-  # Can't compare local vs registry because podman push recompresses layers
-  # Must compare post-push registry digest with previous version's registry digest
+  # Strategy depends on mode:
+  # - LOCAL_ONLY: Compare local image IDs (fast, no push, but less accurate due to metadata)
+  # - Normal: Push to test tag, compare registry manifests (accurate, requires push)
+  #
+  # Note: Can't reliably compare local vs registry because podman push recompresses layers
 
   local bumped=false
   local pushed=false
 
+  if [[ "$LOCAL_ONLY" == "true" ]]; then
+    # Local-only mode: compare image IDs without pushing
+    if [[ "$current_patch" -ge 0 ]]; then
+      # Get the current image ID
+      local current_image_id
+      current_image_id=$(podman inspect --format '{{.Id}}' "$temp_tag" 2>/dev/null)
+
+      # Try to get the previous version's image ID (if it exists locally)
+      local prev_image_id=""
+      if podman image exists "localhost/mc-rhel10:${latest_registry_tag}" 2>/dev/null; then
+        prev_image_id=$(podman inspect --format '{{.Id}}' "localhost/mc-rhel10:${latest_registry_tag}" 2>/dev/null)
+      fi
+
+      if [[ -n "$prev_image_id" && "$current_image_id" == "$prev_image_id" ]]; then
+        local elapsed=$SECONDS
+        echo "[LOCAL-ONLY] Image unchanged (ID match: ${current_image_id})"
+        echo "[LOCAL-ONLY] Would skip bump and push"
+        echo "[LOCAL-ONLY] Build completed in ${elapsed}s (no-op)"
+        echo ""
+        echo "Note: Local image ID comparison may miss metadata changes."
+        echo "Use normal mode (without --local-only) for accurate registry manifest comparison."
+        return 0
+      else
+        echo "[LOCAL-ONLY] Image changed or no previous version found locally"
+        echo "[LOCAL-ONLY] Current ID: ${current_image_id}"
+        echo "[LOCAL-ONLY] Previous ID: ${prev_image_id:-none}"
+        echo "[LOCAL-ONLY] Would bump to ${MINOR_VERSION}.$((current_patch + 1)) and push to registry"
+        echo ""
+        echo "Note: Use normal mode (without --local-only) to actually push to registry."
+        return 0
+      fi
+    else
+      echo "[LOCAL-ONLY] First build for ${MINOR_VERSION}.*"
+      echo "[LOCAL-ONLY] Would create version ${MINOR_VERSION}.0 and push to registry"
+      echo ""
+      echo "Note: Use normal mode (without --local-only) to actually push to registry."
+      return 0
+    fi
+  fi
+
+  # Normal mode: push to test tag and compare registry manifests
   if [[ "$current_patch" -ge 0 ]]; then
     # Previous version exists - push to test tag and compare
     local test_tag="mc-rhel10:test-digest"
@@ -624,14 +672,13 @@ auto_version_and_push() {
       jq -r '.Digest')
 
     if [[ "$test_digest" == "$prev_digest" ]]; then
-      # Digests match - image is identical, clean up test tag
+      # Digests match - image is identical
+      # Note: We leave the test tag in the registry. It will be overwritten on the next build.
+      # Attempting to delete it with skopeo would delete the manifest digest, which would
+      # remove ALL tags pointing to that digest (including 'latest'), not just the test tag.
       if [[ "$JSON_OUTPUT" != "true" ]]; then
-        echo "Image unchanged (manifest match), cleaning up test tag..."
+        echo "Image unchanged (manifest match), skipping bump and push..."
       fi
-
-      # Delete test tag from registry
-      skopeo delete "docker://${REGISTRY_REPO}:${test_registry_tag}" \
-        --authfile="${REGISTRY_AUTH_FILE}" &>/dev/null || true
 
       local elapsed=$SECONDS
 
@@ -644,13 +691,13 @@ auto_version_and_push() {
       return 0
     fi
 
-    # Digests differ - delete test tag and proceed with version bump
+    # Digests differ - proceed with version bump
+    # Note: We leave the test tag in the registry. It will be overwritten on the next build.
+    # Attempting to delete it with skopeo would delete the manifest digest, which could
+    # remove other tags if they share the same digest.
     if [[ "$JSON_OUTPUT" != "true" ]]; then
       echo "Image changed (digest mismatch), bumping version..."
     fi
-
-    skopeo delete "docker://${REGISTRY_REPO}:${test_registry_tag}" \
-      --authfile="${REGISTRY_AUTH_FILE}" &>/dev/null || true
 
   else
     if [[ "$JSON_OUTPUT" != "true" ]]; then
@@ -735,6 +782,10 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --dry-run)
       DRY_RUN=true
+      shift
+      ;;
+    --local-only)
+      LOCAL_ONLY=true
       shift
       ;;
     --verbose)
