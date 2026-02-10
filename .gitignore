@@ -68,3 +68,6 @@ archive/
 # Temporary files
 tmp/
 *.tmp
+
+# Registry credentials (sensitive)
+.registry-auth/
