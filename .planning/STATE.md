@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-09)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Phase 23 - Quay.io Integration
+**Current focus:** Phase 24 - Auto-Versioning Logic
 
 ## Current Position
 
-Phase: 23 of 25 (Quay.io Integration)
+Phase: 24 of 25 (Auto-Versioning Logic)
 Plan: 1 of 1 (complete)
-Status: Phase complete and verified (all 4 success criteria met)
-Last activity: 2026-02-10 — Phase 23 verified: registry query with skopeo, digest comparison, JSON output mode, exponential backoff retry logic
+Status: Phase complete (intelligent patch version bumping with digest-based change detection)
+Last activity: 2026-02-10 — Completed 24-01-PLAN.md: auto-versioning system with registry-as-source-of-truth
 
-Progress: [█████████████████████░░░] 90% (48/~48 total plans across all milestones)
+Progress: [██████████████████████░░] 92% (49/~53 total plans across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 48 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
+- Total plans completed: 49 (across v1.0, v2.0, v2.0.1, v2.0.2, v2.0.3)
 - Milestones shipped:
   - v1.0 Hardening: 21 plans (8 phases) — shipped 2026-01-22
   - v2.0 Containerization: 22 plans (7 phases) — shipped 2026-02-01
@@ -31,18 +31,19 @@ Progress: [█████████████████████░░
 | Milestone | Phases | Plans | Duration | Status |
 |-----------|--------|-------|----------|--------|
 | v2.0.2 Window Tracking | 15-19 | 10/10 | 6 hours | ✅ Shipped 2026-02-08 |
-| v2.0.3 Container Tools | 20-25 | 5/TBD | In progress | 🚧 Phase 23 complete (registry integration) |
+| v2.0.3 Container Tools | 20-25 | 6/6 | In progress | 🚧 Phase 24 complete (auto-versioning) |
 
 **Recent Trend:**
 - v2.0.2 delivered in <1 day (10 plans, 5 phases, 6 hours)
 - Phase 21 completed in 2 minutes (independent image versioning established)
 - Phase 22 completed in 4 minutes (build automation with yq and podman)
 - Phase 23 completed in 3 minutes (registry query with skopeo and digest comparison)
+- Phase 24 completed in 4 minutes (digest-based auto-versioning with registry-as-source-of-truth)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
-- Trend: Fast iteration on focused phases
+- Trend: Fast iteration on focused phases (averaging 3-4 min per phase)
 
-*Updated: 2026-02-10 after Phase 23 completion*
+*Updated: 2026-02-10 after Phase 24 completion*
 
 ## Accumulated Context
 
@@ -89,6 +90,15 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - JSON output mode (--json) suppresses human-readable messages, outputs only structured data for pipeline consumption
 - Registry query skipped in dry-run mode (no network calls during preview)
 
+**Phase 24 execution decisions:**
+- Store only minor version (x.y) in versions.yaml to prevent merge conflicts when multiple developers build
+- Registry determines current patch version, preventing conflicts and serving as source of truth
+- Digest comparison triggers bump (not file changes or timestamps), immune to comment/whitespace changes
+- No --push flag: auto-push on digest differ is always behavior (CONTEXT.md specification)
+- Build with temp tag, compare digest, then retag and push if needed
+- Fail fast on version conflict (version already exists when shouldn't) to detect race conditions
+- validate_semver() uses official semver 2.0.0 regex rejecting leading zeros and missing components
+
 ### Pending Todos
 
 None yet.
@@ -100,9 +110,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 23 complete
+Stopped at: Phase 24 complete
 Resume file: None
-Next action: `/gsd:discuss-phase 24` to gather context for Auto-Versioning System phase
+Next action: `/gsd:discuss-phase 25` to gather context for Registry Publishing phase
 
 ---
-*Phase 23 complete: Registry query capability with skopeo, exponential backoff, digest comparison, JSON output for CI/CD*
+*Phase 24 complete: Auto-versioning system with digest-based bumping, registry-as-source-of-truth, and automatic publishing to quay.io*
