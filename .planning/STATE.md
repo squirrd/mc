@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-09)
 ## Current Position
 
 Phase: 24 of 25 (Auto-Versioning Logic)
-Plan: 1 of 1 (complete)
-Status: Phase complete (intelligent patch version bumping with digest-based change detection)
-Last activity: 2026-02-10 — Completed 24-01-PLAN.md: auto-versioning system with registry-as-source-of-truth
+Plan: 2 of 2 (complete)
+Status: Phase complete (auto-versioning with semver 2.0.0 compliant validation)
+Last activity: 2026-02-10 — Completed 24-02-PLAN.md: gap closure for semver validation fix
 
-Progress: [██████████████████████░░] 92% (49/~53 total plans across all milestones)
+Progress: [███████████████████████░] 94% (50/~53 total plans across all milestones)
 
 ## Performance Metrics
 
@@ -38,12 +38,12 @@ Progress: [██████████████████████░
 - Phase 21 completed in 2 minutes (independent image versioning established)
 - Phase 22 completed in 4 minutes (build automation with yq and podman)
 - Phase 23 completed in 3 minutes (registry query with skopeo and digest comparison)
-- Phase 24 completed in 4 minutes (digest-based auto-versioning with registry-as-source-of-truth)
+- Phase 24 completed in 7 minutes total (4 min plan 01 + 3 min gap closure plan 02)
 - 530 tests passing with 74.65% coverage
 - Zero test failures, zero tech debt at v2.0.2 ship
 - Trend: Fast iteration on focused phases (averaging 3-4 min per phase)
 
-*Updated: 2026-02-10 after Phase 24 completion*
+*Updated: 2026-02-10 after Phase 24 gap closure completion*
 
 ## Accumulated Context
 
@@ -98,6 +98,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Build with temp tag, compare digest, then retag and push if needed
 - Fail fast on version conflict (version already exists when shouldn't) to detect race conditions
 - validate_semver() uses official semver 2.0.0 regex rejecting leading zeros and missing components
+- MINOR_VERSION_REGEX now enforces semver 2.0.0 spec by rejecting leading zeros (01.2, 1.02, 00.0)
+- Regex pattern matches SEMVER_REGEX approach for consistency: (0|[1-9][0-9]*)
 
 ### Pending Todos
 
@@ -110,9 +112,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Phase 24 complete
+Stopped at: Phase 24 complete (gap closure plan 24-02 completed)
 Resume file: None
 Next action: `/gsd:discuss-phase 25` to gather context for Registry Publishing phase
 
 ---
-*Phase 24 complete: Auto-versioning system with digest-based bumping, registry-as-source-of-truth, and automatic publishing to quay.io*
+*Phase 24 complete: Auto-versioning system with digest-based bumping, registry-as-source-of-truth, semver 2.0.0 compliant validation, and automatic publishing to quay.io*
