@@ -128,7 +128,20 @@ Shipped in v2.0.3 (2026-02-10):
 
 ### Active
 
-No active requirements - ready for next milestone via `/gsd:new-milestone`
+**Current Milestone: v2.0.4 Version Management**
+
+**Goal:** Enable automatic version management for both MC CLI and container images with smart update notifications, version pinning, and graceful handling of stale versions.
+
+**Target features:**
+- Background version checking (hourly throttle) for MC CLI from GitHub releases
+- Background version checking for container images from Quay.io registry
+- Auto-update to latest unless version is pinned (TOML config persistence)
+- `mc-update` utility bundled with MC for manual version control
+- Version listing with dates and current version indicators
+- Pin warnings with grace period (suppress for X days after pinning, then weekly reminders)
+- Smart notifications (banner with unpin hints) for updates and stale pins
+- Container auto-pull behavior respecting pins with warnings
+- Running containers unaffected by image updates
 
 ### Out of Scope
 
@@ -218,4 +231,4 @@ No active requirements - ready for next milestone via `/gsd:new-milestone`
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
 
 ---
-*Last updated: 2026-02-10 after v2.0.3 milestone completion*
+*Last updated: 2026-02-11 after v2.0.4 milestone initialization*
