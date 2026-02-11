@@ -169,12 +169,25 @@ Which phases cover which requirements. Updated during roadmap creation for each 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be filled by roadmapper) | | |
+| UCTL-05 | Phase 26 | Pending |
+| UCTL-06 | Phase 26 | Pending |
+| UCTL-09 | Phase 26 | Pending |
+| UCTL-10 | Phase 26 | Pending |
+| RTMD-01 | Phase 27 | Pending |
+| RTMD-02 | Phase 27 | Pending |
+| RTMD-03 | Phase 27 | Pending |
+| VCHK-01 | Phase 28 | Pending |
+| VCHK-03 | Phase 28 | Pending |
+| VCHK-04 | Phase 28 | Pending |
+| VCHK-05 | Phase 28 | Pending |
+| VCHK-06 | Phase 28 | Pending |
+| VCHK-07 | Phase 28 | Pending |
+| VCHK-08 | Phase 28 | Pending |
 
 **Coverage:**
 - v2.0.4 requirements: 14 total
-- Mapped to phases: TBD
-- Unmapped: TBD
+- Mapped to phases: 14/14 (100%)
+- Unmapped: 0
 
 ### v2.0.5 MC Auto-Update
 
@@ -190,4 +203,4 @@ Which phases cover which requirements. Updated during roadmap creation for each 
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 after three-milestone split*
+*Last updated: 2026-02-11 with v2.0.4 traceability*
