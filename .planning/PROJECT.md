@@ -128,20 +128,23 @@ Shipped in v2.0.3 (2026-02-10):
 
 ### Active
 
-**Current Milestone: v2.0.4 Version Management**
+**Current Milestone: v2.0.4 Foundation**
 
-**Goal:** Enable automatic version management for both MC CLI and container images with smart update notifications, version pinning, and graceful handling of stale versions.
+**Goal:** Build version checking infrastructure and configuration foundation for automatic updates (MC CLI only in this milestone).
 
 **Target features:**
-- Background version checking (hourly throttle) for MC CLI from GitHub releases
-- Background version checking for container images from Quay.io registry
-- Auto-update to latest unless version is pinned (TOML config persistence)
-- `mc-update` utility bundled with MC for manual version control
-- Version listing with dates and current version indicators
-- Pin warnings with grace period (suppress for X days after pinning, then weekly reminders)
-- Smart notifications (banner with unpin hints) for updates and stale pins
-- Container auto-pull behavior respecting pins with warnings
-- Running containers unaffected by image updates
+- GitHub releases API version checking for MC CLI
+- Hourly throttling with timestamp-based caching
+- Non-blocking checks (never delay CLI commands)
+- ETag conditional requests to prevent API rate limiting
+- PEP 440-compliant version comparison
+- TOML config extensions for version management
+- File locking for safe concurrent config writes
+- Runtime mode detection (host vs container)
+
+**Future Milestones:**
+- v2.0.5 MC Auto-Update: MC auto-update, mc-update utility, notifications, pinning
+- v2.0.6 Container Management: Container version checking, dual-artifact coordination
 
 ### Out of Scope
 
