@@ -38,7 +38,70 @@ RUN set -e && \
     rm -rf /tmp/*
 
 # =============================================================================
-# Stage 2: MC CLI Builder
+# Stage 2: backplane Binary Downloader
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS backplane-downloader
+
+# ARG for backplane version - placed before dependencies to accept build script injection (Phase 22)
+# When build script injects new version via --build-arg, downstream layers are invalidated
+# This is correct behavior: version changes require downloading new binary
+ARG BACKPLANE_VERSION=0.7.0
+
+# Install download tools
+RUN microdnf install -y curl tar gzip && \
+    microdnf clean all
+
+# Download and verify backplane binary from GitHub releases
+# Fail fast on download or checksum mismatch
+RUN set -e && \
+    cd /tmp && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && \
+    TARBALL="ocm-backplane_${BACKPLANE_VERSION}_Linux_${ARCH}.tar.gz" && \
+    curl -fsSL "https://github.com/openshift/backplane-cli/releases/download/v${BACKPLANE_VERSION}/${TARBALL}" -o "${TARBALL}" && \
+    curl -fsSL "https://github.com/openshift/backplane-cli/releases/download/v${BACKPLANE_VERSION}/checksums.txt" -o checksums.txt && \
+    grep "${TARBALL}" checksums.txt | sha256sum --check && \
+    tar --no-same-owner -xzf "${TARBALL}" && \
+    chmod +x ocm-backplane && \
+    mv ocm-backplane /usr/local/bin/ocm-backplane && \
+    rm -rf /tmp/*
+
+# =============================================================================
+# Stage 3: OC CLI Downloader
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS oc-downloader
+
+# ARG for OC version - uses "latest" by default to always get current stable release
+# Can be overridden to specific version like "4.21.1" via --build-arg OC_VERSION=4.21.1
+ARG OC_VERSION=latest
+
+# Install download tools
+RUN microdnf install -y curl tar gzip && \
+    microdnf clean all
+
+# Download and verify oc binary from OpenShift mirror
+# Fail fast on download or checksum mismatch
+RUN set -e && \
+    cd /tmp && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        TARBALL="openshift-client-linux.tar.gz"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        TARBALL="openshift-client-linux-arm64.tar.gz"; \
+    else \
+        echo "Unsupported architecture: ${ARCH}" && exit 1; \
+    fi && \
+    curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/${TARBALL}" -o "${TARBALL}" && \
+    curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/sha256sum.txt" -o sha256sum.txt && \
+    grep "${TARBALL}" sha256sum.txt | sha256sum --check && \
+    tar --no-same-owner -xzf "${TARBALL}" && \
+    chmod +x oc kubectl && \
+    mv oc /usr/local/bin/oc && \
+    mv kubectl /usr/local/bin/kubectl && \
+    rm -rf /tmp/*
+
+# =============================================================================
+# Stage 4: MC CLI Builder
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/ubi:10.1 AS mc-builder
 
@@ -67,7 +130,7 @@ COPY . /opt/mc
 RUN SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
 
 # =============================================================================
-# Stage 3: Final Runtime Image
+# Stage 5: Final Runtime Image
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/ubi:10.1 AS final
 
@@ -82,6 +145,7 @@ RUN dnf install -y \
     nano \
     wget \
     openssl \
+    less \
     && dnf clean all && \
     rm -rf /var/cache/dnf
 
@@ -95,6 +159,13 @@ RUN mkdir -p /case && \
 
 # Copy OCM binary from downloader stage
 COPY --from=ocm-downloader --chown=mcuser:mcuser /usr/local/bin/ocm /usr/local/bin/ocm
+
+# Copy backplane binary from downloader stage
+COPY --from=backplane-downloader --chown=mcuser:mcuser /usr/local/bin/ocm-backplane /usr/local/bin/ocm-backplane
+
+# Copy oc and kubectl binaries from downloader stage
+COPY --from=oc-downloader --chown=mcuser:mcuser /usr/local/bin/oc /usr/local/bin/oc
+COPY --from=oc-downloader --chown=mcuser:mcuser /usr/local/bin/kubectl /usr/local/bin/kubectl
 
 # Copy MC CLI source from builder stage
 COPY --from=mc-builder --chown=mcuser:mcuser /opt/mc /opt/mc

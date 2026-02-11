@@ -21,3 +21,13 @@ tools:
     url: "https://github.com/openshift-online/ocm-cli/releases/download/v{version}/ocm-linux-{arch}"
     checksum: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     description: "OpenShift Cluster Manager CLI"
+  backplane:
+    version: "0.7.0"
+    url: "https://github.com/openshift/backplane-cli/releases/download/v{version}/ocm-backplane_{version}_Linux_{arch}.tar.gz"
+    checksum: "verified from checksums.txt"
+    description: "OpenShift Backplane CLI"
+  oc:
+    version: "4.20.14"
+    url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{version}/openshift-client-linux-{arch}.tar.gz"
+    checksum: "verified from sha256sum.txt"
+    description: "OpenShift CLI (includes kubectl)"
