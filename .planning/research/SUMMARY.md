@@ -1,203 +1,251 @@
 # Project Research Summary
 
-**Project:** MC CLI v2.0.3 Container Tools
-**Domain:** Container build automation with multi-stage architecture and versioned tool management
-**Researched:** 2026-02-09
+**Project:** MC CLI Auto-Update and Version Management
+**Domain:** CLI tool version management with dual-artifact coordination (CLI + container)
+**Researched:** 2026-02-11
 **Confidence:** HIGH
 
 ## Executive Summary
 
-MC CLI v2.0.3 enhances container tooling by migrating from single-stage to multi-stage builds, enabling efficient layer caching, independent image versioning, and automated tool management. The research validates a three-component architecture: a multi-stage Containerfile (mc-builder, ocm-downloader, final stages), a versions.yaml config file for version management, and a build-container.sh automation script. This architecture separates build-time complexity from runtime simplicity, requiring zero changes to existing Python container management code while delivering significant benefits—smaller images, faster incremental builds, and independent versioning for container updates without MC CLI code changes.
+MC CLI requires a sophisticated auto-update system that manages both the CLI tool itself (distributed via uv/PyPI) and container images (hosted on Quay.io). Expert implementations in this domain emphasize non-blocking version checks with aggressive throttling, graceful degradation when APIs are unavailable, and explicit user control over update timing through version pinning. The recommended approach leverages MC's existing infrastructure (TOML config, Rich terminal output, requests library, platformdirs) and adds only one new dependency: the `packaging` library for PEP 440-compliant version comparison.
 
-The recommended approach uses Podman's native multi-stage build capabilities (already in dependencies), Bash for build orchestration with Python for version logic, and introduces semver for version bumping plus PyYAML for config management. The OCM CLI serves as proof-of-concept for a scalable pattern: one downloader stage per tool maximizes cache reuse and enables parallel builds. Independent image versioning (1.0.0 separate from MC 2.0.3) allows tool updates to trigger automatic patch bumps without coupling to MC release cycles.
+The critical architectural principle is separation of concerns: version checking must never block CLI operations. Background checks with hourly throttling, ETag-based conditional requests to prevent GitHub API rate limiting (60 req/hour unauthenticated), and stale-while-revalidate caching ensure the CLI remains responsive even when networks are slow or registries are down. The update execution mechanism delegates to uv's battle-tested `tool upgrade` command rather than attempting in-place self-updates, avoiding the platform-specific complexity and failure modes that plague custom update systems.
 
-Critical risks center on layer cache invalidation (defeating multi-stage benefits), version drift between image tags and actual contents, and architecture mismatches for multi-platform support. Prevention strategies are well-documented: explicit stage naming, careful instruction ordering, rigorous version validation, and TARGETARCH ARG usage. The research shows high confidence across all areas, with clear implementation patterns validated against official Podman documentation and real-world container build best practices.
+Key risks center on race conditions (concurrent config writes corrupting TOML files), version comparison bugs (infinite update loops), and notification fatigue (users training to ignore update banners). These are mitigated through file locking, semantic versioning via the `packaging` library, and notification suppression (maximum once per day per version). The dual-artifact nature introduces unique challenges around container lifecycle awareness—users must understand that pulling a new image doesn't update running containers—requiring clear messaging and version mismatch indicators in container listings.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Multi-stage builds work with existing Podman 5.7.0+ already in pyproject.toml dependencies—no additional container tooling needed. The stack additions focus on version management and build automation: semver (3.0.4) for semantic version bumping, PyYAML (6.0.2) for parsing versions.yaml, and bash for build orchestration with Python for complex logic. Skopeo (1.21.0+ already on host) queries registry tags via `list-tags` command, avoiding unnecessary API complexity. The research specifically recommends against jq (not in UBI repos) in favor of Python's json module for API parsing.
+MC CLI's existing stack provides nearly everything needed for auto-update functionality. The only required addition is the `packaging` library (>=24.0) for PEP 440-compliant version comparison. Recent performance improvements in packaging v26.0 (January 2026) deliver 2-5x faster version parsing, making it ideal for frequent background checks.
 
 **Core technologies:**
-- **Podman 5.7.0+ (existing)**: Multi-stage builds with native support for `FROM...AS stage` and `COPY --from=stage` patterns
-- **semver 3.0.4**: Semantic version parsing and bumping (patch/minor/major) with simple API and Python 3.11+ compatibility
-- **PyYAML 6.0.2**: Parse and update versions.yaml config file (adequate for machine-managed YAML despite ruamel.yaml's comment preservation)
-- **Bash + Python hybrid**: Bash for build orchestration (simple command sequencing), Python when logic complexity requires YAML parsing or semver operations
-- **skopeo 1.21.0+ (existing)**: Query Quay.io tags via `list-tags` without pulling images—faster than REST API for simple queries
+- `packaging>=24.0`: PEP 440 version comparison and parsing — de facto standard for Python versioning, handles pre-releases/post-releases/epochs correctly, 3x performance improvement in v26.0
+- `requests>=2.31.0`: GitHub/Quay.io API calls — already present, handles both JSON APIs and supports ETag conditional requests for rate limit management
+- `tomli_w>=1.0.0`: TOML config persistence — already present, safe serialization for version pins and timestamps
+- `platformdirs>=4.0.0`: Cross-platform cache paths — already present, provides XDG-compliant cache directory for throttle timestamps
+- `rich>=14.0.0`: Update notification banners — already present, Panel component perfect for non-intrusive update notifications
+
+**Integration with uv:**
+- Delegate upgrade execution to `uv tool upgrade mc-cli` (atomic updates, proper dependency resolution)
+- Delegate pinning to `uv tool install mc-cli==X.Y.Z` (explicit version installation)
+- No custom download/install logic needed (uv handles complexity)
 
 ### Expected Features
 
-Multi-stage container builds are table-stakes infrastructure that users expect to "just work" with standard Docker/Podman behaviors. The research identifies eight must-have features including layer caching, named build stages, explicit version tags (no :latest in production), ARG-based version control, and build reproducibility. These are low-complexity standard patterns that form the foundation. Differentiators include versions.yaml as single source of truth, automated patch bumping when tool versions change, and registry-queried version detection—medium complexity features that provide competitive advantage through reduced manual version management and drift prevention.
+Research reveals a clear hierarchy of user expectations based on how established CLI tools (GitHub CLI, rustup, uv) handle updates.
 
 **Must have (table stakes):**
-- Layer caching with multi-stage builds — standard BuildKit behavior users rely on
-- Named build stages — required for `--target` and `COPY --from=` references
-- Explicit version tags (semver x.y.z) — production requirement, :latest causes rollback problems
-- ARG-based version control — standard Dockerfile pattern for configurable builds
-- Semantic version bumping — auto-increment patch, manual minor/major control
-- Build reproducibility — same input produces same output via version pinning
+- Background version checking with throttling — users expect tools to know about updates without manual checking
+- Update availability notifications — silence means "checked and current," not "haven't checked"
+- Manual update trigger — explicit command to upgrade (trust but verify, not automatic)
+- Graceful network failure — CLI must work offline or when APIs are down
+- Timestamp-based throttling — prevents API hammering, respects rate limits (hourly for background, daily for notifications)
+- Current version indicator — when listing versions, mark which is installed
 
 **Should have (competitive advantage):**
-- versions.yaml single source of truth — centralized tool versions prevent drift across stages
-- Tool version change detection — git diff on versions.yaml triggers auto patch bump
-- Registry query for current version — auto-detect if local version is stale vs quay.io
-- OCM tool as POC — prove pattern works with single tool before scaling complexity
-- Dry-run mode — preview build actions without execution (safety feature)
+- Version pinning with grace period — pin + suppress warnings for 30 days, then weekly reminders (unique to MC)
+- Dual-artifact version management — manage both CLI and container from single utility (unique to containerized CLIs)
+- Smart notifications with context — not just "update available" but "pinned to v2.0.4 (30 days old), run mc-update to unpin"
+- Container auto-pull with pin respect — automatically pull new images unless pinned, warn when running stale version
+- Unified update utility — single `mc-update` command for CLI upgrades, container pulls, version listing, pinning
+- Stale pin warnings — proactive warnings when pinned version becomes outdated (>30 days old)
 
-**Defer (v2.1.x and beyond):**
-- Inline cache metadata — BuildKit `BUILDKIT_INLINE_CACHE=1` for CI/CD optimization
-- Additional tools beyond OCM — scale pattern to jq, yq, oc, kubectl after validation
-- Stage-level cache pushing — `--cache-from` with per-stage tags for advanced CI/CD
-- Multi-platform builds — `--platform linux/amd64,linux/arm64` support
-- Automated dependency updates — Dependabot/Renovate for tool version bumps
+**Defer (v2+):**
+- Changelog integration — show what's new in each version (can link to GitHub releases initially)
+- Update analytics — track update adoption rates (no telemetry infrastructure currently)
+- Multi-registry support — alternative container registries (Quay.io sufficient for v1)
+- Pre-release/beta channels — opt into unstable versions (use git install for bleeding edge)
 
 ### Architecture Approach
 
-The architecture maintains clean separation between build-time concerns (container/ directory with Containerfile, versions.yaml, build-container.sh) and runtime concerns (src/mc/container/ Python code managing container lifecycle). Multi-stage Containerfile uses builder-downloader-final pattern: mc-builder stage compiles MC CLI from source, ocm-downloader fetches versioned OCM binary, final stage assembles minimal runtime image copying only artifacts. This separation enables independent caching—MC source changes rebuild only mc-builder + final, OCM version changes rebuild only ocm-downloader + final. Layer caching optimization follows least-to-most-frequently-changed ordering, reducing incremental builds from 3-5 minutes to under 1 minute.
+The standard architecture for CLI auto-update systems follows a layered approach with strict separation between version checking (non-blocking, background) and update execution (explicit, user-triggered). MC's implementation should hook into the existing CLI entry point immediately after logging setup but before config load, ensuring version checks run on every invocation without blocking command execution.
 
 **Major components:**
-1. **Multi-stage Containerfile** — Three named stages (mc-builder, ocm-downloader, final) with ARG-based version injection from versions.yaml; final stage copies artifacts only, no build dependencies
-2. **versions.yaml config** — Single source of truth with independent image semver (not tied to MC CLI version), tool versions with URL patterns, schema enabling easy tool additions
-3. **build-container.sh script** — Reads versions.yaml, queries Quay.io API for latest tag, detects tool version changes to auto-bump patch, builds with podman passing build args, optional --push for registry publishing
-4. **ContainerManager (unchanged)** — Existing _ensure_image() pull-then-create workflow preserved; multi-stage build transparent to runtime; OCM appears at /usr/local/bin/ocm automatically
+1. **VersionChecker** (utils/version_checker.py) — Query GitHub/Quay APIs, parse responses, compare versions using packaging.version.Version, handle rate limiting with ETag conditional requests, implement hourly throttle with timestamp cache
+2. **ConfigExtension** (config/models.py) — Extend existing schema with version_management section containing pinned_mc_version, pinned_container_version, last_version_check timestamp, available versions cache
+3. **UpdateBanner** (utils/update_banner.py) — Display Rich Panel notifications at command completion (non-intrusive), show actionable commands, suppress duplicate notifications (once per day per version)
+4. **mc-update CLI** (cli/update.py) — Separate console_scripts entry point that survives package upgrades, executes subprocess(['uv', 'tool', 'upgrade', 'mc-cli']), validates post-upgrade, provides recovery instructions on failure
+
+**Critical patterns:**
+- **Non-blocking checks:** Throttle to 1 check/hour, fail silently on network errors, never block command execution
+- **ETag caching:** Use If-None-Match headers to get HTTP 304 Not Modified responses (saves API quota, doesn't count against rate limit)
+- **File locking:** Use filelock library for atomic config writes to prevent corruption from concurrent mc processes
+- **Stale-while-revalidate:** Return cached version immediately, trigger background revalidation if cache older than 1 hour
 
 ### Critical Pitfalls
 
-Research identified seven critical pitfalls with high-confidence prevention strategies. Layer cache invalidation tops the list—`COPY --from=builder` can incorrectly invalidate downstream caches even when upstream cached, defeating multi-stage benefits (verified Podman issue #20229). Prevention requires explicit named stages, careful stage ordering, and testing cache behavior with double-builds. Version conflicts between image tag, versions.yaml, and actual MC CLI version inside container cause drift—auto-bumping on every tool change creates version noise. Architecture mismatches (hardcoded ocm-linux-amd64 instead of using TARGETARCH) break ARM64 users. Quay.io API rate limiting during rapid iteration blocks builds without exponential backoff. Breaking existing single-stage build workflow requires backward compatibility planning. YAML parsing failures from manual edits (tabs vs spaces) require validation. Missing runtime dependencies for binaries require `ldd` verification.
+Research identified 10 critical pitfalls with detailed prevention strategies. The top 5 most dangerous:
 
-1. **Layer cache invalidation from stage dependencies** — Verify cache works with double-builds; order stages least-to-most frequently changed; never use --squash-all with multi-stage (Podman #14712)
-2. **Version conflict between image version and MC CLI version** — Declare version relationship policy in versions.yaml header; validate consistency across image tag, versions.yaml, and `mc --version` output
-3. **Architecture mismatch in tool binaries** — Use `ARG TARGETARCH` in every downloader stage; substitute `${TARGETARCH}` in download URLs; test on both amd64 and arm64
-4. **Quay.io API rate limiting and authentication failures** — Implement exponential backoff; cache API responses locally (5min TTL); provide `--version X.Y.Z` override to skip API
-5. **Breaking existing single-stage build workflow** — Maintain build.sh as wrapper for backward compat; validate podman version >= 4.0; document migration path
-6. **versions.yaml parsing failures from manual edits** — Add yamllint validation in pre-commit hook; quote all version strings; validate YAML before parsing in build script
-7. **Missing dependencies in final stage** — Test binaries with `ldd` to check shared library dependencies; use RHEL UBI base with common deps pre-installed; add smoke tests to Containerfile
+1. **Synchronous version check blocking startup** — Version checks on every invocation blocking command execution. Prevention: hourly throttle + async background checks + aggressive 2s timeout + fail silently. Must address in Phase 1 or retrofitting is high-cost.
+
+2. **GitHub API rate limiting without fallback** — Unauthenticated API has 60 req/hour limit, easily exhausted by multiple users or CI/CD. Prevention: ETag conditional requests (304 Not Modified doesn't count against limit), cache x-ratelimit headers, exponential backoff on 429, graceful degradation to cached data. Must address in Phase 1.
+
+3. **uv tool upgrade failure leaving broken installation** — Partial upgrade leaves tool unusable. Prevention: health check before upgrade (uv tool list --outdated), validation after (mc --version), recovery instructions on failure (uv tool install --force mc-cli), never upgrade while tool is running (Windows file locks).
+
+4. **Concurrent config file writes causing corruption** — Multiple mc processes updating TOML simultaneously corrupt file. Prevention: filelock library + atomic write pattern (temp file + rename), SQLite for frequently-changing state, separate throttle cache from main config. Must address in Phase 1.
+
+5. **Infinite update loop from version comparison bug** — String comparison instead of semantic versioning causes "2.0.10" < "2.0.9" bugs. Prevention: use packaging.version.Version for all comparisons, test edge cases (pre-releases, multi-digit versions), store last_offered_version to detect loops. Must address in Phase 1.
 
 ## Implications for Roadmap
 
-The research strongly suggests a 6-phase incremental approach that validates each layer before adding complexity. Starting with multi-stage Containerfile architecture (Phase 1) proves the build pattern works and establishes cache behavior baselines before introducing automation. Version management (Phase 2) establishes single source of truth in versions.yaml before building automation that depends on it. Build automation (Phase 3) orchestrates what was proven manually in Phases 1-2. Quay.io integration (Phase 4) adds external dependency only after core automation works. Auto-versioning logic (Phase 5) implements complex version comparison after all pieces exist. Registry publishing (Phase 6) comes last since it requires reliable builds. This ordering minimizes risk by validating assumptions incrementally and allows early exit if patterns don't work as expected.
+Based on research, the implementation should follow a 3-phase structure that builds foundation first (non-blocking checks, correct version comparison, file locking), then adds update mechanics (uv integration, validation), and finally polishes UX (notification tuning, container lifecycle awareness).
 
-### Phase 1: Multi-Stage Architecture Foundation
-**Rationale:** Validates build pattern works before adding automation complexity; establishes cache behavior baselines; proves OCM tool integration succeeds
-**Delivers:** Working 3-stage Containerfile (mc-builder, ocm-downloader, final); hardcoded OCM version initially; verified layer caching; image size comparison vs single-stage
-**Addresses:** Table-stakes features (layer caching, named stages, build reproducibility); Anti-feature avoidance (no build tools in final image)
-**Avoids:** Pitfall #1 (cache invalidation) via explicit stage naming and ordering; Pitfall #7 (missing dependencies) via smoke tests and `ldd` verification
-**Needs research:** No—multi-stage builds are well-documented standard patterns with official Podman docs and extensive community examples
+### Phase 1: Version Check Infrastructure
+**Rationale:** Foundation for all version management features. Version checking, throttling, and config safety must be correct before building anything on top. Retrofitting non-blocking architecture or fixing version comparison bugs is expensive.
 
-### Phase 2: Version Management System
-**Rationale:** Establishes single source of truth before automation depends on it; defines version relationship policy (image semver independent from MC CLI version)
-**Delivers:** versions.yaml schema with image version, MC CLI reference, tool versions; manual builds with --build-arg pattern; YAML validation
-**Addresses:** Differentiator features (versions.yaml single source of truth, version validation); Must-have (ARG-based version control)
-**Avoids:** Pitfall #2 (version conflicts) via explicit version relationship policy; Pitfall #6 (YAML parsing failures) via yamllint validation and quote enforcement
-**Needs research:** No—YAML parsing and semver libraries are straightforward; version management patterns well-established
+**Delivers:** Background version checking with hourly throttle, GitHub Releases API integration with ETag support, TOML config extension with file locking, version comparison using packaging library, notification suppression (once per day per version).
 
-### Phase 3: Build Automation Core
-**Rationale:** Automates what was proven manually in Phases 1-2; no version bumping yet, just orchestration
-**Delivers:** build-container.sh script that reads versions.yaml, extracts tool versions, runs podman build with --build-arg flags, tags image
-**Addresses:** Differentiator features (dry-run mode potential, build orchestration); Must-have (semantic versioning enforcement)
-**Avoids:** Pitfall #5 (breaking existing builds) via backward-compatible wrapper; UX pitfall (silent failures) via set -e and clear messaging
-**Needs research:** No—bash scripting patterns for container builds are standard; Python YAML parsing straightforward
+**Addresses features:**
+- Background version checking (table stakes)
+- Timestamp-based throttling (table stakes)
+- Graceful network failure (table stakes)
 
-### Phase 4: Quay.io API Integration
-**Rationale:** Adds external dependency only after core automation works; enables version staleness detection
-**Delivers:** Quay.io REST API querying in build-container.sh; latest semver tag extraction; --check-only flag for dry-run version comparison
-**Addresses:** Differentiator features (registry query for current version, version staleness detection)
-**Avoids:** Pitfall #4 (API rate limiting) via exponential backoff, local caching (5min TTL), and --version override; Security mistake (token handling) via environment variables
-**Needs research:** Minimal—Quay.io API is well-documented; may need brief research on OAuth2 token generation for private repos if needed
+**Avoids pitfalls:**
+- Synchronous version check blocking startup (critical)
+- GitHub API rate limiting without fallback (critical)
+- Concurrent config file writes causing corruption (critical)
+- Infinite update loop from version comparison bug (critical)
 
-### Phase 5: Intelligent Version Bumping
-**Rationale:** Most complex logic; needs all previous pieces working; implements core differentiator (auto patch bump)
-**Delivers:** Version comparison logic (local versions.yaml vs Quay.io latest); tool version change detection via git diff; auto-increment patch on changes; manual --minor/--major flags; updated versions.yaml write-back
-**Addresses:** Differentiator features (tool version change detection, auto patch bump); Must-have (semantic version bumping with manual control)
-**Avoids:** Pitfall #2 (version conflicts) via version validation; UX pitfall (auto-bump without confirmation) via user confirmation prompt
-**Needs research:** No—semver library API is simple; git diff patterns standard; version comparison logic straightforward
+**Stack elements:**
+- packaging library for PEP 440 version comparison
+- requests for GitHub API with ETag headers
+- tomli_w + filelock for safe config writes
+- platformdirs for cache directory
 
-### Phase 6: Registry Publishing
-**Rationale:** Only needed after build process proven reliable; publishing is one-way operation requiring confidence
-**Delivers:** --push flag support; dual tagging (semver + latest); podman push to Quay.io; verification that ContainerManager can pull new image
-**Addresses:** Must-have (registry push capability); Anti-feature avoidance (no auto-push, explicit flag required)
-**Avoids:** Security mistake (hardcoded tokens) via environment variables; UX pitfall (breaking changes without migration) via backward compat verification
-**Needs research:** No—podman push is standard; registry authentication well-documented
+**Technical details:**
+- Hook into cli/main.py after logging setup
+- Implement should_check_version() with 1-hour throttle
+- Store last_check timestamp in separate cache file (not main config)
+- Use packaging.version.Version for all comparisons
+- Implement ETag conditional requests (If-None-Match header)
+- File locking for all config writes
+
+### Phase 2: Auto-Update Mechanics
+**Rationale:** With version checking working reliably, add the ability to actually upgrade. Update execution has complex failure modes (broken installations, version mismatches) that require careful validation and recovery mechanisms.
+
+**Delivers:** mc-update CLI utility as separate console_scripts entry, uv tool upgrade integration with pre-flight checks, post-upgrade validation, version pinning (binary: pinned or latest), Quay.io API integration for container version checking.
+
+**Addresses features:**
+- Manual update trigger (table stakes)
+- Version pinning with TOML persistence (differentiator)
+- Container auto-pull preparation (foundation for Phase 3)
+
+**Avoids pitfalls:**
+- uv tool upgrade failure leaving broken installation (critical)
+- Version pinning without escape hatch (after 30 days, show warnings)
+
+**Architecture components:**
+- cli/update.py with separate entry point (survives package upgrades)
+- Pre-flight checks: uv installed, network accessible, no active sessions
+- Post-upgrade validation: run mc --version, check exit code
+- Recovery instructions on failure
+
+**Technical details:**
+- subprocess.run(['uv', 'tool', 'upgrade', 'mc-cli'], check=True)
+- Pin support: subprocess.run(['uv', 'tool', 'install', f'mc-cli=={version}'])
+- Store pinned_mc_version in config with pin_timestamp
+- Quay.io Docker Registry v2 API: /v2/{namespace}/{repo}/tags/list
+- Filter tags with packaging.version.Version (skip "latest", "stable")
+
+### Phase 3: UX Refinement and Container Integration
+**Rationale:** Core functionality (checking, upgrading) is stable. Now add polish: smart notifications with context, container lifecycle awareness, stale pin warnings. These improve UX without risking core stability.
+
+**Delivers:** Smart update notifications with context (pinned version age, versions behind), container auto-pull with pin respect, version listing with release dates and metadata, container version mismatch indicators in mc container list, stale pin warnings (30-day grace period + weekly reminders).
+
+**Addresses features:**
+- Smart notification context (differentiator)
+- Dual-artifact version management (differentiator)
+- Stale pin warnings (differentiator)
+- Version listing with metadata (differentiator)
+
+**Avoids pitfalls:**
+- Update notification spam training users to ignore (show max once per day)
+- Running container not updated but user expects it (clear messaging)
+
+**Architecture components:**
+- Enhanced update_banner.py with rich context
+- Container lifecycle awareness in container list output
+- Pin age calculation and warning logic
+
+**Technical details:**
+- Calculate pin age: datetime.now(UTC) - pin_timestamp
+- Show warnings after 30 days, weekly reminders after 60 days
+- Container list shows: CASE | STATUS | IMAGE | AVAILABLE (with mismatch indicator)
+- Notification context: "Pinned to 2.0.4 (45 days ago), latest: 2.0.9 (security fixes)"
 
 ### Phase Ordering Rationale
 
-- **Foundation first (Phase 1):** Multi-stage Containerfile must work before adding automation—validates cache behavior, image size benefits, tool integration success; early exit point if pattern doesn't deliver expected benefits
-- **Config before automation (Phase 2):** versions.yaml establishes contract before build-container.sh depends on parsing it—prevents fragile automation built on unstable foundation
-- **Local before remote (Phases 3-4):** Build automation works locally before adding Quay.io API dependency—allows iteration without network calls; API integration adds external dependency only when core proven
-- **Detection before action (Phases 4-5):** Query Quay.io for versions before implementing auto-bump logic—version comparison depends on reliable registry queries
-- **Build before publish (Phases 5-6):** Reliable versioning before pushing to registry—prevents publishing incorrectly-versioned images; publishing is one-way, requires confidence
-- **Incremental validation:** Each phase has clear success criteria; failure in early phase prevents wasted effort in later phases; allows pivots based on discovered constraints
+- **Phase 1 first:** Version checking is the foundation. Non-blocking architecture, correct version comparison, and file locking must be right from the start. Retrofitting these is expensive and risky. All other phases depend on reliable version checking.
+
+- **Phase 2 second:** Update mechanics build on stable version checking. Validation and recovery mechanisms require careful testing. Separating from Phase 1 allows thorough testing of version checking before introducing update execution complexity.
+
+- **Phase 3 last:** UX refinements are valuable but not critical. Can iterate on notification wording, container messaging, and pin warnings without affecting core functionality. Allows real-world feedback from Phase 1-2 to inform UX decisions.
+
+**Dependency chain:**
+- Phase 3 depends on Phase 2 (needs working pin system for stale warnings)
+- Phase 2 depends on Phase 1 (needs reliable version checking before executing upgrades)
+- Phase 1 is foundational (no dependencies)
 
 ### Research Flags
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Multi-stage Architecture):** Multi-stage builds extensively documented in official Podman docs, Docker docs, and 2026 community sources; layer caching behavior well-understood
-- **Phase 2 (Version Management):** PyYAML and semver library usage straightforward; version management patterns established in container ecosystem
-- **Phase 3 (Build Automation):** Bash scripting for container builds follows standard patterns; no novel integration complexity
-- **Phase 5 (Version Bumping):** semver library API simple; git diff patterns standard; no complex algorithm discovery needed
-- **Phase 6 (Registry Publishing):** podman push standard operation; authentication well-documented
+**Phases needing deeper research during planning:**
+- **Phase 2: Auto-Update Mechanics** — Reason: uv tool upgrade failure modes are complex (Python version mismatches, Windows file locking, partial installs). Needs research on recovery strategies and validation approaches. Research found diverse failure modes but limited documentation on detection/recovery.
 
-**Phases potentially needing focused research:**
-- **Phase 4 (Quay.io API):** May warrant brief focused research if authentication complexity arises (OAuth2 token generation, robot accounts) or if advanced API features needed (pagination for repos with 100+ tags, filtering by date/labels); however, basic tag listing is well-documented and likely sufficient for POC
+- **Phase 3: Container Integration** — Reason: Interaction between container auto-pull and existing ContainerManager is unclear. Needs research on podman-py integration, image pull timing (don't pull while containers running), and state management (which image version is each container using).
+
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1: Version Check Infrastructure** — Reason: Well-documented patterns. GitHub CLI, rustup, and multiple Python tools (check4updates, update-checker) provide clear implementation examples. ETag usage, throttling strategies, and file locking are established patterns with abundant documentation.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Podman multi-stage support verified in official docs (2026); semver and PyYAML versions confirmed on PyPI with Python 3.11+ compatibility; skopeo 1.21.0 verified on host; no new container tooling required |
-| Features | HIGH | Multi-stage builds and semantic versioning are industry-standard practices with extensive documentation; table-stakes vs differentiators clearly delineated based on Docker/Podman ecosystem expectations; anti-features validated against real-world pitfalls |
-| Architecture | HIGH | Builder-downloader-final pattern proven in official Docker multi-stage docs and community examples; separation of build-time vs runtime concerns aligns with established containerization best practices; layer caching optimization patterns well-documented |
-| Pitfalls | HIGH | All critical pitfalls validated against real GitHub issues (Podman #20229, #14712) and official documentation; prevention strategies tested in community; recovery costs accurately estimated based on container ecosystem experience |
+| Stack | HIGH | All recommended technologies verified via official documentation. Packaging library is Python standard (used by pip/setuptools). Existing stack (requests, tomli_w, platformdirs, rich) already present in MC. Only new dependency is packaging. |
+| Features | HIGH | Feature expectations validated across multiple established CLIs (GitHub CLI, rustup, uv). Table stakes features consistent across all three. Differentiators (dual-artifact management, pin grace period) are novel but low-risk additions. |
+| Architecture | HIGH | Standard patterns documented in multiple authoritative sources (Salesforce CLI, Azure CLI, check4updates library). Non-blocking check pattern proven in GitHub CLI (24-hour window). Separation of version checking from update execution is industry standard. |
+| Pitfalls | HIGH | All critical pitfalls documented with real-world examples. GitHub API rate limiting has official documentation. uv upgrade failure modes documented in uv issue tracker. Version comparison bugs have established solutions (packaging library). File locking patterns well-documented. |
 
 **Overall confidence:** HIGH
 
+Research drew from official documentation (GitHub API docs, uv docs, packaging docs, Quay.io API docs), established open-source implementations (GitHub CLI, rustup), and Python-specific libraries (check4updates, update-checker) with proven track records. All critical pitfalls have documented prevention strategies with code examples.
+
 ### Gaps to Address
 
-**Minor gaps requiring validation during implementation:**
+Remaining uncertainties to resolve during implementation:
 
-- **Quay.io API pagination:** Research covers basic tag listing, but repos with 100+ tags may require pagination handling—likely not needed for MC CLI container (expects <20 versions in first year), but should validate during Phase 4 if tag count grows
-- **Multi-architecture build timing:** Research assumes TARGETARCH substitution works for OCM CLI (verified in GitHub releases)—should validate during Phase 3 that URL pattern `ocm-linux-${TARGETARCH}` resolves correctly for both amd64 and arm64
-- **Version relationship enforcement:** Research suggests policy declaration in versions.yaml header—during Phase 2 implementation, may need to formalize rules (e.g., "MC minor bump requires image minor bump") with validation logic rather than just comments
-- **Cache hit rate monitoring:** Research mentions build time benefits (3-5min → <1min) but doesn't provide tooling to measure cache effectiveness—consider adding `--verbose` flag to build-container.sh that reports cache hit/miss per stage for troubleshooting
+- **uv installation detection:** Research assumes checking if `uv` binary exists in PATH. Unclear: should mc-update support pip-based upgrades if user installed via pip instead of uv? How to detect installation method reliably? Resolution: Start with uv-only support, document that mc-update requires uv installation. Can add pip support in v2.1 if users request it.
 
-**No blocking gaps identified.** All core patterns validated against official sources and real-world implementations. Gaps above are refinements discovered during execution, not fundamental unknowns.
+- **Container version pinning integration:** Config schema includes `pinned_container_version` but interaction with existing ContainerManager is undefined. Which component enforces pin during container start? How to show version mismatch in container listings? Resolution: Phase 2 planning should map container pin enforcement into existing container lifecycle. Likely: check pin in container_start() before podman.images.pull().
+
+- **ETag storage location:** Should ETag be stored in config.toml or separate cache file? Config write contention vs. cache coherence tradeoff. Resolution: Store in separate cache file (~/.cache/mc/version_check.json) alongside last_check timestamp. Reduces config write frequency, allows cache clearing without losing pins.
+
+- **Notification display timing:** Show banner at start of command (high visibility, may disrupt output) or end of command (less intrusive, may be missed)? Resolution: Test both during Phase 3 UX refinement. GitHub CLI shows at end (less disruptive). Consider: show at start for major versions, at end for patches.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-**Official Documentation:**
-- Podman Build Documentation (docs.podman.io) — Multi-stage build syntax, --target flag, layer caching behavior
-- Skopeo Documentation (containers/skopeo GitHub) — Registry tag listing via `list-tags` command
-- Quay.io API Documentation (docs.quay.io/api) — REST API for repository queries, tag listing endpoints
-- OCM CLI Releases (github.com/openshift-online/ocm-cli/releases) — Binary downloads, v1.0.10 verified Dec 2025
-- Semantic Versioning Spec (semver.org) — Version format specification
-- python-semver PyPI (pypi.org/project/semver) — Version 3.0.4 compatibility, Python 3.7-3.14 support
-- PyYAML PyPI (pypi.org/project/pyyaml) — Version 6.0.2+ for YAML parsing
-- Docker Multi-stage Builds Documentation (docs.docker.com/build/building/multi-stage) — Canonical reference for multi-stage patterns
-- Container Image Versioning (container-registry.com) — Best practices for semver tagging
+- [PEP 440 – Version Identification and Dependency Specification](https://peps.python.org/pep-0440/) — Official Python versioning standard
+- [GitHub REST API - Releases](https://docs.github.com/en/rest/releases/releases) — Official API documentation for version checking
+- [GitHub Docs: Rate Limits for REST API](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api) — Rate limiting and ETag conditional requests
+- [uv Tool Management](https://docs.astral.sh/uv/guides/tools/) — Official uv documentation for tool upgrade mechanics
+- [Quay.io API Documentation](https://docs.quay.io/api/) — Official container registry API
+- [Docker Registry v2 API](https://docs.docker.com/registry/spec/api/) — Standard for /v2/.../tags/list endpoint
+- [packaging library documentation](https://packaging.pypa.io/en/stable/version.html) — PEP 440 version comparison implementation
+- [Rich library documentation](https://rich.readthedocs.io/en/stable/) — Panel component for update banners
 
 ### Secondary (MEDIUM confidence)
+- [GitHub CLI source code](https://github.com/cli/cli) — Real-world implementation of 24-hour version check pattern
+- [Rustup documentation](https://rust-lang.github.io/rustup/) — Auto-update configuration patterns
+- [check4updates Python library](https://github.com/MatthewReid854/check4updates) — Reusable version check implementation
+- [update-checker Python module](https://github.com/bboe/update_checker) — PyPI version checking patterns
+- [filelock library](https://pypi.org/project/filelock/) — File locking for concurrent config writes
+- [How we made Python's packaging library 3x faster](https://iscinumpy.dev/post/packaging-faster/) — Performance improvements in v26.0
 
-**Community Best Practices (2026 sources):**
-- How to Build Images with Podman (OneUptime Blog, Jan 2026) — Multi-stage build patterns and optimization
-- Skopeo: The Unsung Hero (Red Hat Developer, Sep 2025) — Registry inspection patterns
-- Docker Layer Caching Strategies (OneUptime Blog, Jan 2026) — Cache optimization techniques
-- Semantic Versioning Automation (OneUptime Blog, Jan 2026) — Version bumping workflows
-- Container Anti-Patterns (dev.to, 2026) — Common mistakes and avoidance strategies
-- DevOps Anti-Patterns (Medium, 2026) — Build automation pitfalls
-
-**Verified GitHub Issues:**
-- containers/podman#20229 — Layer caching does not work with --squash-all --layers
-- containers/podman#14712 — podman build --squash always rebuilds every layer
-- containers/buildah#4950 — buildah doesn't use cached layers with multi-stage build and --label
-- moby/buildkit#2120 — cache-from and COPY invalidates all layers
-
-### Tertiary (LOW confidence)
-
-No tertiary sources required—all findings validated against official documentation or verified community sources with 2025-2026 timestamps.
+### Tertiary (LOW confidence, needs validation)
+- uv GitHub issues (#8028, #11534, #11930, #8528) — Upgrade failure modes and recovery strategies (anecdotal but informative)
+- [Quay.io rate limiting](https://access.redhat.com/solutions/6218921) — Community reports of "few requests per second" limit (not officially documented)
 
 ---
-*Research completed: 2026-02-09*
+*Research completed: 2026-02-11*
 *Ready for roadmap: yes*
