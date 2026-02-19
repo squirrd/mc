@@ -1,5 +1,32 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.4 Foundation (Shipped: 2026-02-19)
+
+**Delivered:** Version checking infrastructure and configuration foundation for automatic updates (MC CLI only)
+
+**Phases completed:** 26-28 (3 phases, 6 plans total)
+
+**Key accomplishments:**
+
+- Non-blocking version check infrastructure with daemon threads, GitHub API integration with ETag caching, and PEP 440 version comparison
+- Configuration foundation extended TOML config with [version] section and atomic write safety for version management fields
+- Runtime mode detection with layered container detection preventing auto-updates in containerized environments
+- Comprehensive test coverage with 67 tests across 3 phases (100% pass rate) validating infrastructure reliability
+- Foundation for auto-updates with clean interfaces and patterns established ready for v2.0.5 MC Auto-Update milestone
+
+**Stats:**
+
+- 32 files created/modified (+6,510 insertions, -55 deletions)
+- 7,914 lines of Python code total
+- 3 phases, 6 plans
+- Same day delivery (2026-02-19, phases 16:40-19:21, ~3 hours)
+
+**Git range:** `9562c88` (docs(26): capture phase context) → `ee5be90` (docs(28): complete version check infrastructure phase)
+
+**What's next:** Start v2.0.5 MC Auto-Update milestone via `/gsd:new-milestone`
+
+---
+
 ## v2.0.3 Container Tools (Shipped: 2026-02-10)
 
 **Delivered:** Multi-stage container architecture with efficient layer caching and versioned tool management

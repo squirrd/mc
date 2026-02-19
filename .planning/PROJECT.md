@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.3 (2026-02-10)
+**Latest Release:** v2.0.4 (2026-02-19)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -23,7 +23,10 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Window ID tracking system eliminating duplicate terminal windows (macOS and Linux X11)
 - ✓ Self-healing window registry with automatic cleanup and reconcile command
 - ✓ Build automation with version management and intelligent patch bumping
-- ✓ Production-ready test suite: 530 tests passing with 74.65% coverage
+- ✓ Version check infrastructure with GitHub API, ETag caching, and PEP 440 comparison
+- ✓ Runtime mode detection preventing containerized auto-updates
+- ✓ Configuration foundation with atomic writes and version management fields
+- ✓ Production-ready test suite: 597 tests passing with 75% coverage
 
 ## Requirements
 
@@ -126,25 +129,39 @@ Shipped in v2.0.3 (2026-02-10):
 - ✓ SHA256 checksum verification for downloaded tool binaries — v2.0.3
 - ✓ Multi-stage pattern proven scalable for additional tools — v2.0.3
 
+Shipped in v2.0.4 (2026-02-19):
+
+**Version Check Infrastructure:**
+- ✓ GitHub releases API version checking for MC CLI with daemon threads — v2.0.4
+- ✓ Hourly throttling with timestamp-based caching (3600s, extends to 86400s on rate limits) — v2.0.4
+- ✓ Non-blocking checks never delay CLI commands (daemon thread lifecycle) — v2.0.4
+- ✓ ETag conditional requests to prevent API rate limiting (If-None-Match header) — v2.0.4
+- ✓ PEP 440-compliant version comparison using packaging library — v2.0.4
+- ✓ Offline resilience with cached version data and timestamps — v2.0.4
+- ✓ Graceful network failure handling with structured logging — v2.0.4
+
+**Configuration Management:**
+- ✓ TOML config extensions for version management ([version] section with 7 fields) — v2.0.4
+- ✓ Atomic config writes with temp file + os.replace() pattern — v2.0.4
+- ✓ Backward-compatible config reads with dict.get() defaults — v2.0.4
+
+**Runtime Mode Detection:**
+- ✓ Container vs host detection (MC_RUNTIME_MODE env var + file fallback) — v2.0.4
+- ✓ Auto-update guard prevents version checks in containerized environments — v2.0.4
+- ✓ Informational messaging via Rich Console for container context — v2.0.4
+
 ### Active
 
-**Current Milestone: v2.0.4 Foundation**
+**Next Milestone: v2.0.5 MC Auto-Update**
 
-**Goal:** Build version checking infrastructure and configuration foundation for automatic updates (MC CLI only in this milestone).
+**Goal:** MC CLI auto-update functionality, mc-update utility for MC management, and update notifications.
 
 **Target features:**
-- GitHub releases API version checking for MC CLI
-- Hourly throttling with timestamp-based caching
-- Non-blocking checks (never delay CLI commands)
-- ETag conditional requests to prevent API rate limiting
-- PEP 440-compliant version comparison
-- TOML config extensions for version management
-- File locking for safe concurrent config writes
-- Runtime mode detection (host vs container)
-
-**Future Milestones:**
-- v2.0.5 MC Auto-Update: MC auto-update, mc-update utility, notifications, pinning
-- v2.0.6 Container Management: Container version checking, dual-artifact coordination
+- MC auto-update using `uv tool upgrade mc` subprocess
+- mc-update utility for version control (pin/unpin/list/check commands)
+- Update notifications as Rich banners on stderr
+- Version pinning support with grace periods and stale warnings
+- Post-upgrade validation with recovery instructions
 
 ### Out of Scope
 
@@ -158,15 +175,16 @@ Shipped in v2.0.3 (2026-02-10):
 
 ## Context
 
-**Current State (v2.0.3 shipped 2026-02-10):**
+**Current State (v2.0.4 shipped 2026-02-19):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
-- 7,349 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
+- 7,914 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
-- External dependencies: Red Hat API, Podman, SQLite
-- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, wmctrl/xdotool (Linux X11), skopeo, yq
-- Configuration: TOML-based (~/mc/config/config.toml) with auto-migration
+- External dependencies: Red Hat API, Podman, SQLite, GitHub API
+- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, packaging, wmctrl/xdotool (Linux X11), skopeo, yq
+- Configuration: TOML-based (~/mc/config/config.toml) with version management section
 - Type-safe: mypy strict mode passing with 100% type coverage
 - Container build: Multi-stage architecture with automated versioning and registry publishing
+- Version management: Background checks via daemon threads with ETag caching
 
 **Key Features:**
 - Container orchestration with per-case isolated workspaces
@@ -174,7 +192,10 @@ Shipped in v2.0.3 (2026-02-10):
 - Container lifecycle management (create, list, stop, delete, exec)
 - Multi-stage container builds with 12-layer cache optimization
 - Build automation with intelligent auto-versioning and registry publishing
-- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.2)
+- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.4)
+- Version check infrastructure with non-blocking daemon threads
+- GitHub API integration with ETag caching and hourly throttling
+- Runtime mode detection preventing containerized auto-updates
 - Red Hat API integration with 5-minute cache TTL
 - SQLite state persistence and reconciliation
 - Parallel downloads (8 concurrent threads) with rich progress bars
@@ -232,6 +253,11 @@ Shipped in v2.0.3 (2026-02-10):
 | 8 concurrent downloads default | Balances download speed with API rate limits and system resources | ✓ Good - 8x faster for multiple files |
 | Rich progress library | Multi-file progress tracking with per-file speed/ETA | ✓ Good - excellent UX |
 | Backoff library for retry | Exponential backoff with jitter prevents thundering herd | ✓ Good - resilient network operations |
+| Daemon threads for version checking | Matches existing CacheManager pattern, simpler than asyncio | ✓ Good - consistent threading semantics |
+| ETag conditional requests | Preserves GitHub API rate limit quota with 304 Not Modified responses | ✓ Good - efficient API usage |
+| Separate check vs notification throttle | Hourly checks (3600s) but daily notifications (86400s) reduces user interruption | ✓ Good - balanced UX |
+| MC_RUNTIME_MODE env var | Explicit container detection contract, more reliable than filesystem sniffing | ✓ Good - clear semantics |
+| Descope file locking (UCTL-09) | Single-process assumption documented in CONTEXT.md, atomic writes sufficient | ✓ Good - simpler implementation |
 
 ---
-*Last updated: 2026-02-11 after v2.0.4 milestone initialization*
+*Last updated: 2026-02-19 after v2.0.4 milestone completion*
