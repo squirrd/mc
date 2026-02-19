@@ -24,6 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "backoff>=2.2.1",
+    "packaging>=26.0",
     "platformdirs>=4.0.0",
     "podman>=5.7.0",
     "requests>=2.31.0",

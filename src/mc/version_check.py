@@ -6,7 +6,17 @@ import threading
 import time
 from typing import Optional
 
+import requests
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
+
 from mc.config.manager import ConfigManager
+from mc.version import get_version
 
 logger = logging.getLogger(__name__)
 
@@ -104,14 +114,129 @@ class VersionChecker:
         except Exception as e:
             logger.error(f"Version check failed: {e}")
 
-    def _perform_version_check(self) -> None:
-        """Perform version check and update config.
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
+    def _fetch_latest_release(self, etag: Optional[str] = None) -> tuple[Optional[dict], str, int]:
+        """Fetch latest release from GitHub with ETag support.
 
-        This method will be fully implemented in Task 2.
-        It will fetch latest release from GitHub, compare versions,
-        and update config with results.
+        Args:
+            etag: Previous ETag value for conditional request
+
+        Returns:
+            Tuple of (release_data, new_etag, status_code)
+            - release_data is None if 304 Not Modified
+            - new_etag is updated value (or same if 304)
+            - status_code for error handling
         """
-        pass  # Implementation in Task 2
+        url = f'https://api.github.com/repos/{self.GITHUB_OWNER}/{self.GITHUB_REPO}/releases/latest'
+        headers = {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+
+        if etag:
+            headers['If-None-Match'] = etag
+
+        response = requests.get(url, headers=headers, timeout=10)
+
+        # Handle 304 Not Modified
+        if response.status_code == 304:
+            return None, etag, 304
+
+        # Fail fast on 4xx errors (don't retry)
+        if 400 <= response.status_code < 500:
+            response.raise_for_status()
+
+        # 5xx errors will be retried by decorator
+        response.raise_for_status()
+
+        new_etag = response.headers.get('ETag', '')
+        return response.json(), new_etag, 200
+
+    def _perform_version_check(self) -> None:
+        """Perform version check and update config."""
+        try:
+            # Get current version
+            current = get_version()
+
+            # Load version config
+            version_config = self._config_manager.get_version_config()
+            cached_etag = self._config_manager.get('version.etag', None)
+            latest_known = self._config_manager.get('version.latest_known', None)
+            latest_known_at = self._config_manager.get('version.latest_known_at', None)
+
+            # Fetch latest release with ETag support
+            release_data, new_etag, status_code = self._fetch_latest_release(cached_etag)
+
+            # Load current config for update
+            try:
+                config = self._config_manager.load()
+            except FileNotFoundError:
+                from mc.config.models import get_default_config
+                config = get_default_config()
+
+            # Ensure [version] section exists
+            if 'version' not in config:
+                config['version'] = {}
+
+            # Update last_check and last_status_code for all responses
+            config['version']['last_check'] = time.time()
+            config['version']['last_status_code'] = status_code
+
+            # Handle 304 Not Modified - keep cached data, update timestamp only
+            if status_code == 304:
+                logger.debug("GitHub API returned 304 Not Modified - using cached version data")
+                self._config_manager.save_atomic(config)
+
+                # Check if cached version is newer and should display notification
+                if latest_known and self._is_newer_version(current, latest_known):
+                    self._display_notification(current, latest_known)
+                return
+
+            # Handle 200 success - parse release data and update config
+            if status_code == 200 and release_data:
+                # Extract version from tag_name (e.g., "v2.0.5" -> "2.0.5")
+                tag_name = release_data.get('tag_name', '')
+                latest_version = tag_name.lstrip('v')
+
+                # Update config with new data
+                config['version']['etag'] = new_etag
+                config['version']['latest_known'] = latest_version
+                config['version']['latest_known_at'] = time.time()
+
+                # Save atomically
+                self._config_manager.save_atomic(config)
+
+                logger.debug(f"Version check complete: current={current}, latest={latest_version}")
+
+                # Display notification if newer version available
+                if self._is_newer_version(current, latest_version):
+                    self._display_notification(current, latest_version)
+
+        except Exception as e:
+            logger.error(f"Failed to perform version check: {e}")
+            # Silent failure - don't raise exceptions from background thread
+
+    def _is_newer_version(self, current: str, latest: str) -> bool:
+        """Check if latest version is newer than current using PEP 440.
+
+        This method will be fully implemented in Task 3.
+
+        Args:
+            current: Current installed version (e.g., "2.0.4")
+            latest: Latest available version from GitHub (e.g., "2.0.5")
+
+        Returns:
+            True if latest > current, False otherwise
+        """
+        pass  # Implementation in Task 3
 
     def _display_notification(self, current: str, latest: str) -> None:
         """Display update notification to stderr.
