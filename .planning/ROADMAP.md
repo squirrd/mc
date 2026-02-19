@@ -300,8 +300,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — Add fallback container detection and auto-update guard with Rich messaging
-- [ ] 27-02-PLAN.md — Test suite for fallback detection and auto-update guard behavior
+- [x] 27-01-PLAN.md — Add fallback container detection and auto-update guard with Rich messaging
+- [x] 27-02-PLAN.md — Test suite for fallback detection and auto-update guard behavior
 
 #### Phase 28: Version Check Infrastructure
 **Goal**: Non-blocking GitHub API integration with throttling and caching for MC CLI version checking
@@ -339,7 +339,7 @@ Phases execute in numeric order: 26 → 27 → 28
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 26. Configuration Foundation | v2.0.4 | 2/2 | ✓ Complete | 2026-02-19 |
-| 27. Runtime Mode Detection | v2.0.4 | 0/2 | Not started | - |
+| 27. Runtime Mode Detection | v2.0.4 | 2/2 | ✓ Complete | 2026-02-19 |
 | 28. Version Check Infrastructure | v2.0.4 | 0/TBD | Not started | - |
 
 ---

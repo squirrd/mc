@@ -26,16 +26,16 @@ Infrastructure for version checking, configuration management, and runtime detec
 
 ### Configuration Management
 
-- [ ] **UCTL-05**: System persists pinned versions in TOML config (pinned_mc_version field)
-- [ ] **UCTL-06**: System persists last version check timestamp in TOML config
-- [ ] **UCTL-09**: System uses file locking to prevent concurrent TOML config writes
-- [ ] **UCTL-10**: System performs atomic writes to TOML config (write temp, rename)
+- [x] **UCTL-05**: System persists pinned versions in TOML config (pinned_mc_version field)
+- [x] **UCTL-06**: System persists last version check timestamp in TOML config
+- [x] **UCTL-09**: System uses file locking to prevent concurrent TOML config writes
+- [x] **UCTL-10**: System performs atomic writes to TOML config (write temp, rename)
 
 ### Runtime Mode Detection
 
-- [ ] **RTMD-01**: System detects when running in container (agent mode) vs host
-- [ ] **RTMD-02**: System disables auto-update when running in container (agent mode)
-- [ ] **RTMD-03**: Container mode shows informational message: "Updates managed via container builds"
+- [x] **RTMD-01**: System detects when running in container (agent mode) vs host
+- [x] **RTMD-02**: System disables auto-update when running in container (agent mode)
+- [x] **RTMD-03**: Container mode shows informational message: "Updates managed via container builds"
 
 ---
 
@@ -169,13 +169,13 @@ Which phases cover which requirements. Updated during roadmap creation for each 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UCTL-05 | Phase 26 | Pending |
-| UCTL-06 | Phase 26 | Pending |
-| UCTL-09 | Phase 26 | Pending |
-| UCTL-10 | Phase 26 | Pending |
-| RTMD-01 | Phase 27 | Pending |
-| RTMD-02 | Phase 27 | Pending |
-| RTMD-03 | Phase 27 | Pending |
+| UCTL-05 | Phase 26 | Complete |
+| UCTL-06 | Phase 26 | Complete |
+| UCTL-09 | Phase 26 | Complete |
+| UCTL-10 | Phase 26 | Complete |
+| RTMD-01 | Phase 27 | Complete |
+| RTMD-02 | Phase 27 | Complete |
+| RTMD-03 | Phase 27 | Complete |
 | VCHK-01 | Phase 28 | Pending |
 | VCHK-03 | Phase 28 | Pending |
 | VCHK-04 | Phase 28 | Pending |
@@ -203,4 +203,4 @@ Which phases cover which requirements. Updated during roadmap creation for each 
 
 ---
 *Requirements defined: 2026-02-11*
-*Last updated: 2026-02-11 with v2.0.4 traceability*
+*Last updated: 2026-02-19 — Phase 26 and 27 requirements completed*
