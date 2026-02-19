@@ -71,7 +71,10 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet. (v2.0.4 is clean slate)
+1. **Address orphaned helper functions from v2.0.4** (planning)
+   - 3 exported functions not currently used in production
+   - All tested and functional, API design question for v2.0.5
+   - File: .planning/todos/pending/2026-02-19-address-orphaned-helper-functions.md
 
 ### Blockers/Concerns
 
