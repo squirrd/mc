@@ -123,11 +123,18 @@ def is_running_in_container() -> bool:
         False
     """
     # Primary: Check explicit environment variable (most reliable)
-    if os.environ.get("MC_RUNTIME_MODE") == "agent":
+    mode = os.environ.get("MC_RUNTIME_MODE")
+
+    if mode == "agent":
         return True
+
+    if mode == "controller":
+        # Explicitly set to controller mode - skip file checks
+        return False
 
     # Fallback: Check filesystem indicators for edge cases
     # (manual podman run, third-party containers, missing ENV directive)
+    # Only used when MC_RUNTIME_MODE is not set at all
     container_files = [
         Path("/run/.containerenv"),  # Podman v1.0+ standard
         Path("/.containerenv"),       # Podman legacy
