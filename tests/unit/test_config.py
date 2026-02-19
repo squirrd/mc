@@ -276,7 +276,9 @@ class TestVersionConfig:
 
         assert 'version' in config
         assert config['version']['pinned_mc'] == 'latest'
-        assert config['version']['last_check'] is None
+        # last_check is omitted from default config (TOML doesn't support None)
+        # The get_version_config() method provides None as default when missing
+        assert 'last_check' not in config['version']
 
     def test_validate_config_accepts_version_section(self):
         """Test that validation accepts config with version section."""

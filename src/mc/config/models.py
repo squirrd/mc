@@ -25,8 +25,9 @@ def get_default_config() -> dict[str, Any]:
             "socket_path": ""
         },
         "version": {
-            "pinned_mc": "latest",
-            "last_check": None
+            "pinned_mc": "latest"
+            # Note: last_check omitted (defaults to None when missing)
+            # TOML doesn't support None values, so we omit the field
         }
     }
 
