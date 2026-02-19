@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 28 of 28 (Version Check Infrastructure)
-Plan: 1 of 1 (completed)
+Plan: 2 of 2 (completed)
 Status: Phase complete
-Last activity: 2026-02-19 — Completed 28-01-PLAN.md
+Last activity: 2026-02-19 — Completed 28-02-PLAN.md
 
 Progress: [████████████████████] 100% (28 of 28 phases complete across all milestones)
 
@@ -32,11 +32,11 @@ Progress: [████████████████████] 100% (2
 | v2.0.1 Cleanup | 5 batches | 13 todos | 2 days |
 | v2.0.2 Window Tracking | 5 | 10 | 6 hours |
 | v2.0.3 Container Tools | 6 | 9 | 14 hours |
-| v2.0.4 Foundation | 3 | 1 | 3 min |
+| v2.0.4 Foundation | 3 | 2 | 7 min |
 
 **Recent Trend:**
-- v2.0.4 showed highly efficient execution (1 plan in 3 minutes)
-- Trend: Excellent velocity with focused infrastructure implementation
+- v2.0.4 showed highly efficient execution (2 plans in 7 minutes)
+- Trend: Excellent velocity with focused infrastructure implementation and comprehensive testing
 
 *Updated after each plan completion*
 
@@ -47,6 +47,10 @@ Progress: [████████████████████] 100% (2
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- v2.0.4 (28-02): Silent failure for auto-check (DEBUG logging), visible errors for manual command (stderr + exit 1)
+- v2.0.4 (28-02): Manual override bypasses throttle by calling _perform_version_check() directly
+- v2.0.4 (28-02): CLI startup hooks placed after config validation, before command routing
+- v2.0.4 (28-02): Runtime mode check guards containerized operations (get_runtime_mode() != 'agent')
 - v2.0.4 (28-01): Use daemon threads with atexit cleanup (not asyncio) - matches existing CacheManager pattern
 - v2.0.4 (28-01): Store ETag, latest_known, latest_known_at, last_status_code in [version] section for conditional requests
 - v2.0.4 (28-01): Retry with tenacity for transient failures, fail fast on 4xx errors
@@ -71,12 +75,12 @@ None yet. (v2.0.4 is clean slate)
 
 ### Blockers/Concerns
 
-None. Phase 28 complete - version check infrastructure ready for CLI startup integration and future auto-update functionality (v2.0.5).
+None. Phase 28 complete - version check infrastructure fully integrated into CLI with comprehensive test coverage. Ready for v2.0.5 MC Auto-Update milestone (update installation logic).
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 28-01-PLAN.md (Phase 28 complete)
+Stopped at: Completed 28-02-PLAN.md (Phase 28 complete)
 Resume file: None (all Phase 28 plans complete)
 
 ---
