@@ -1,7 +1,9 @@
 """Configuration file manager for MC CLI."""
 
+import os
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -126,3 +128,43 @@ class ConfigManager:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "wb") as f:
             tomli_w.dump(config, f)
+
+    def save_atomic(self, config: dict[str, Any]) -> None:
+        """Save configuration to file atomically using temp file + rename pattern.
+
+        This method ensures that the config file is never left in a partially written
+        state, even if the process crashes or is interrupted during the write.
+
+        Args:
+            config: Configuration dictionary to save
+        """
+        config_path = self.get_config_path()
+        # Ensure parent directory exists
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create temp file in same directory (ensures same filesystem for atomic replace)
+        temp = tempfile.NamedTemporaryFile(
+            mode='wb',
+            dir=config_path.parent,  # CRITICAL: same directory as target
+            prefix='.config_',       # hidden temp file
+            suffix='.tmp',
+            delete=False             # manual cleanup for atomic rename
+        )
+
+        try:
+            # Write config to temp file
+            tomli_w.dump(config, temp)
+            temp.flush()
+            os.fsync(temp.fileno())  # Force write to disk (durability)
+            temp.close()
+
+            # Atomic replace: either complete success or complete failure
+            os.replace(temp.name, config_path)
+        except Exception:
+            # Cleanup temp file on failure
+            temp.close()
+            try:
+                os.unlink(temp.name)
+            except OSError:
+                pass  # Temp file already gone, ignore
+            raise
