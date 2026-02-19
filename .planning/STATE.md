@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 28 of 28 (Version Check Infrastructure)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-02-19 — Phase 27 complete, verification passed
+Plan: 1 of 1 (completed)
+Status: Phase complete
+Last activity: 2026-02-19 — Completed 28-01-PLAN.md
 
-Progress: [██████████████████░░] 96% (27 of 28 phases complete across all milestones)
+Progress: [████████████████████] 100% (28 of 28 phases complete across all milestones)
 
 ## Performance Metrics
 
@@ -32,10 +32,11 @@ Progress: [██████████████████░░] 96% (27
 | v2.0.1 Cleanup | 5 batches | 13 todos | 2 days |
 | v2.0.2 Window Tracking | 5 | 10 | 6 hours |
 | v2.0.3 Container Tools | 6 | 9 | 14 hours |
+| v2.0.4 Foundation | 3 | 1 | 3 min |
 
 **Recent Trend:**
-- v2.0.3 showed efficient execution (9 plans in 14 hours)
-- Trend: Stable velocity with improved plan scoping
+- v2.0.4 showed highly efficient execution (1 plan in 3 minutes)
+- Trend: Excellent velocity with focused infrastructure implementation
 
 *Updated after each plan completion*
 
@@ -46,6 +47,11 @@ Progress: [██████████████████░░] 96% (27
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- v2.0.4 (28-01): Use daemon threads with atexit cleanup (not asyncio) - matches existing CacheManager pattern
+- v2.0.4 (28-01): Store ETag, latest_known, latest_known_at, last_status_code in [version] section for conditional requests
+- v2.0.4 (28-01): Retry with tenacity for transient failures, fail fast on 4xx errors
+- v2.0.4 (28-01): Separate hourly check throttle (3600s) from daily notification throttle (86400s)
+- v2.0.4 (28-01): Extend check throttle to 24 hours when rate limited (last_status_code == 403)
 - v2.0.4 (27-02): Fixed MC_RUNTIME_MODE=controller to skip file checks (env var precedence over filesystem)
 - v2.0.4 (27-02): Use unittest.mock.patch for Path mocking (standard library approach)
 - v2.0.4 (27-02): Use capsys fixture for stderr message verification (pytest standard)
@@ -58,7 +64,6 @@ Recent decisions affecting current work:
 - v2.0.3: Multi-stage container architecture with independent image versioning - proven scalable for version checking infrastructure
 - v1.0: TOML config file format chosen for cross-platform support - extending in v2.0.4 for version management fields
 - v1.0: File-based token cache over keyring - similar pattern applies to version check cache
-- v1.0: Backoff library for retry - applies to GitHub API version checks with rate limiting
 
 ### Pending Todos
 
@@ -66,13 +71,13 @@ None yet. (v2.0.4 is clean slate)
 
 ### Blockers/Concerns
 
-None yet. Research phase completed with HIGH confidence. All critical pitfalls documented with prevention strategies.
+None. Phase 28 complete - version check infrastructure ready for CLI startup integration and future auto-update functionality (v2.0.5).
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Phase 27 complete and verified
-Resume file: None (ready to plan Phase 28 - Version Check Infrastructure)
+Stopped at: Completed 28-01-PLAN.md (Phase 28 complete)
+Resume file: None (all Phase 28 plans complete)
 
 ---
 *State initialized: 2026-02-11 for v2.0.4 Foundation milestone*
