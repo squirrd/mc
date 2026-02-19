@@ -168,3 +168,51 @@ class ConfigManager:
             except OSError:
                 pass  # Temp file already gone, ignore
             raise
+
+    def get_version_config(self) -> dict[str, Any]:
+        """Get version configuration with backward-compatible defaults.
+
+        Returns dict with keys:
+        - pinned_mc: Version string (default: "latest" if not set)
+        - last_check: Unix epoch timestamp (float) or None if never checked
+
+        Returns:
+            Version configuration dictionary
+        """
+        return {
+            'pinned_mc': self.get('version.pinned_mc', 'latest'),
+            'last_check': self.get('version.last_check', None)
+        }
+
+    def update_version_config(
+        self,
+        pinned_mc: str | None = None,
+        last_check: float | None = None
+    ) -> None:
+        """Update version configuration fields atomically.
+
+        Only updates fields that are specified (not None). Preserves other fields.
+
+        Args:
+            pinned_mc: Version string to pin to, or None to keep current
+            last_check: Unix epoch timestamp, or None to keep current
+        """
+        # Load current config (or get defaults if missing)
+        try:
+            config = self.load()
+        except FileNotFoundError:
+            from mc.config.models import get_default_config
+            config = get_default_config()
+
+        # Ensure [version] section exists
+        if 'version' not in config:
+            config['version'] = {}
+
+        # Update only specified fields
+        if pinned_mc is not None:
+            config['version']['pinned_mc'] = pinned_mc
+        if last_check is not None:
+            config['version']['last_check'] = last_check
+
+        # Save using atomic write for safety
+        self.save_atomic(config)
