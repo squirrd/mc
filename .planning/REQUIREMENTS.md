@@ -16,13 +16,13 @@ Infrastructure for version checking, configuration management, and runtime detec
 
 ### Version Checking Infrastructure (MC CLI only)
 
-- [ ] **VCHK-01**: System checks GitHub releases API for latest MC CLI version
-- [ ] **VCHK-03**: Version checks use hourly throttling (timestamp-based, no check if <1 hour since last)
-- [ ] **VCHK-04**: Version checks are non-blocking (never delay mc command execution)
-- [ ] **VCHK-05**: System uses ETag conditional requests to prevent GitHub API rate limiting
-- [ ] **VCHK-06**: System caches version data with timestamps for offline resilience
-- [ ] **VCHK-07**: System compares versions using PEP 440-compliant comparison (packaging library)
-- [ ] **VCHK-08**: System handles network failures gracefully (show warning, continue with current version)
+- [x] **VCHK-01**: System checks GitHub releases API for latest MC CLI version
+- [x] **VCHK-03**: Version checks use hourly throttling (timestamp-based, no check if <1 hour since last)
+- [x] **VCHK-04**: Version checks are non-blocking (never delay mc command execution)
+- [x] **VCHK-05**: System uses ETag conditional requests to prevent GitHub API rate limiting
+- [x] **VCHK-06**: System caches version data with timestamps for offline resilience
+- [x] **VCHK-07**: System compares versions using PEP 440-compliant comparison (packaging library)
+- [x] **VCHK-08**: System handles network failures gracefully (show warning, continue with current version)
 
 ### Configuration Management
 
