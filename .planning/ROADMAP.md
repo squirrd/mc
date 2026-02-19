@@ -313,11 +313,11 @@ Plans:
   3. System uses ETag conditional requests and caches version data with timestamps
   4. Version comparison uses PEP 440-compliant logic (packaging library)
   5. Network failures are handled gracefully (show warning, continue with current version)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 28-01: TBD during planning
-- [ ] 28-02: TBD during planning
+- [ ] 28-01-PLAN.md — VersionChecker core with daemon threads, GitHub API integration, and PEP 440 comparison
+- [ ] 28-02-PLAN.md — CLI integration, manual override command, and comprehensive test suite
 
 ### 📋 v2.0.5 MC Auto-Update (Planned)
 
@@ -340,7 +340,7 @@ Phases execute in numeric order: 26 → 27 → 28
 |-------|-----------|----------------|--------|-----------|
 | 26. Configuration Foundation | v2.0.4 | 2/2 | ✓ Complete | 2026-02-19 |
 | 27. Runtime Mode Detection | v2.0.4 | 2/2 | ✓ Complete | 2026-02-19 |
-| 28. Version Check Infrastructure | v2.0.4 | 0/TBD | Not started | - |
+| 28. Version Check Infrastructure | v2.0.4 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-11 for v2.0.4 Foundation milestone*
