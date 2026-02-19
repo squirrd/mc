@@ -23,6 +23,10 @@ def get_default_config() -> dict[str, Any]:
             "timeout": 120,
             "retry_attempts": 3,
             "socket_path": ""
+        },
+        "version": {
+            "pinned_mc": "latest",
+            "last_check": None
         }
     }
 
@@ -73,6 +77,21 @@ def validate_config(config: dict[str, Any]) -> bool:
         if "socket_path" in podman_config:
             # socket_path can be empty string (auto-detect) or a path
             if not isinstance(podman_config["socket_path"], str):
+                return False
+
+    # Version config is optional (backward compatibility), but if present must have valid structure
+    if "version" in config:
+        if not isinstance(config["version"], dict):
+            return False
+
+        # Validate version config fields if present
+        version_config = config["version"]
+        if "pinned_mc" in version_config:
+            if not isinstance(version_config["pinned_mc"], str):
+                return False
+        if "last_check" in version_config:
+            # last_check must be float or None
+            if version_config["last_check"] is not None and not isinstance(version_config["last_check"], (float, int)):
                 return False
 
     return True
