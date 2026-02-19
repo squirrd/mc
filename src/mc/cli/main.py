@@ -133,6 +133,11 @@ def main() -> ExitCode:
         quick_parser = subparsers.add_parser('quick_access', help=argparse.SUPPRESS)
         quick_parser.add_argument('case_number', type=str, help='Case number')
 
+        # Version subcommand
+        version_parser = subparsers.add_parser('version', help='Show version and check for updates')
+        version_parser.add_argument('--update', action='store_true',
+                                    help='Force immediate version check (bypasses hourly throttle)')
+
         # Parse arguments (--version/--help exit here, before config check)
         args = parser.parse_args()
 
@@ -217,6 +222,8 @@ def main() -> ExitCode:
                 container_parser.print_help()
         elif args.command == 'quick_access':
             container.quick_access(args)
+        elif args.command == 'version':
+            other.version(update=args.update)
         else:
             parser.print_help()
 
