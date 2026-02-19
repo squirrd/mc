@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 27 of 28 (Runtime Mode Detection)
-Plan: Not yet planned
-Status: Ready to plan
-Last activity: 2026-02-19 — Phase 26 complete, verification passed
+Plan: 1 of 1 (Runtime Mode Detection Foundation)
+Status: Phase complete
+Last activity: 2026-02-19 — Completed 27-01-PLAN.md
 
-Progress: [████████████████░░░░] 93% (26 of 28 phases complete across all milestones)
+Progress: [████████████████░░░░] 96% (27 of 28 phases complete across all milestones)
 
 ## Performance Metrics
 
@@ -46,6 +46,10 @@ Progress: [████████████████░░░░] 93% (26
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- v2.0.4 (27-01): Use MC_RUNTIME_MODE environment variable as primary container detection (explicit contract)
+- v2.0.4 (27-01): Fallback to filesystem indicators for edge cases (defensive /run/.containerenv, /.dockerenv)
+- v2.0.4 (27-01): Block auto-update in agent mode with informational Rich message
+- v2.0.4 (27-01): Avoid cgroups parsing (fragile, deprecated in cgroups v2, broken by Linux 6.12+)
 - v2.0.4 (26-02): Omit last_check from default config when None - TOML doesn't support None values
 - v2.0.4 (26-02): get_version_config() provides None as default when last_check field is missing
 - v2.0.3: Multi-stage container architecture with independent image versioning - proven scalable for version checking infrastructure
@@ -64,8 +68,8 @@ None yet. Research phase completed with HIGH confidence. All critical pitfalls d
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Phase 26 complete and verified
-Resume file: None (ready to plan Phase 27 - Runtime Mode Detection)
+Stopped at: Completed 27-01-PLAN.md
+Resume file: None (Phase 27 complete, ready for Phase 28 - Version Checking)
 
 ---
 *State initialized: 2026-02-11 for v2.0.4 Foundation milestone*
