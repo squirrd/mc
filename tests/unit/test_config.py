@@ -2,6 +2,7 @@
 
 import pytest
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from mc.config.manager import ConfigManager
@@ -264,3 +265,91 @@ class TestLegacyEnvVarDetection:
         assert "RH_API_OFFLINE_TOKEN" in captured.out
         assert "unset MC_BASE_DIR" in captured.out
         assert "unset RH_API_OFFLINE_TOKEN" in captured.out
+
+
+class TestVersionConfig:
+    """Tests for version config functionality."""
+
+    def test_default_config_includes_version_section(self):
+        """Test that default config includes version section with correct defaults."""
+        config = get_default_config()
+
+        assert 'version' in config
+        assert config['version']['pinned_mc'] == 'latest'
+        assert config['version']['last_check'] is None
+
+    def test_validate_config_accepts_version_section(self):
+        """Test that validation accepts config with version section."""
+        valid_config = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            },
+            "version": {
+                "pinned_mc": "2.0.4",
+                "last_check": 1234567890.0
+            }
+        }
+
+        assert validate_config(valid_config) is True
+
+    def test_validate_config_accepts_missing_version_section(self):
+        """Test that validation accepts config without version section (backward compatibility)."""
+        valid_config = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            }
+        }
+
+        assert validate_config(valid_config) is True
+
+    def test_validate_config_rejects_invalid_version_types(self):
+        """Test that validation rejects invalid types for version fields."""
+        # Test invalid pinned_mc type (should be string)
+        invalid_config_pinned = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            },
+            "version": {
+                "pinned_mc": 123,  # Invalid: should be string
+                "last_check": None
+            }
+        }
+
+        assert validate_config(invalid_config_pinned) is False
+
+        # Test invalid last_check type (should be float/int/None)
+        invalid_config_check = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            },
+            "version": {
+                "pinned_mc": "latest",
+                "last_check": "not_a_timestamp"  # Invalid: should be float/None
+            }
+        }
+
+        assert validate_config(invalid_config_check) is False
