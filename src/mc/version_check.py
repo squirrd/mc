@@ -2,11 +2,13 @@
 
 import atexit
 import logging
+import sys
 import threading
 import time
 from typing import Optional
 
 import requests
+from packaging.version import Version, InvalidVersion
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -227,8 +229,6 @@ class VersionChecker:
     def _is_newer_version(self, current: str, latest: str) -> bool:
         """Check if latest version is newer than current using PEP 440.
 
-        This method will be fully implemented in Task 3.
-
         Args:
             current: Current installed version (e.g., "2.0.4")
             latest: Latest available version from GitHub (e.g., "2.0.5")
@@ -236,19 +236,71 @@ class VersionChecker:
         Returns:
             True if latest > current, False otherwise
         """
-        pass  # Implementation in Task 3
+        try:
+            return Version(latest) > Version(current)
+        except InvalidVersion as e:
+            logger.error(f"Invalid version string during comparison: {e}")
+            return False
+
+    def _should_display_notification(self, last_notification: Optional[float]) -> bool:
+        """Determine if notification should be displayed (once per day max).
+
+        Args:
+            last_notification: Unix timestamp of last notification, or None
+
+        Returns:
+            True if should display, False if throttled
+        """
+        if last_notification is None:
+            return True  # Never shown before
+
+        elapsed = time.time() - last_notification
+        return elapsed >= 86400  # 24 hours = 1 day
 
     def _display_notification(self, current: str, latest: str) -> None:
         """Display update notification to stderr.
 
-        This method will be fully implemented in Task 3.
-        It will show a single-line message when updates are available.
+        Format from CONTEXT.md:
+        "mc v2.0.6 available. Update: uvx --reinstall mc-cli@latest"
 
         Args:
             current: Current installed version
             latest: Latest available version from GitHub
         """
-        pass  # Implementation in Task 3
+        try:
+            # Check if should display (once per day)
+            last_notification = self._config_manager.get('version.last_notification', None)
+
+            if not self._should_display_notification(last_notification):
+                logger.debug(f"Notification throttled (last shown: {last_notification})")
+                return
+
+            # Display single-line message to stderr
+            message = f"mc v{latest} available. Update: uvx --reinstall mc-cli@latest\n"
+            sys.stderr.write(message)
+            sys.stderr.flush()
+
+            # Update last_notification timestamp
+            try:
+                config = self._config_manager.load()
+            except FileNotFoundError:
+                from mc.config.models import get_default_config
+                config = get_default_config()
+
+            # Ensure [version] section exists
+            if 'version' not in config:
+                config['version'] = {}
+
+            config['version']['last_notification'] = time.time()
+
+            # Save atomically
+            self._config_manager.save_atomic(config)
+
+            logger.debug(f"Update notification displayed: v{latest}")
+
+        except Exception as e:
+            logger.error(f"Failed to display notification: {e}")
+            # Silent failure - don't raise exceptions from background thread
 
 
 def check_for_updates() -> None:
