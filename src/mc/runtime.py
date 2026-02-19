@@ -3,11 +3,19 @@
 This module detects whether the MC CLI is running in controller mode (on the host)
 or agent mode (inside a container). This enables different behavior patterns:
 
-- Controller mode: Manages containers, launches terminals, orchestrates workflows
-- Agent mode: Executes within containers, provides case workspace environment
+- Controller mode: Manages containers, launches terminals, orchestrates workflows,
+  checks for updates via GitHub API
+- Agent mode: Executes within containers, provides case workspace environment,
+  disables auto-update (updates managed via container builds)
 
 Detection uses the MC_RUNTIME_MODE environment variable set by the container
 entrypoint. Host environments default to controller mode.
+
+Fallback detection checks filesystem indicators (/run/.containerenv, /.dockerenv)
+for edge cases where environment variable is missing.
+
+Auto-update guard (should_check_for_updates) prevents version checking when
+running in agent mode, with informational messaging via Rich Console.
 """
 
 import os
