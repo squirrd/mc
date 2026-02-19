@@ -383,7 +383,7 @@ class TestCLIIntegration:
         assert "mc version 2.0.4" in captured.out
         assert "Checking for updates..." in captured.err
         assert "Version check complete." in captured.err
-        assert mock_check.called_once()
+        mock_check.assert_called_once()
 
 
 class TestRuntimeModeIntegration:
