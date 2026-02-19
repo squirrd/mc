@@ -11,6 +11,7 @@ entrypoint. Host environments default to controller mode.
 """
 
 import os
+from pathlib import Path
 from typing import Literal
 
 RuntimeMode = Literal["controller", "agent"]
@@ -79,3 +80,46 @@ def is_controller_mode() -> bool:
         False
     """
     return get_runtime_mode() == "controller"
+
+
+def is_running_in_container() -> bool:
+    """Detect if running inside container using layered approach.
+
+    Uses defense-in-depth strategy combining explicit environment variable
+    (primary) with filesystem indicators (fallback):
+
+    Priority:
+    1. MC_RUNTIME_MODE environment variable (explicit, set by our Containerfile)
+    2. Container indicator files (defensive fallback for edge cases)
+
+    Container indicator files checked:
+    - /run/.containerenv (Podman standard location)
+    - /.containerenv (Podman legacy location)
+    - /.dockerenv (Docker standard location)
+
+    Returns:
+        True if running in any container context, False if on host
+
+    Example:
+        >>> import os
+        >>> os.environ["MC_RUNTIME_MODE"] = "agent"
+        >>> is_running_in_container()
+        True
+        >>> del os.environ["MC_RUNTIME_MODE"]
+        >>> # Assuming no container indicator files exist
+        >>> is_running_in_container()
+        False
+    """
+    # Primary: Check explicit environment variable (most reliable)
+    if os.environ.get("MC_RUNTIME_MODE") == "agent":
+        return True
+
+    # Fallback: Check filesystem indicators for edge cases
+    # (manual podman run, third-party containers, missing ENV directive)
+    container_files = [
+        Path("/run/.containerenv"),  # Podman v1.0+ standard
+        Path("/.containerenv"),       # Podman legacy
+        Path("/.dockerenv")           # Docker standard
+    ]
+
+    return any(f.exists() for f in container_files)
