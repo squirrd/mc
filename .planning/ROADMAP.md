@@ -277,16 +277,15 @@ Plans:
 #### Phase 26: Configuration Foundation
 **Goal**: Extend TOML config system with version management fields and safe concurrent write patterns
 **Depends on**: Phase 25 (v2.0.3 shipped)
-**Requirements**: UCTL-05, UCTL-06, UCTL-09, UCTL-10
+**Requirements**: UCTL-05, UCTL-06, UCTL-10
 **Success Criteria** (what must be TRUE):
   1. TOML config persists pinned_mc_version field and last_version_check timestamp
-  2. Concurrent mc processes can safely write to config without corruption (file locking)
-  3. Config writes are atomic (temp file + rename pattern prevents partial writes)
-  4. Config read operations return defaults when version management fields are missing (backward compatibility)
+  2. Config writes are atomic (temp file + rename pattern prevents partial writes and corruption)
+  3. Config read operations return defaults when version management fields are missing (backward compatibility)
 **Plans**: 2 plans
 
 Plans:
-- [ ] 26-01-PLAN.md — Extend config models with [version] section and atomic write implementation
+- [x] 26-01-PLAN.md — Extend config models with [version] section and atomic write implementation
 - [ ] 26-02-PLAN.md — Test suite for version config functionality and backward compatibility
 
 #### Phase 27: Runtime Mode Detection
@@ -298,10 +297,11 @@ Plans:
   2. Auto-update functionality is disabled when running in container mode
   3. Container mode shows informational message: "Updates managed via container builds"
   4. Runtime mode detection works across different container runtimes (podman, docker)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 27-01: TBD during planning
+- [ ] 27-01-PLAN.md — Add fallback container detection and auto-update guard with Rich messaging
+- [ ] 27-02-PLAN.md — Test suite for fallback detection and auto-update guard behavior
 
 #### Phase 28: Version Check Infrastructure
 **Goal**: Non-blocking GitHub API integration with throttling and caching for MC CLI version checking
@@ -338,8 +338,8 @@ Phases execute in numeric order: 26 → 27 → 28
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 26. Configuration Foundation | v2.0.4 | 0/2 | Not started | - |
-| 27. Runtime Mode Detection | v2.0.4 | 0/TBD | Not started | - |
+| 26. Configuration Foundation | v2.0.4 | 1/2 | In progress | - |
+| 27. Runtime Mode Detection | v2.0.4 | 0/2 | Not started | - |
 | 28. Version Check Infrastructure | v2.0.4 | 0/TBD | Not started | - |
 
 ---
