@@ -14,7 +14,11 @@ import os
 from pathlib import Path
 from typing import Literal
 
+from rich.console import Console
+
 RuntimeMode = Literal["controller", "agent"]
+
+console = Console(stderr=True)
 
 
 def get_runtime_mode() -> RuntimeMode:
@@ -123,3 +127,35 @@ def is_running_in_container() -> bool:
     ]
 
     return any(f.exists() for f in container_files)
+
+
+def should_check_for_updates() -> bool:
+    """Determine if version checking should proceed.
+
+    Auto-update functionality should only run in controller mode (on host).
+    When running in agent mode (inside container), updates are managed via
+    container image builds, not in-place package upgrades.
+
+    Displays informational message when blocking updates in agent mode.
+
+    Returns:
+        False if running in agent mode (container), True otherwise
+
+    Example:
+        >>> import os
+        >>> os.environ["MC_RUNTIME_MODE"] = "agent"
+        >>> should_check_for_updates()
+        ℹ Updates managed via container builds
+        False
+        >>> del os.environ["MC_RUNTIME_MODE"]
+        >>> should_check_for_updates()
+        True
+    """
+    if is_agent_mode():
+        console.print(
+            "[yellow]ℹ Updates managed via container builds[/yellow]",
+            style="bold"
+        )
+        return False
+
+    return True
