@@ -283,11 +283,11 @@ Plans:
   2. Concurrent mc processes can safely write to config without corruption (file locking)
   3. Config writes are atomic (temp file + rename pattern prevents partial writes)
   4. Config read operations return defaults when version management fields are missing (backward compatibility)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 26-01: TBD during planning
-- [ ] 26-02: TBD during planning
+- [ ] 26-01-PLAN.md — Extend config models with [version] section and atomic write implementation
+- [ ] 26-02-PLAN.md — Test suite for version config functionality and backward compatibility
 
 #### Phase 27: Runtime Mode Detection
 **Goal**: Detect container vs host execution context to prevent auto-update in containerized environments
@@ -338,10 +338,10 @@ Phases execute in numeric order: 26 → 27 → 28
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 26. Configuration Foundation | v2.0.4 | 0/TBD | Not started | - |
+| 26. Configuration Foundation | v2.0.4 | 0/2 | Not started | - |
 | 27. Runtime Mode Detection | v2.0.4 | 0/TBD | Not started | - |
 | 28. Version Check Infrastructure | v2.0.4 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-11 for v2.0.4 Foundation milestone*
-*Last updated: 2026-02-11*
+*Last updated: 2026-02-19*
