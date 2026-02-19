@@ -353,3 +353,123 @@ class TestVersionConfig:
         }
 
         assert validate_config(invalid_config_check) is False
+
+    def test_get_version_config_returns_defaults_when_missing(self, tmp_path):
+        """Test get_version_config returns defaults when config doesn't exist."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        version_config = manager.get_version_config()
+
+        assert version_config['pinned_mc'] == 'latest'
+        assert version_config['last_check'] is None
+
+    def test_get_version_config_returns_stored_values(self, tmp_path):
+        """Test get_version_config returns stored values from file."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Save config with version section
+        config = get_default_config()
+        config['version']['pinned_mc'] = "2.0.4"
+        config['version']['last_check'] = 1234567890.0
+        manager.save(config)
+
+        # Load version config
+        version_config = manager.get_version_config()
+
+        assert version_config['pinned_mc'] == "2.0.4"
+        assert version_config['last_check'] == 1234567890.0
+
+    def test_update_version_config_creates_section_if_missing(self, tmp_path):
+        """Test update_version_config creates [version] section if missing."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Create config without version section
+        config = {
+            "base_directory": "~/mc",
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+            "salesforce": {
+                "username": "",
+                "password": "",
+                "security_token": ""
+            }
+        }
+        manager.save(config)
+
+        # Update version config
+        timestamp = time.time()
+        manager.update_version_config(pinned_mc="2.0.4", last_check=timestamp)
+
+        # Verify [version] section exists with correct values
+        loaded_config = manager.load()
+        assert 'version' in loaded_config
+        assert loaded_config['version']['pinned_mc'] == "2.0.4"
+        assert loaded_config['version']['last_check'] == timestamp
+
+    def test_update_version_config_partial_update_preserves_fields(self, tmp_path):
+        """Test update_version_config partial update preserves other fields."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Create config with both version fields set
+        config = get_default_config()
+        config['version']['pinned_mc'] = "2.0.3"
+        config['version']['last_check'] = 1234567890.0
+        manager.save(config)
+
+        # Update only pinned_mc
+        manager.update_version_config(pinned_mc="2.0.5")
+
+        # Verify pinned_mc changed but last_check unchanged
+        loaded_config = manager.load()
+        assert loaded_config['version']['pinned_mc'] == "2.0.5"
+        assert loaded_config['version']['last_check'] == 1234567890.0
+
+    def test_save_atomic_creates_file(self, tmp_path):
+        """Test save_atomic creates file with correct content."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        test_config = {'test': 'value'}
+        manager.save_atomic(test_config)
+
+        assert manager.exists()
+        loaded_config = manager.load()
+        assert loaded_config == test_config
+
+    def test_save_atomic_no_temp_file_left_on_success(self, tmp_path):
+        """Test save_atomic cleans up temp files after successful write."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        test_config = {'test': 'value'}
+        manager.save_atomic(test_config)
+
+        # List all files in directory
+        files = list(tmp_path.iterdir())
+
+        # Check no .config_*.tmp files exist
+        temp_files = [f for f in files if f.name.startswith('.config_') and f.name.endswith('.tmp')]
+        assert len(temp_files) == 0
+
+    def test_save_atomic_overwrites_existing_file(self, tmp_path):
+        """Test save_atomic atomically overwrites existing file."""
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Save initial config
+        initial_config = {'initial': 'data'}
+        manager.save_atomic(initial_config)
+
+        # Overwrite with new config
+        new_config = {'new': 'data'}
+        manager.save_atomic(new_config)
+
+        # Verify file content reflects new config
+        loaded_config = manager.load()
+        assert loaded_config == new_config
+        assert 'initial' not in loaded_config
