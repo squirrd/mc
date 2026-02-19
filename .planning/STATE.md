@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-11)
 ## Current Position
 
 Phase: 27 of 28 (Runtime Mode Detection)
-Plan: 1 of 1 (Runtime Mode Detection Foundation)
+Plan: 2 of 2 (Fallback Detection & Auto-Update Guard Tests)
 Status: Phase complete
-Last activity: 2026-02-19 — Completed 27-01-PLAN.md
+Last activity: 2026-02-19 — Completed 27-02-PLAN.md
 
 Progress: [████████████████░░░░] 96% (27 of 28 phases complete across all milestones)
 
@@ -46,6 +46,9 @@ Progress: [████████████████░░░░] 96% (27
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- v2.0.4 (27-02): Fixed MC_RUNTIME_MODE=controller to skip file checks (env var precedence over filesystem)
+- v2.0.4 (27-02): Use unittest.mock.patch for Path mocking (standard library approach)
+- v2.0.4 (27-02): Use capsys fixture for stderr message verification (pytest standard)
 - v2.0.4 (27-01): Use MC_RUNTIME_MODE environment variable as primary container detection (explicit contract)
 - v2.0.4 (27-01): Fallback to filesystem indicators for edge cases (defensive /run/.containerenv, /.dockerenv)
 - v2.0.4 (27-01): Block auto-update in agent mode with informational Rich message
@@ -68,7 +71,7 @@ None yet. Research phase completed with HIGH confidence. All critical pitfalls d
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 27-01-PLAN.md
+Stopped at: Completed 27-02-PLAN.md
 Resume file: None (Phase 27 complete, ready for Phase 28 - Version Checking)
 
 ---
