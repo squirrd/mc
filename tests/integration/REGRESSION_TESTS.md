@@ -15,6 +15,7 @@ This document tracks integration tests that were created in response to actual b
 | `test_image_pull_and_tag_regression` | UAT 3.1 | 2026-02-04 | Failing (reproduces bug) | `test_container_image.py` |
 | `test_terminal_title_format_regression` | UAT 5.1 | 2026-02-04 | Failing (reproduces bug) | `test_case_terminal.py` |
 | `test_duplicate_terminal_prevention_regression` | UAT 5.2 | 2026-02-04 | Failing (reproduces real bug - no mocking!) | `test_case_terminal.py` |
+| `test_github_404_no_releases_regression` | Production Bug | 2026-02-23 | Passing (reproduces bug) | `test_version_check.py` |
 
 ## Test Details
 
@@ -361,6 +362,104 @@ This test uses REAL iTerm2 integration (no mocking!) and successfully reproduces
 
 **Why no mocking?**
 See `docs/INTEGRATION_TEST_NO_MOCKING.md` for the full explanation. In short: mocking hides bugs. We initially wrote this test with mocks - it passed while the bug existed. After removing mocks and using real iTerm2, the test immediately caught the bug.
+
+---
+
+### test_github_404_no_releases_regression
+
+**Source:** Production Bug - Post v2.0.4 deployment
+**Platform:** All platforms (GitHub API independent)
+**Severity:** Minor - Doesn't block core functionality
+
+**Bug Description:**
+After deploying v2.0.4 with the new version check feature, running any `mc` command triggers a background version check that fails with an ERROR log:
+
+```
+2026-02-23 10:34:32 [ERROR] mc.version_check: Failed to perform version check: 404 Client Error: Not Found for url: https://api.github.com/repos/squirrd/mc/releases/latest
+```
+
+The issue occurs because the GitHub repository `squirrd/mc` doesn't have any published releases yet. The version checker attempts to fetch the latest release and receives a 404 response, which is treated as an error.
+
+**User Impact:**
+- Error logs on every command execution (confusing)
+- Users may think something is broken
+- Logs polluted with ERROR level messages for normal condition
+- No actual functionality broken (version check is optional)
+
+**Root Cause:**
+`src/mc/version_check.py:156-157` in the `_fetch_latest_release()` method raises HTTPError for 404 responses:
+
+```python
+# Fail fast on 4xx errors (don't retry)
+if 400 <= response.status_code < 500:
+    response.raise_for_status()
+```
+
+The 404 response is a normal condition for repositories without published releases, but the code treats it as an exceptional error. The exception propagates to `_perform_version_check()` which logs it at ERROR level (line 226).
+
+**Expected Behavior:**
+- 404 should be handled gracefully as "no releases published yet"
+- Log at INFO or DEBUG level, not ERROR
+- Save `last_status_code=404` in config for smart throttling
+- Save `last_check` timestamp to prevent repeated failed attempts
+- Perhaps extend throttle period for 404 (similar to 403 rate limit handling)
+
+**Fix Required:**
+Update `_fetch_latest_release()` to handle 404 specially:
+
+```python
+# Handle 404 Not Found (repository has no releases yet)
+if response.status_code == 404:
+    return None, etag, 404  # Return gracefully, no exception
+
+# Fail fast on other 4xx errors (don't retry)
+if 400 <= response.status_code < 500:
+    response.raise_for_status()
+```
+
+And update `_perform_version_check()` to handle 404 status_code gracefully:
+
+```python
+# Handle 404 Not Found - repository has no releases yet
+if status_code == 404:
+    logger.info("No releases published yet for this repository")
+    self._config_manager.save_atomic(config)
+    return  # Exit gracefully
+```
+
+**Test Approach:**
+This is a TRUE integration test with REAL GitHub API calls:
+- ✅ Makes actual HTTP request to `https://api.github.com/repos/squirrd/mc/releases/latest`
+- ✅ Verifies real 404 response from GitHub
+- ✅ Uses real ConfigManager with tmp_path for isolation
+- ✅ No mocks - catches real-world API behavior
+- ⚠️ Only mocks `get_version()` for stable test version
+
+The test currently PASSES by verifying the exception is raised (documenting current buggy behavior). After the fix is applied, the test assertions should be updated to verify graceful 404 handling.
+
+**How to Run:**
+```bash
+uv run pytest tests/integration/test_version_check.py::TestGitHubAPIIntegration::test_github_404_no_releases_regression -v -s
+```
+
+**Test Output (Current - Catches Bug):**
+```
+PASSED - HTTPError raised for 404 (documents current behavior)
+```
+
+**Test Output (After Fix):**
+The test should be updated to verify:
+- No ERROR level logs
+- Config updated with `last_status_code=404`
+- Config updated with `last_check` timestamp
+- No exception raised
+
+**Related Tests:**
+- `test_github_api_with_valid_repo_has_releases` - Validates happy path with real repo
+- `test_github_api_respects_rate_limits` - Documents 403 handling
+
+**Note on Real GitHub API Usage:**
+This test makes real HTTP calls to GitHub. It's fast (<1 second) and doesn't require authentication for public API endpoints. The 404 response is consistent and stable (repo has no releases), making it a reliable test case. We prefer real API calls over mocks to catch real-world issues like this one.
 
 ---
 

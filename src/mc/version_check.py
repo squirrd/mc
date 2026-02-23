@@ -28,7 +28,7 @@ class VersionChecker:
 
     THROTTLE_SECONDS = 3600  # 1 hour
     RATE_LIMIT_THROTTLE_SECONDS = 86400  # 24 hours
-    GITHUB_OWNER = "dsquire"
+    GITHUB_OWNER = "squirrd"
     GITHUB_REPO = "mc"
 
     def __init__(self):
