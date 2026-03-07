@@ -616,10 +616,11 @@ wheels = [
 
 [[package]]
 name = "mc-cli"
-version = "2.0.2"
+version = "2.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "backoff" },
+    { name = "packaging" },
     { name = "platformdirs" },
     { name = "podman" },
     { name = "requests" },
@@ -651,6 +652,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "packaging", specifier = ">=26.0" },
     { name = "platformdirs", specifier = ">=4.0.0" },
     { name = "podman", specifier = ">=5.7.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.0" },

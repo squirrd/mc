@@ -37,6 +37,7 @@ Thumbs.db
 
 # Claude-Related
 .claude/
+.claude-skills/
 .claude_sessions/
 claude_sessions/
 Claude-*.log
@@ -45,14 +46,18 @@ Claude-*.cache
 Claude-*.bak
 claude.md
 Claude.md
+!CLAUDE.md
 claude_backup.md
+*.local.md
+
+# Skill run reports (runtime artifacts)
+.fix-integration-tests/
 
 
 
 # Environment variables
 .env
 *.env
-!.env.example
 
 # Test coverage
 .coverage
@@ -64,6 +69,9 @@ htmlcov/
 
 # Archive directory
 archive/
+
+# Accidental literal ~ directory (created when scripts run from repo root instead of home)
+~/
 
 # Temporary files
 tmp/
