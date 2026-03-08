@@ -60,7 +60,6 @@ def _run_main_go(argv: list[str]) -> None:
     import mc.cli.main as main_module
 
     with patch.object(sys, 'argv', argv), \
-         patch('mc.cli.main.check_legacy_env_vars'), \
          patch('mc.cli.main.ConfigManager') as MockCfgMgr, \
          patch('mc.cli.main.does_path_exist', return_value=True), \
          patch('mc.cli.main.get_runtime_mode', return_value='host'), \

@@ -20,33 +20,6 @@ from mc.version_check import VersionChecker
 ExitCode = Literal[0, 1, 2, 65, 69, 73, 74, 130]
 
 
-def check_legacy_env_vars() -> None:
-    """Check for deprecated environment variables and guide migration."""
-    legacy_vars = ["MC_BASE_DIR", "RH_API_OFFLINE_TOKEN"]
-    found_vars = [var for var in legacy_vars if var in os.environ]
-
-    if not found_vars:
-        return
-
-    # Detect shell for tailored instructions
-    shell = os.environ.get("SHELL", "").lower()
-
-    if "fish" in shell:
-        unset_cmd = "\n".join(f"set -e {var}" for var in found_vars)
-    else:  # bash/zsh
-        unset_cmd = "\n".join(f"unset {var}" for var in found_vars)
-
-    # Use print for this error since logging isn't configured yet
-    print(f"ERROR: Legacy environment variables detected: {', '.join(found_vars)}")  # print OK
-    print("\nEnvironment variables are no longer supported.")  # print OK
-    print("Configuration is now managed via config file.")  # print OK
-    print("\nTo migrate:")  # print OK
-    print("1. Remove environment variables:")  # print OK
-    print(f"\n{unset_cmd}\n")  # print OK
-    print("2. Run 'mc --help' to trigger configuration wizard")  # print OK
-    sys.exit(1)
-
-
 def main() -> ExitCode:
     """Main CLI entry point."""
     try:
@@ -147,9 +120,6 @@ def main() -> ExitCode:
             debug=args.debug,
             debug_file=getattr(args, 'debug_file', None)
         )
-
-        # Check for legacy environment variables
-        check_legacy_env_vars()
 
         # Load or create configuration
         config_mgr = ConfigManager()
