@@ -79,3 +79,6 @@ tmp/
 
 # Registry credentials (sensitive)
 .registry-auth/
+
+# TDD worktrees and issue tracking (local only)
+.tdd/
