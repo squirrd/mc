@@ -3,11 +3,24 @@
 from __future__ import annotations
 
 import os
+import platform
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
+
+
+def get_ocm_config_path() -> Path:
+    """Return the platform-specific host OCM config path.
+
+    Returns:
+        Path to ocm.json on this host (may or may not exist).
+    """
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Application Support" / "ocm" / "ocm.json"
+    return Path.home() / ".config" / "ocm" / "ocm.json"
 
 
 class ContainerManager:
@@ -100,7 +113,15 @@ class ContainerManager:
             # Re-raise with context preserved
             raise
 
-        # 5. Create new container via Podman API
+        # 5. Build volumes dict — workspace always present, OCM config if available
+        volumes: dict[str, dict[str, str]] = {
+            workspace_path: {"bind": "/case", "mode": "rw"}
+        }
+        ocm_config = get_ocm_config_path()
+        if ocm_config.exists():
+            volumes[str(ocm_config)] = {"bind": "/root/.config/ocm/ocm.json", "mode": "ro"}
+
+        # 6. Create new container via Podman API
         try:
             container = self.podman.client.containers.create(
                 image="mc-rhel10:latest",
@@ -118,9 +139,7 @@ class ContainerManager:
                     "WORKSPACE_PATH": "/case",
                     "MC_RUNTIME_MODE": "agent",
                 },
-                volumes={
-                    workspace_path: {"bind": "/case", "mode": "rw"}
-                },
+                volumes=volumes,
                 userns_mode="keep-id",  # Critical for rootless volume permissions
                 tty=True,
                 stdin_open=True,
