@@ -23,7 +23,7 @@ def test_go_link_flag_reversed_regression() -> None:
     1. Run `mc go 04392393` — expect browser to open, but URL is printed to stdout
     2. Run `mc go -l 04392393` — expect URL printed to stdout, but browser opens instead
 
-    Expected: go(case_number) launches browser; go(case_number, launch=True) prints URL
+    Expected: go(case_number) launches browser; go(case_number, launch=False) prints URL
     Actual:   go(case_number) prints URL; go(case_number, launch=True) launches browser
 
     This test ensures the bug does not regress.
@@ -52,15 +52,16 @@ def test_go_link_flag_prints_url_regression(capsys: pytest.CaptureFixture[str]) 
     When -l is passed to mc go, the URL should be printed to stdout for copy/paste.
     Before the fix, -l launched the browser instead.
 
-    Expected: go(case_number, launch=True) prints URL to stdout
+    Expected: go(case_number, launch=False) prints URL to stdout (launch=False is what -l maps to)
     Actual:   go(case_number, launch=True) opens browser via subprocess.run
 
     This test ensures the bug does not regress.
     """
     from mc.cli.commands.other import go
 
+    # -l flag maps to launch=False in the fixed code (main.py: launch=not args.link)
     with patch("mc.cli.commands.other.subprocess.run") as mock_run:
-        go("04392393", launch=True)
+        go("04392393", launch=False)
 
     mock_run.assert_not_called()
 
