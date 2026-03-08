@@ -28,9 +28,15 @@ class TestContainerManagerInit:
 class TestCreateNewContainer:
     """Tests for creating new containers."""
 
+    @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_new_container(self, mock_makedirs):
+    def test_create_new_container(self, mock_makedirs, mock_get_ocm_config_path):
         """Test creating new container when none exists."""
+        # Mock OCM config as absent so volumes dict stays workspace-only
+        mock_ocm_path = MagicMock()
+        mock_ocm_path.exists.return_value = False
+        mock_get_ocm_config_path.return_value = mock_ocm_path
+
         # Setup mocks
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
@@ -104,6 +110,68 @@ class TestCreateNewContainer:
 
         # Verify return value
         assert result is mock_container
+
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_create_includes_ocm_config_volume_when_present(self, mock_makedirs, mock_get_ocm_config_path):
+        """Test OCM config is mounted when the file exists on the host."""
+        mock_ocm_path = MagicMock()
+        mock_ocm_path.exists.return_value = True
+        mock_ocm_path.__str__ = lambda self: "/fake/home/.config/ocm/ocm.json"
+        mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        podman_client = Mock(spec=PodmanClient)
+        state_db = Mock(spec=StateDatabase)
+
+        podman_client.client.containers.list.return_value = []
+        state_db.get_container.return_value = None
+
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
+        mock_container = MagicMock()
+        mock_container.id = "abc123"
+        podman_client.client.containers.create.return_value = mock_container
+
+        manager = ContainerManager(podman_client, state_db)
+        manager.create("12345678", "/path/to/workspace", "TestCustomer")
+
+        create_call = podman_client.client.containers.create.call_args
+        volumes = create_call.kwargs["volumes"]
+        assert "/path/to/workspace" in volumes
+        assert "/fake/home/.config/ocm/ocm.json" in volumes
+        assert volumes["/fake/home/.config/ocm/ocm.json"] == {
+            "bind": "/root/.config/ocm/ocm.json",
+            "mode": "ro",
+        }
+
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_create_skips_ocm_config_volume_when_absent(self, mock_makedirs, mock_get_ocm_config_path):
+        """Test OCM config is not mounted when the file does not exist on the host."""
+        mock_ocm_path = MagicMock()
+        mock_ocm_path.exists.return_value = False
+        mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        podman_client = Mock(spec=PodmanClient)
+        state_db = Mock(spec=StateDatabase)
+
+        podman_client.client.containers.list.return_value = []
+        state_db.get_container.return_value = None
+
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
+        mock_container = MagicMock()
+        mock_container.id = "abc123"
+        podman_client.client.containers.create.return_value = mock_container
+
+        manager = ContainerManager(podman_client, state_db)
+        manager.create("12345678", "/path/to/workspace", "TestCustomer")
+
+        create_call = podman_client.client.containers.create.call_args
+        volumes = create_call.kwargs["volumes"]
+        assert volumes == {"/path/to/workspace": {"bind": "/case", "mode": "rw"}}
 
     @patch('mc.container.manager.os.makedirs')
     def test_create_with_default_customer_name(self, mock_makedirs):

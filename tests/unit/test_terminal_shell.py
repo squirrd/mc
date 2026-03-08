@@ -313,9 +313,34 @@ class TestFormatField:
     def test_format_field_default_width(self):
         """Verify default width is 80."""
         long_text = "A" * 100
-        
+
         result = format_field(long_text)
-        
+
         # First line should be 80 chars (default)
         lines = result.split("\n")
         assert len(lines[0]) == 80
+
+
+class TestGenerateBashrcHttpsProxy:
+    """Tests for HTTPS_PROXY propagation in generate_bashrc."""
+
+    def test_generate_bashrc_includes_https_proxy_when_set(self):
+        """When HTTPS_PROXY is set in os.environ, generate_bashrc includes export HTTPS_PROXY='<value>'."""
+        proxy_value = "http://proxy.example.com:3128"
+        metadata = {"case_number": "12345678"}
+
+        with patch.dict(os.environ, {"HTTPS_PROXY": proxy_value}):
+            bashrc = generate_bashrc("12345678", metadata)
+
+        assert f"export HTTPS_PROXY='{proxy_value}'" in bashrc
+
+    def test_generate_bashrc_excludes_https_proxy_when_not_set(self):
+        """When HTTPS_PROXY is not set in os.environ, generate_bashrc does not include HTTPS_PROXY."""
+        metadata = {"case_number": "12345678"}
+
+        # Ensure HTTPS_PROXY is absent from the environment
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True):
+            bashrc = generate_bashrc("12345678", metadata)
+
+        assert "HTTPS_PROXY" not in bashrc

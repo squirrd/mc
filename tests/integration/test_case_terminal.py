@@ -1168,3 +1168,158 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — container OCM env setup (fix/container-ocm-env-setup)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_container_ocm_env_setup_https_proxy_in_bashrc_regression() -> None:
+    """Regression test for fix/container-ocm-env-setup — HTTPS_PROXY missing from bashrc.
+
+    Bug discovered: 2026-03-08
+    Platform: macOS / Linux
+    Severity: major
+    Source: prod usage
+
+    Problem:
+        When `mc case <number>` creates a new terminal, the case bashrc
+        (injected via BASH_ENV) did not contain HTTPS_PROXY.  Users had to
+        manually copy-paste the proxy env var into every new container session
+        to use OCM through the corporate proxy.
+
+    Root cause:
+        generate_bashrc() in terminal/shell.py never read or propagated
+        HTTPS_PROXY from the host environment.
+
+    Test approach:
+        Calls generate_bashrc() with HTTPS_PROXY set in the host environment
+        and asserts the resulting script contains the export line.
+        No Podman or network access required.
+
+    This test will fail until the bug is fixed, then pass automatically.
+    """
+    import os
+    from unittest.mock import patch
+
+    from mc.terminal.shell import generate_bashrc
+
+    case_number = "12345678"
+    metadata = {
+        "case_number": case_number,
+        "customer_name": "Test Corp",
+        "description": "Server down",
+    }
+    proxy_value = "http://squid.corp.redhat.com:3128"
+
+    with patch.dict(os.environ, {"HTTPS_PROXY": proxy_value}):
+        bashrc = generate_bashrc(case_number, metadata)
+
+    assert f"export HTTPS_PROXY='{proxy_value}'" in bashrc, (
+        f"bashrc must propagate host HTTPS_PROXY into the container shell.\n"
+        f"Expected: export HTTPS_PROXY='{proxy_value}'\n"
+        f"Bashrc produced:\n{bashrc}"
+    )
+
+
+@pytest.mark.integration
+def test_container_ocm_env_setup_https_proxy_absent_when_unset_regression() -> None:
+    """Regression — HTTPS_PROXY must not appear in bashrc when host env is unset.
+
+    Ensures the fix is conditional (reads from host env) and does not
+    hardcode the proxy value.
+
+    Bug discovered: 2026-03-08
+    """
+    import os
+    from unittest.mock import patch
+
+    from mc.terminal.shell import generate_bashrc
+
+    metadata = {"case_number": "12345678"}
+    env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+
+    with patch.dict(os.environ, env_without_proxy, clear=True):
+        bashrc = generate_bashrc("12345678", metadata)
+
+    assert "HTTPS_PROXY" not in bashrc, (
+        "bashrc must not contain HTTPS_PROXY when host env var is absent"
+    )
+
+
+@pytest.mark.integration
+def test_container_ocm_env_setup_ocm_config_mounted_regression(tmp_path: Path) -> None:
+    """Regression test for fix/container-ocm-env-setup — OCM config not mounted.
+
+    Bug discovered: 2026-03-08
+    Platform: macOS / Linux
+    Severity: major
+    Source: prod usage
+
+    Problem:
+        ContainerManager.create() did not mount the host OCM config file
+        (~/.config/ocm/ocm.json or ~/Library/Application Support/ocm/ocm.json)
+        into the container.  Users had to manually copy-paste OCM credentials
+        (JWT tokens) into every new container session.
+
+    Root cause:
+        The volumes dict passed to podman containers.create() only contained
+        the workspace mount.  No OCM config volume was added.
+
+    Test approach:
+        - Creates a fake OCM config file in tmp_path
+        - Patches get_ocm_config_path() to return that temp path
+        - Calls ContainerManager.create() with mocked Podman
+        - Asserts the volumes dict includes a read-only mount at
+          /root/.config/ocm/ocm.json pointing at the host config file
+        No real Podman required.
+
+    This test will fail until the bug is fixed, then pass automatically.
+    """
+    from unittest.mock import MagicMock, Mock, patch
+
+    from mc.container.manager import ContainerManager
+    from mc.container.state import StateDatabase
+    from mc.integrations.podman import PodmanClient
+
+    # Create a fake OCM config that exists on disk
+    fake_ocm = tmp_path / "ocm.json"
+    fake_ocm.write_text('{"access_token": "fake-jwt"}')
+
+    podman_client = Mock(spec=PodmanClient)
+    state_db = Mock(spec=StateDatabase)
+    podman_client.client.containers.list.return_value = []
+    state_db.get_container.return_value = None
+    mock_image = MagicMock()
+    podman_client.client.images.get.return_value = mock_image
+    mock_container = MagicMock()
+    mock_container.id = "abc123"
+    podman_client.client.containers.create.return_value = mock_container
+
+    manager = ContainerManager(podman_client, state_db)
+
+    with patch("mc.container.manager.os.makedirs"), \
+         patch("mc.container.manager.get_ocm_config_path", return_value=fake_ocm):
+        manager.create("12345678", "/path/to/workspace", "TestCustomer")
+
+    create_call = podman_client.client.containers.create.call_args
+    volumes = create_call.kwargs["volumes"]
+
+    expected_target = "/root/.config/ocm/ocm.json"
+    ocm_mounts = [
+        (src, spec) for src, spec in volumes.items()
+        if isinstance(spec, dict) and spec.get("bind") == expected_target
+    ]
+
+    assert ocm_mounts, (
+        f"ContainerManager.create() must mount the host OCM config at "
+        f"'{expected_target}' inside the container.\n"
+        f"Actual volumes passed to containers.create(): {volumes}\n"
+        f"Bug: OCM config volume is missing."
+    )
+    _src, spec = ocm_mounts[0]
+    assert spec["mode"] == "ro", (
+        f"OCM config mount must be read-only (mode='ro'), got mode='{spec['mode']}'"
+    )
