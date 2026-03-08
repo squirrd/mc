@@ -8,13 +8,13 @@ from mc.integrations.ldap import ldap_search
 logger = logging.getLogger(__name__)
 
 
-def go(case_number: str, launch: bool = False) -> None:
+def go(case_number: str, launch: bool = True) -> None:
     """
     Print or launch Salesforce case URL.
 
     Args:
         case_number: Case number
-        launch: If True, launch URL in Chrome
+        launch: If True (default), launch URL in Chrome; if False, print URL
     """
     url = f"https://gss--c.vf.force.com/apex/Case_View?sbstr={case_number}"
 
