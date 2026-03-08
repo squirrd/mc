@@ -102,7 +102,7 @@ def main() -> ExitCode:
         # Go subcommand
         parser_go = subparsers.add_parser('go', help='Print or launch Salesforce case URL')
         parser_go.add_argument('case_number', type=str, help='Case number')
-        parser_go.add_argument('-l', '--launch', action='store_true', help='Launch URL in Chrome')
+        parser_go.add_argument('-l', '--link', action='store_true', help='Print URL instead of launching browser')
 
         # Container subcommand
         container_parser = subparsers.add_parser('container', help='Container lifecycle operations')
@@ -204,7 +204,7 @@ def main() -> ExitCode:
         elif args.command == 'ls':
             other.ls(args.uid, show_all=args.all)
         elif args.command == 'go':
-            other.go(args.case_number, launch=args.launch)
+            other.go(args.case_number, launch=not args.link)
         elif args.command == 'container':
             if args.container_command == 'list':
                 container.list_containers(args)
