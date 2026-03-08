@@ -36,6 +36,9 @@ def generate_bashrc(case_number: str, case_metadata: dict[str, Any]) -> str:
     # Generate welcome banner
     banner = generate_banner(case_metadata)
     
+    # Read optional proxy from host environment
+    https_proxy = os.environ.get("HTTPS_PROXY")
+
     # Build bashrc content
     bashrc_lines = [
         "# MC Custom Bashrc - Auto-generated",
@@ -48,6 +51,17 @@ def generate_bashrc(case_number: str, case_metadata: dict[str, Any]) -> str:
         f"export MC_CUSTOMER='{customer}'",
         f"export MC_DESCRIPTION='{description}'",
         "",
+    ]
+
+    # Conditionally propagate HTTPS_PROXY from host environment
+    if https_proxy is not None:
+        bashrc_lines += [
+            "# Proxy configuration from host environment",
+            f"export HTTPS_PROXY='{https_proxy}'",
+            "",
+        ]
+
+    bashrc_lines += [
         "# Helper aliases",
         "alias ll='ls -lah'",
         "alias case-info='echo \"Case: ${MC_CASE_ID}\"'",
