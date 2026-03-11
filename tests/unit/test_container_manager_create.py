@@ -141,7 +141,7 @@ class TestCreateNewContainer:
         assert "/path/to/workspace" in volumes
         assert "/fake/home/.config/ocm/ocm.json" in volumes
         assert volumes["/fake/home/.config/ocm/ocm.json"] == {
-            "bind": "/root/.config/ocm/ocm.json",
+            "bind": "/home/mcuser/.config/ocm/ocm.json",
             "mode": "ro",
         }
 

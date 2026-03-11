@@ -119,7 +119,7 @@ class ContainerManager:
         }
         ocm_config = get_ocm_config_path()
         if ocm_config.exists():
-            volumes[str(ocm_config)] = {"bind": "/root/.config/ocm/ocm.json", "mode": "ro"}
+            volumes[str(ocm_config)] = {"bind": "/home/mcuser/.config/ocm/ocm.json", "mode": "ro"}
 
         # 6. Create new container via Podman API
         try:

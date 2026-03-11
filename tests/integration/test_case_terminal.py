@@ -1307,7 +1307,7 @@ def test_container_ocm_env_setup_ocm_config_mounted_regression(tmp_path: Path) -
     create_call = podman_client.client.containers.create.call_args
     volumes = create_call.kwargs["volumes"]
 
-    expected_target = "/root/.config/ocm/ocm.json"
+    expected_target = "/home/mcuser/.config/ocm/ocm.json"
     ocm_mounts = [
         (src, spec) for src, spec in volumes.items()
         if isinstance(spec, dict) and spec.get("bind") == expected_target
@@ -1317,7 +1317,90 @@ def test_container_ocm_env_setup_ocm_config_mounted_regression(tmp_path: Path) -
         f"ContainerManager.create() must mount the host OCM config at "
         f"'{expected_target}' inside the container.\n"
         f"Actual volumes passed to containers.create(): {volumes}\n"
-        f"Bug: OCM config volume is missing."
+        f"Bug: OCM config volume is missing or mounted at wrong path."
+    )
+    _src, spec = ocm_mounts[0]
+    assert spec["mode"] == "ro", (
+        f"OCM config mount must be read-only (mode='ro'), got mode='{spec['mode']}'"
+    )
+
+
+@pytest.mark.integration
+def test_ocm_config_mount_regression(tmp_path: Path) -> None:
+    """Regression test for fix/ocm-config-mount — OCM config mounted at wrong path in container.
+
+    Bug discovered: 2026-03-11
+    Platform: macOS (Linux unaffected — same path on both sides)
+    Severity: major
+    Source: ad-hoc
+
+    Problem:
+        ContainerManager.create() mounts the host OCM config at /root/.config/ocm/ocm.json
+        inside the container. However, the container runs as 'mcuser' (HOME=/home/mcuser),
+        not root. mcuser cannot access /root/, so ocm sees no config at ~/.config/ocm/ocm.json
+        (= /home/mcuser/.config/ocm/ocm.json) and fails with the misleading error:
+        "please ensure you are logged into OCM by using the command 'ocm login --url $ENV'"
+
+    Expected behaviour:
+        The OCM config is mounted at /home/mcuser/.config/ocm/ocm.json so that the container
+        user (mcuser) can read it and 'ocm backplane login <cluster-id>' succeeds.
+
+    Actual behaviour:
+        The OCM config is mounted at /root/.config/ocm/ocm.json. mcuser (uid=998) has no
+        access to /root/, so ~/.config/ocm/ocm.json is effectively missing inside the container.
+
+    Test approach:
+        - Creates a fake OCM config file in tmp_path
+        - Patches get_ocm_config_path() to return that temp path
+        - Calls ContainerManager.create() with mocked Podman
+        - Asserts the volumes dict includes a read-only mount at
+          /home/mcuser/.config/ocm/ocm.json (the correct path for the container user)
+        No real Podman required.
+
+    This test will fail until the bug is fixed, then pass automatically.
+    """
+    from unittest.mock import MagicMock, Mock, patch
+
+    from mc.container.manager import ContainerManager
+    from mc.container.state import StateDatabase
+    from mc.integrations.podman import PodmanClient
+
+    # Create a fake OCM config that exists on disk
+    fake_ocm = tmp_path / "ocm.json"
+    fake_ocm.write_text('{"access_token": "fake-jwt"}')
+
+    podman_client = Mock(spec=PodmanClient)
+    state_db = Mock(spec=StateDatabase)
+    podman_client.client.containers.list.return_value = []
+    state_db.get_container.return_value = None
+    mock_image = MagicMock()
+    podman_client.client.images.get.return_value = mock_image
+    mock_container = MagicMock()
+    mock_container.id = "abc123"
+    podman_client.client.containers.create.return_value = mock_container
+
+    manager = ContainerManager(podman_client, state_db)
+
+    with patch("mc.container.manager.os.makedirs"), \
+         patch("mc.container.manager.get_ocm_config_path", return_value=fake_ocm):
+        manager.create("12345678", "/path/to/workspace", "TestCustomer")
+
+    create_call = podman_client.client.containers.create.call_args
+    volumes = create_call.kwargs["volumes"]
+
+    # The container user is 'mcuser' (HOME=/home/mcuser) — NOT root.
+    # The mount target must reflect the container user's home directory.
+    expected_target = "/home/mcuser/.config/ocm/ocm.json"
+    ocm_mounts = [
+        (src, spec) for src, spec in volumes.items()
+        if isinstance(spec, dict) and spec.get("bind") == expected_target
+    ]
+
+    assert ocm_mounts, (
+        f"ContainerManager.create() must mount the host OCM config at "
+        f"'{expected_target}' inside the container (container user is mcuser, HOME=/home/mcuser).\n"
+        f"Actual volumes passed to containers.create(): {volumes}\n"
+        f"Bug: OCM config is mounted at /root/.config/ocm/ocm.json — mcuser cannot read /root/."
     )
     _src, spec = ocm_mounts[0]
     assert spec["mode"] == "ro", (
