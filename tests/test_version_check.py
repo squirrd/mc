@@ -457,3 +457,68 @@ class Test304Response:
 
                             # Should still display notification for cached newer version
                             mock_notify.assert_called_once_with('2.0.4', '2.0.5')
+
+
+class Test404Response:
+    """Test handling of 404 No Releases responses."""
+
+    @patch('mc.version_check.requests.get')
+    def test_fetch_release_404_returns_sentinel(self, mock_get):
+        """Should return (None, '', 404) when repo has no releases yet."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        checker = VersionChecker()
+        data, etag, status = checker._fetch_latest_release()
+
+        assert status == 404
+        assert data is None
+        assert etag == ''
+
+    @patch('mc.version_check.requests.get')
+    def test_404_does_not_log_error(self, mock_get):
+        """Should not log an ERROR when repo has no releases — it is not a fault."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        checker = VersionChecker()
+
+        with patch('mc.version_check.get_version', return_value='2.0.4'):
+            with patch.object(checker._config_manager, 'get_version_config', return_value={'last_check': None}):
+                with patch.object(checker._config_manager, 'get', return_value=None):
+                    with patch.object(checker._config_manager, 'load', return_value={}):
+                        with patch.object(checker._config_manager, 'save_atomic'):
+                            import logging
+                            with patch.object(
+                                logging.getLogger('mc.version_check'), 'error'
+                            ) as mock_error:
+                                checker._perform_version_check()
+
+                            mock_error.assert_not_called()
+
+    @patch('mc.version_check.requests.get')
+    def test_404_records_last_check_timestamp(self, mock_get):
+        """Should update last_check so the check is throttled normally after a 404."""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        saved_config = {}
+
+        def capture_save(cfg):
+            saved_config.update(cfg)
+
+        checker = VersionChecker()
+
+        with patch('mc.version_check.get_version', return_value='2.0.4'):
+            with patch.object(checker._config_manager, 'get_version_config', return_value={'last_check': None}):
+                with patch.object(checker._config_manager, 'get', return_value=None):
+                    with patch.object(checker._config_manager, 'load', return_value={}):
+                        with patch.object(checker._config_manager, 'save_atomic', side_effect=capture_save):
+                            checker._perform_version_check()
+
+        assert 'version' in saved_config
+        assert saved_config['version']['last_status_code'] == 404
+        assert saved_config['version']['last_check'] > 0

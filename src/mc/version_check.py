@@ -152,7 +152,11 @@ class VersionChecker:
         if response.status_code == 304:
             return None, etag, 304
 
-        # Fail fast on 4xx errors (don't retry)
+        # Handle 404 — repo has no releases published yet (not a real error)
+        if response.status_code == 404:
+            return None, '', 404
+
+        # Fail fast on other 4xx errors (don't retry)
         if 400 <= response.status_code < 500:
             response.raise_for_status()
 
@@ -191,6 +195,14 @@ class VersionChecker:
             # Update last_check and last_status_code for all responses
             config['version']['last_check'] = time.time()
             config['version']['last_status_code'] = status_code
+
+            # Handle 404 - no releases published yet
+            if status_code == 404:
+                logger.debug("No GitHub releases found — version check skipped")
+                config['version']['last_check'] = time.time()
+                config['version']['last_status_code'] = status_code
+                self._config_manager.save_atomic(config)
+                return
 
             # Handle 304 Not Modified - keep cached data, update timestamp only
             if status_code == 304:
