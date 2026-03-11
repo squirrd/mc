@@ -49,7 +49,18 @@ def test_get_version_matches_pyproject():
 
 def test_get_version_fallback_to_pyproject(monkeypatch):
     """Test fallback to pyproject.toml when package not installed."""
+    import sys
+    from pathlib import Path
     from mc import version as version_module
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        expected_version = tomllib.load(f)["project"]["version"]
 
     def mock_version(name):
         raise PackageNotFoundError(name)
@@ -57,9 +68,10 @@ def test_get_version_fallback_to_pyproject(monkeypatch):
     # Patch the version function in mc.version module (not importlib.metadata)
     monkeypatch.setattr(version_module, 'version', mock_version)
 
-    # Should fall back to parsing pyproject.toml
+    # Should fall back to parsing pyproject.toml — reads expected value dynamically
+    # so this test never needs updating when the version bumps.
     version = get_version()
-    assert version == "2.0.1"  # Updated to match current pyproject.toml version
+    assert version == expected_version
     assert isinstance(version, str)
 
 
