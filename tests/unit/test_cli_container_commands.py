@@ -226,15 +226,12 @@ class TestCLIStop:
 
     def test_stop_invalid_case_number(self, capsys):
         """Test mc container stop rejects invalid case number."""
-        args = argparse.Namespace(case_number="123")
+        args = argparse.Namespace(case_numbers=["123"])
 
-        # Run command should exit
         with pytest.raises(SystemExit) as exc_info:
             container.stop(args)
 
         assert exc_info.value.code == 1
-
-        # Verify error message
         captured = capsys.readouterr()
         assert "Invalid case number: '123'" in captured.err
         assert "must be exactly 8 digits" in captured.err
@@ -243,18 +240,13 @@ class TestCLIStop:
     def test_stop_success(self, mock_get_manager, capsys):
         """Test mc container stop <case> calls manager.stop()."""
         mock_manager = Mock()
-        mock_manager.stop.return_value = True  # Was stopped
+        mock_manager.stop.return_value = True
         mock_get_manager.return_value = mock_manager
 
-        args = argparse.Namespace(case_number="12345678")
-
-        # Run command
+        args = argparse.Namespace(case_numbers=["12345678"])
         container.stop(args)
 
-        # Verify manager.stop called
         mock_manager.stop.assert_called_once_with("12345678")
-
-        # Verify success message
         captured = capsys.readouterr()
         assert "Stopped container for case 12345678" in captured.out
 
@@ -262,15 +254,12 @@ class TestCLIStop:
     def test_stop_already_stopped(self, mock_get_manager, capsys):
         """Test mc container stop handles already stopped container."""
         mock_manager = Mock()
-        mock_manager.stop.return_value = False  # Already stopped
+        mock_manager.stop.return_value = False
         mock_get_manager.return_value = mock_manager
 
-        args = argparse.Namespace(case_number="12345678")
-
-        # Run command
+        args = argparse.Namespace(case_numbers=["12345678"])
         container.stop(args)
 
-        # Verify message
         captured = capsys.readouterr()
         assert "already stopped" in captured.out
 
@@ -281,13 +270,44 @@ class TestCLIStop:
         mock_manager.stop.side_effect = RuntimeError("Stop failed")
         mock_get_manager.return_value = mock_manager
 
-        args = argparse.Namespace(case_number="12345678")
+        args = argparse.Namespace(case_numbers=["12345678"])
 
-        # Run command should exit
         with pytest.raises(SystemExit) as exc_info:
             container.stop(args)
 
         assert exc_info.value.code == 1
+
+    @patch("mc.cli.commands.container._get_manager")
+    def test_stop_multiple_cases(self, mock_get_manager, capsys):
+        """Test mc container stop processes all case numbers."""
+        mock_manager = Mock()
+        mock_manager.stop.return_value = True
+        mock_get_manager.return_value = mock_manager
+
+        args = argparse.Namespace(case_numbers=["12345678", "87654321"])
+        container.stop(args)
+
+        assert mock_manager.stop.call_count == 2
+        mock_manager.stop.assert_any_call("12345678")
+        mock_manager.stop.assert_any_call("87654321")
+
+    @patch("mc.cli.commands.container._get_manager")
+    def test_stop_multiple_continues_on_error(self, mock_get_manager, capsys):
+        """Test mc container stop continues past one failure and exits non-zero."""
+        mock_manager = Mock()
+        mock_manager.stop.side_effect = [RuntimeError("Stop failed"), True]
+        mock_get_manager.return_value = mock_manager
+
+        args = argparse.Namespace(case_numbers=["12345678", "87654321"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            container.stop(args)
+
+        assert exc_info.value.code == 1
+        # Second case was still attempted
+        assert mock_manager.stop.call_count == 2
+        captured = capsys.readouterr()
+        assert "Stopped container for case 87654321" in captured.out
 
 
 class TestCLIDelete:
@@ -295,15 +315,12 @@ class TestCLIDelete:
 
     def test_delete_invalid_case_number(self, capsys):
         """Test mc container delete rejects invalid case number."""
-        args = argparse.Namespace(case_number="123")
+        args = argparse.Namespace(case_numbers=["123"])
 
-        # Run command should exit
         with pytest.raises(SystemExit) as exc_info:
             container.delete(args)
 
         assert exc_info.value.code == 1
-
-        # Verify error message
         captured = capsys.readouterr()
         assert "Invalid case number: '123'" in captured.err
         assert "must be exactly 8 digits" in captured.err
@@ -314,16 +331,11 @@ class TestCLIDelete:
         mock_manager = Mock()
         mock_get_manager.return_value = mock_manager
 
-        args = argparse.Namespace(case_number="12345678")
-
-        # Run command
+        args = argparse.Namespace(case_numbers=["12345678"])
         container.delete(args)
 
-        # Verify warning printed
         captured = capsys.readouterr()
         assert "preserve the workspace" in captured.out
-
-        # Verify manager.delete called
         mock_manager.delete.assert_called_once_with("12345678")
 
     @patch("mc.cli.commands.container._get_manager")
@@ -333,13 +345,41 @@ class TestCLIDelete:
         mock_manager.delete.side_effect = RuntimeError("Delete failed")
         mock_get_manager.return_value = mock_manager
 
-        args = argparse.Namespace(case_number="12345678")
+        args = argparse.Namespace(case_numbers=["12345678"])
 
-        # Run command should exit
         with pytest.raises(SystemExit) as exc_info:
             container.delete(args)
 
         assert exc_info.value.code == 1
+
+    @patch("mc.cli.commands.container._get_manager")
+    def test_delete_multiple_cases(self, mock_get_manager, capsys):
+        """Test mc container delete processes all case numbers."""
+        mock_manager = Mock()
+        mock_get_manager.return_value = mock_manager
+
+        args = argparse.Namespace(case_numbers=["12345678", "87654321"])
+        container.delete(args)
+
+        assert mock_manager.delete.call_count == 2
+        mock_manager.delete.assert_any_call("12345678")
+        mock_manager.delete.assert_any_call("87654321")
+
+    @patch("mc.cli.commands.container._get_manager")
+    def test_delete_multiple_continues_on_error(self, mock_get_manager, capsys):
+        """Test mc container delete continues past one failure and exits non-zero."""
+        mock_manager = Mock()
+        mock_manager.delete.side_effect = [RuntimeError("Delete failed"), None]
+        mock_get_manager.return_value = mock_manager
+
+        args = argparse.Namespace(case_numbers=["12345678", "87654321"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            container.delete(args)
+
+        assert exc_info.value.code == 1
+        # Second case was still attempted
+        assert mock_manager.delete.call_count == 2
 
 
 class TestCLIExec:

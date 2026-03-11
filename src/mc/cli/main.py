@@ -87,10 +87,10 @@ def main() -> ExitCode:
         create_parser.add_argument('case_number', help='Case number')
 
         stop_parser = container_subparsers.add_parser('stop', help='Stop container')
-        stop_parser.add_argument('case_number', help='Case number')
+        stop_parser.add_argument('case_numbers', nargs='+', help='Case number(s)')
 
         delete_parser = container_subparsers.add_parser('delete', help='Delete container')
-        delete_parser.add_argument('case_number', help='Case number')
+        delete_parser.add_argument('case_numbers', nargs='+', help='Case number(s)')
 
         exec_parser = container_subparsers.add_parser('exec', help='Execute command in container')
         exec_parser.add_argument('case_number', help='Case number')

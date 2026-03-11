@@ -141,53 +141,61 @@ def list_containers(args: argparse.Namespace) -> None:
 
 
 def stop(args: argparse.Namespace) -> None:
-    """Stop container.
+    """Stop one or more containers.
 
     Args:
-        args: Parsed arguments with case_number
+        args: Parsed arguments with case_numbers (list)
     """
-    # Validate case number format early (fail fast before expensive operations)
-    try:
-        case_number = validate_case_number(args.case_number)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
     manager = _get_manager()
+    errors: list[str] = []
 
-    try:
-        was_stopped = manager.stop(case_number)
-        if was_stopped:
-            print(f"Stopped container for case {case_number}")
-        else:
-            print(f"Container for case {case_number} was already stopped")
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    for raw in args.case_numbers:
+        try:
+            case_number = validate_case_number(raw)
+        except ValueError as e:
+            errors.append(f"Error: {e}")
+            continue
+
+        try:
+            was_stopped = manager.stop(case_number)
+            if was_stopped:
+                print(f"Stopped container for case {case_number}")
+            else:
+                print(f"Container for case {case_number} was already stopped")
+        except RuntimeError as e:
+            errors.append(f"Error stopping {case_number}: {e}")
+
+    if errors:
+        for msg in errors:
+            print(msg, file=sys.stderr)
         sys.exit(1)
 
 
 def delete(args: argparse.Namespace) -> None:
-    """Delete container.
+    """Delete one or more containers.
 
     Args:
-        args: Parsed arguments with case_number
+        args: Parsed arguments with case_numbers (list)
     """
-    # Validate case number format early (fail fast before expensive operations)
-    try:
-        case_number = validate_case_number(args.case_number)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
     manager = _get_manager()
+    print("This will delete the container(s) but preserve the workspace.")
+    errors: list[str] = []
 
-    # Print warning
-    print("This will delete the container but preserve the workspace.")
+    for raw in args.case_numbers:
+        try:
+            case_number = validate_case_number(raw)
+        except ValueError as e:
+            errors.append(f"Error: {e}")
+            continue
 
-    try:
-        manager.delete(case_number)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        try:
+            manager.delete(case_number)
+        except RuntimeError as e:
+            errors.append(f"Error deleting {case_number}: {e}")
+
+    if errors:
+        for msg in errors:
+            print(msg, file=sys.stderr)
         sys.exit(1)
 
 
