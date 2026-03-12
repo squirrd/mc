@@ -14,8 +14,8 @@ from mc.runtime import get_runtime_mode
 from mc.utils.errors import handle_cli_error
 from mc.utils.file_ops import does_path_exist
 from mc.utils.logging import setup_logging
+from mc.banner import show_update_banner
 from mc.version import get_version
-from mc.version_check import VersionChecker
 
 ExitCode = Literal[0, 1, 2, 65, 69, 73, 74, 130]
 
@@ -147,15 +147,12 @@ def main() -> ExitCode:
             logger.error("The directory '%s' must exist", base_dir)
             return 1
 
-        # Start background version check (non-blocking)
-        # Only check when NOT in container mode (runtime mode detection from Phase 27)
+        # Show update banner (foreground check, once per calendar day, suppressed for --version)
         if get_runtime_mode() != 'agent':
             try:
-                version_checker = VersionChecker()
-                version_checker.start_background_check()
+                show_update_banner()
             except Exception as e:
-                # Silent failure - version check errors should not block CLI
-                logger.debug(f"Version check failed to start: {e}")
+                logger.debug("Update banner failed: %s", e)
 
         # Route to appropriate command
         if args.command == 'attach':
