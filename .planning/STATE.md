@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 30 of 32 (mc-update Core)
-Plan: 1 of 2 in current phase
-Status: In progress — 30-01 complete
-Last activity: 2026-03-12 — Completed 30-01-PLAN.md (mc-update standalone module and entry point)
+Plan: 2 of 2 in current phase
+Status: Phase complete — 30-01 and 30-02 complete
+Last activity: 2026-03-12 — Completed 30-02-PLAN.md (mc-update edge case tests and quality gate)
 
-Progress: [█████████████████████░] 87% (29 phases + 30-01 complete)
+Progress: [██████████████████████░] 90% (Phase 30 complete, 2 plans remaining: Phase 31, 32)
 
 ## Performance Metrics
 
@@ -38,7 +38,9 @@ Progress: [█████████████████████░] 8
 **Recent Trend:**
 - v2.0.5 29-01 completed in 4 min — extremely focused implementation plan
 - v2.0.5 29-02 completed in 4 min — test suite for new Python API path
-- Trend: Excellent velocity; Phase 29 complete in under 10 min total
+- v2.0.5 30-01 completed in 8 min — mc-update module and entry point
+- v2.0.5 30-02 completed in 5 min — edge case tests and quality gate
+- Trend: Excellent velocity; Phase 30 complete in under 15 min total
 
 *Updated after each plan completion*
 
@@ -64,6 +66,8 @@ Recent decisions affecting current work:
 - v2.0.5 (30-01): mc-update module intentionally independent from mc.cli.main — survives partial package upgrades
 - v2.0.5 (30-01): Lazy import of is_agent_mode() inside upgrade() function body keeps mc.update importable when CLI is broken
 - v2.0.5 (30-01): capture_output=False for uv tool upgrade mc (live streaming); capture_output=True for mc --version (inspect output)
+- v2.0.5 (30-02): shell=False assertion via call_args.kwargs.get('shell', False) handles absent kwarg correctly
+- v2.0.5 (30-02): Negative stdout assertion ("Upgrade complete" absent) prevents false success message on partial failure paths
 
 ### Pending Todos
 
@@ -78,10 +82,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12T04:58:14Z
-Stopped at: Completed 30-01-PLAN.md — mc-update standalone module, entry point, and 12 unit tests
+Last session: 2026-03-12T05:05:00Z
+Stopped at: Completed 30-02-PLAN.md — mc-update edge case tests (17 total) and full quality gate
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (Phase 30 plan 01 complete)*
+*Last updated: 2026-03-12 (Phase 30 complete — both plans done)*
