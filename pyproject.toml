@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mc-cli"
+name = "mc"
 version = "2.0.4"
 description = "MC CLI - Multi-case Container Management Tool"
 readme = "README.md"

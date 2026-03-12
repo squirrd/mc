@@ -273,7 +273,7 @@ class VersionChecker:
         """Display update notification to stderr.
 
         Format from CONTEXT.md:
-        "mc v2.0.6 available. Update: uvx --reinstall mc-cli@latest"
+        "mc v2.0.6 available. Update: uv tool install --reinstall git+https://github.com/squirrd/mc"
 
         Args:
             current: Current installed version
@@ -288,7 +288,7 @@ class VersionChecker:
                 return
 
             # Display single-line message to stderr
-            message = f"mc v{latest} available. Update: uvx --reinstall mc-cli@latest\n"
+            message = f"mc v{latest} available. Update: uv tool install --reinstall git+https://github.com/squirrd/mc\n"
             sys.stderr.write(message)
             sys.stderr.flush()
 

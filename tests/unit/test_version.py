@@ -83,4 +83,4 @@ def test_get_version_from_installed_package():
         version = get_version()
 
         assert version == "1.2.3"
-        mock_version.assert_called_once_with("mc-cli")
+        mock_version.assert_called_once_with("mc")
