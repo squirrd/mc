@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 29 of 32 (iTerm2 Python API Migration)
-Plan: 0 of 2 in current phase
-Status: Roadmap created — ready to plan
-Last activity: 2026-03-12 — Roadmap created for v2.0.5 (phases 29-32, 12 requirements mapped)
+Plan: 1 of 2 in current phase
+Status: In progress — 29-01 complete, ready for 29-02 (tests)
+Last activity: 2026-03-12 — Completed 29-01-PLAN.md (Python API integration in macos.py)
 
-Progress: [████████████████████] 81% (6 of 4 v2.0.5 phases remain — 28 phases complete across all milestones)
+Progress: [████████████████████░] 82% (29 phases started, 28 fully complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 56+ plans (across phases 1-28)
+- Total plans completed: 57+ plans (across phases 1-29)
 - Average duration: ~45 min per plan (estimated from v2.0.2 and v2.0.3 data)
 - Total execution time: ~42 hours across v1.0, v2.0, v2.0.2, v2.0.3, v2.0.4
 
@@ -33,9 +33,10 @@ Progress: [████████████████████] 81% (6 
 | v2.0.2 Window Tracking | 5 | 10 | 6 hours |
 | v2.0.3 Container Tools | 6 | 9 | 14 hours |
 | v2.0.4 Foundation | 3 | 6 | 3 hours |
+| v2.0.5 Terminal (in progress) | 4 | 2+ | ~4 min so far |
 
 **Recent Trend:**
-- v2.0.4 showed efficient same-day delivery (3 hours total)
+- v2.0.5 29-01 completed in 4 min — extremely focused implementation plan
 - Trend: Excellent velocity with focused infrastructure implementation
 
 *Updated after each plan completion*
@@ -53,6 +54,10 @@ Recent decisions affecting current work:
 - v2.0.4 (28-01): ETag conditional requests to preserve GitHub API quota
 - v2.0.5 roadmap: iTerm2 AppleScript dropped entirely — fallback chain is iTerm2 API only → Terminal.app
 - v2.0.5 roadmap: mc-update needs separate console_scripts entry point (survives package upgrades)
+- v2.0.5 (29-01): iterm2 added as optional [macos] extra, not core dependency — Linux stays clean
+- v2.0.5 (29-01): asyncio.timeout(5) applied INSIDE coroutine, not outside run_until_complete()
+- v2.0.5 (29-01): _last_api_window_id instance attribute threads window_id from launch() to _capture_window_id()
+- v2.0.5 (29-01): _build_iterm_script() retained for backwards-compat; plan 02 adds dedicated tests
 
 ### Pending Todos
 
@@ -63,14 +68,14 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- `iterm2` Python library must be added as optional macOS dependency — check pyproject.toml extras or optional-dependencies pattern
+- None — iterm2 library blocker resolved in 29-01
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Roadmap created for v2.0.5 — ready to plan Phase 29
+Last session: 2026-03-12T04:01:47Z
+Stopped at: Completed 29-01-PLAN.md — MacOSLauncher Python API integration
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (roadmap created)*
+*Last updated: 2026-03-12 (29-01 complete)*
