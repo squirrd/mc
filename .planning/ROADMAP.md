@@ -86,11 +86,11 @@ Plans:
   2. After upgrade, mc-update verifies the new version by running `mc --version` and reports the result
   3. If the upgrade fails, mc-update prints actionable recovery instructions (e.g., `uv tool install --force mc`)
   4. `mc-update` is available as a separate console_scripts entry point that survives package upgrades
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 30-01: mc-update entry point, upgrade command, and post-upgrade validation
-- [ ] 30-02: Failure handling and recovery instructions
+- [ ] 30-01-PLAN.md — mc-update module (src/mc/update.py), pyproject.toml entry point, and core unit tests
+- [ ] 30-02-PLAN.md — Edge case tests: FileNotFoundError paths, post-upgrade mc failure, agent mode subprocess guard, full quality gate
 
 ---
 
