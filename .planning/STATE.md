@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 Auto-Update & Terminal — defining requirements
+**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 29: iTerm2 Python API Migration
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-12 — Milestone v2.0.5 started
+Phase: 29 of 32 (iTerm2 Python API Migration)
+Plan: 0 of 2 in current phase
+Status: Roadmap created — ready to plan
+Last activity: 2026-03-12 — Roadmap created for v2.0.5 (phases 29-32, 12 requirements mapped)
 
-Progress: [████████████████████] 100% (28 of 28 phases complete across all milestones)
+Progress: [████████████████████] 81% (6 of 4 v2.0.5 phases remain — 28 phases complete across all milestones)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 56+ plans (across phases 1-25)
+- Total plans completed: 56+ plans (across phases 1-28)
 - Average duration: ~45 min per plan (estimated from v2.0.2 and v2.0.3 data)
-- Total execution time: ~42 hours across v1.0, v2.0, v2.0.2, v2.0.3
+- Total execution time: ~42 hours across v1.0, v2.0, v2.0.2, v2.0.3, v2.0.4
 
 **By Milestone:**
 
@@ -36,7 +36,7 @@ Progress: [████████████████████] 100% (2
 
 **Recent Trend:**
 - v2.0.4 showed efficient same-day delivery (3 hours total)
-- Trend: Excellent velocity with focused infrastructure implementation and comprehensive testing
+- Trend: Excellent velocity with focused infrastructure implementation
 
 *Updated after each plan completion*
 
@@ -48,44 +48,29 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - v2.0.4 (28-02): Silent failure for auto-check (DEBUG logging), visible errors for manual command (stderr + exit 1)
-- v2.0.4 (28-02): Manual override bypasses throttle by calling _perform_version_check() directly
-- v2.0.4 (28-02): CLI startup hooks placed after config validation, before command routing
+- v2.0.4 (28-02): Separate hourly check throttle (3600s) from daily notification throttle (86400s)
 - v2.0.4 (28-02): Runtime mode check guards containerized operations (get_runtime_mode() != 'agent')
-- v2.0.4 (28-01): Use daemon threads with atexit cleanup (not asyncio) - matches existing CacheManager pattern
-- v2.0.4 (28-01): Store ETag, latest_known, latest_known_at, last_status_code in [version] section for conditional requests
-- v2.0.4 (28-01): Retry with tenacity for transient failures, fail fast on 4xx errors
-- v2.0.4 (28-01): Separate hourly check throttle (3600s) from daily notification throttle (86400s)
-- v2.0.4 (28-01): Extend check throttle to 24 hours when rate limited (last_status_code == 403)
-- v2.0.4 (27-02): Fixed MC_RUNTIME_MODE=controller to skip file checks (env var precedence over filesystem)
-- v2.0.4 (27-02): Use unittest.mock.patch for Path mocking (standard library approach)
-- v2.0.4 (27-02): Use capsys fixture for stderr message verification (pytest standard)
-- v2.0.4 (27-01): Use MC_RUNTIME_MODE environment variable as primary container detection (explicit contract)
-- v2.0.4 (27-01): Fallback to filesystem indicators for edge cases (defensive /run/.containerenv, /.dockerenv)
-- v2.0.4 (27-01): Block auto-update in agent mode with informational Rich message
-- v2.0.4 (27-01): Avoid cgroups parsing (fragile, deprecated in cgroups v2, broken by Linux 6.12+)
-- v2.0.4 (26-02): Omit last_check from default config when None - TOML doesn't support None values
-- v2.0.4 (26-02): get_version_config() provides None as default when last_check field is missing
-- v2.0.3: Multi-stage container architecture with independent image versioning - proven scalable for version checking infrastructure
-- v1.0: TOML config file format chosen for cross-platform support - extending in v2.0.4 for version management fields
-- v1.0: File-based token cache over keyring - similar pattern applies to version check cache
+- v2.0.4 (28-01): ETag conditional requests to preserve GitHub API quota
+- v2.0.5 roadmap: iTerm2 AppleScript dropped entirely — fallback chain is iTerm2 API only → Terminal.app
+- v2.0.5 roadmap: mc-update needs separate console_scripts entry point (survives package upgrades)
 
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
    - 3 exported functions not currently used in production
-   - All tested and functional, API design question for v2.0.5
+   - All tested and functional — candidates for v2.0.5 mc-update integration
    - File: .planning/todos/pending/2026-02-19-address-orphaned-helper-functions.md
 
 ### Blockers/Concerns
 
-None. Requirements being defined for v2.0.5.
+- `iterm2` Python library must be added as optional macOS dependency — check pyproject.toml extras or optional-dependencies pattern
 
 ## Session Continuity
 
 Last session: 2026-03-12
-Stopped at: Milestone v2.0.5 requirements definition
+Stopped at: Roadmap created for v2.0.5 — ready to plan Phase 29
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (milestone started)*
+*Last updated: 2026-03-12 (roadmap created)*
