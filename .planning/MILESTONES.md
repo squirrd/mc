@@ -1,5 +1,33 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.5 Auto-Update & Terminal (Shipped: 2026-03-12)
+
+**Delivered:** MC CLI auto-update functionality (upgrade/pin/unpin/check/banner) and iTerm2 Python API migration for cleaner terminal management
+
+**Phases completed:** 29-32 (4 phases, 8 plans total)
+
+**Key accomplishments:**
+
+- iTerm2 Python API migration — MacOSLauncher now creates windows via iterm2 Python library with MCC-Term profile applied and raw `podman exec` command hidden from terminal scrollback; Terminal.app fallback preserved; iterm2>=2.14 as optional macOS extra
+- `mc-update upgrade` standalone entry point — runs `uv tool upgrade mc` with live streaming, post-upgrade `mc --version` verification, and `uv tool install --force mc` recovery instructions on failure; survives partial package upgrades
+- Version pinning — `mc-update pin/unpin/check` subcommands with GitHub release validation, config.toml atomic persistence, and pin guard blocking accidental upgrades
+- Update notification banner — Rich Panel on stderr at CLI startup, calendar-day suppression, pin-aware messaging, 1.5s threaded timeout replacing VersionChecker background check
+- Fixed pre-existing project misconfiguration: `.flake8` aligned with Black's 100-char line length (was missing entirely)
+
+**Stats:**
+
+- 85 files changed (9,824 insertions, 3,085 deletions)
+- 9,921 lines of Python code total (up from 7,914 at v2.0.4)
+- 4 phases, 8 plans
+- Same-day delivery (2026-03-12, ~40 min total)
+- Tests: 523 → 579 unit tests (+56 new tests); 67.84% coverage
+
+**Git range:** `3e5cf7b` (docs(29): capture phase context) → `f2b046e` (docs(32): complete update-notifications phase)
+
+**What's next:** Start next milestone via `/gsd:new-milestone`
+
+---
+
 ## v2.0.4 Foundation (Shipped: 2026-02-19)
 
 **Delivered:** Version checking infrastructure and configuration foundation for automatic updates (MC CLI only)

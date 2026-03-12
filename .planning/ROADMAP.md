@@ -8,7 +8,7 @@
 - ✅ **v2.0.2 Window Tracking** - Phases 15-19 (shipped 2026-02-08)
 - ✅ **v2.0.3 Container Tools** - Phases 20-25 (shipped 2026-02-10)
 - ✅ **v2.0.4 Foundation** - Phases 26-28 (shipped 2026-02-19)
-- 🚧 **v2.0.5 Auto-Update & Terminal** - Phases 29-32 (in progress)
+- ✅ **v2.0.5 Auto-Update & Terminal** - Phases 29-32 (shipped 2026-03-12)
 
 ## Phases
 
@@ -54,83 +54,12 @@ Phases 26-28 delivered: GitHub API version checking with daemon threads, ETag ca
 
 </details>
 
-### 🚧 v2.0.5 Auto-Update & Terminal (In Progress)
+<details>
+<summary>✅ v2.0.5 Auto-Update & Terminal (Phases 29-32) - SHIPPED 2026-03-12</summary>
 
-**Milestone Goal:** MC CLI auto-update functionality and iTerm2 Python API migration for cleaner terminal management.
+Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin/check commands, Rich Panel update notification banner. See milestones/v2.0.5-ROADMAP.md for full details.
 
-#### Phase 29: iTerm2 Python API Migration
-
-**Goal**: Users get cleaner terminal windows when opening case containers on macOS — raw command hidden, custom profile applied, with reliable fallback.
-**Depends on**: Phase 28 (terminal infrastructure)
-**Requirements**: ITERM-01, ITERM-02, ITERM-03, ITERM-04
-**Success Criteria** (what must be TRUE):
-  1. Running `mc case 12345678` on macOS opens a new iTerm2 window using the `iterm2` Python library (not AppleScript)
-  2. The new window opens with the `MCC-Term` iTerm2 profile applied
-  3. The user sees only the container shell prompt — the `podman exec ...` command is not visible in the terminal scrollback
-  4. When iTerm2 Python API is unavailable (library missing, API not enabled, or iTerm2 not running), the launcher falls back to Terminal.app without error
-**Plans**: 2 plans
-
-Plans:
-- [ ] 29-01-PLAN.md — iterm2 optional dependency, pyproject.toml extras + mypy override, MacOSLauncher refactor with Python API path for window creation, ID capture, focus, and existence check; Terminal.app AppleScript fallback preserved; once-per-day fallback notice
-- [ ] 29-02-PLAN.md — Unit tests for API path (new test file) and updated existing launcher tests; full quality gate (mypy, flake8, bandit, pytest)
-
----
-
-#### Phase 30: mc-update Core
-
-**Goal**: Users can explicitly trigger a safe MC CLI upgrade and receive clear feedback on success or failure, including recovery instructions.
-**Depends on**: Phase 29 (iTerm2 track independent; update track depends only on v2.0.4 version infrastructure already shipped)
-**Requirements**: UPDATE-01, UPDATE-02, UPDATE-03
-**Success Criteria** (what must be TRUE):
-  1. User can run `mc-update upgrade` and the command executes `uv tool upgrade mc` to upgrade MC CLI
-  2. After upgrade, mc-update verifies the new version by running `mc --version` and reports the result
-  3. If the upgrade fails, mc-update prints actionable recovery instructions (e.g., `uv tool install --force mc`)
-  4. `mc-update` is available as a separate console_scripts entry point that survives package upgrades
-**Plans**: 2 plans
-
-Plans:
-- [x] 30-01-PLAN.md — mc-update module (src/mc/update.py), pyproject.toml entry point, and core unit tests
-- [x] 30-02-PLAN.md — Edge case tests: FileNotFoundError paths, post-upgrade mc failure, agent mode subprocess guard, full quality gate
-
----
-
-#### Phase 31: Version Pinning
-
-**Goal**: Users can lock MC to a specific version and inspect current vs. latest version and pin status at any time.
-**Depends on**: Phase 30
-**Requirements**: UPDATE-04, UPDATE-05, UPDATE-06
-**Success Criteria** (what must be TRUE):
-  1. User can run `mc-update pin X.Y.Z` to record a version pin in the TOML config
-  2. User can run `mc-update unpin` to remove the version pin from the TOML config
-  3. User can run `mc-update check` to see current installed version, latest available version, and whether a pin is active
-  4. Pinned version is persisted in `~/mc/config/config.toml` [version] section using existing atomic write infrastructure
-**Plans**: 2 plans
-
-Plans:
-- [ ] 31-01-PLAN.md — pin(), unpin(), check(), _fetch_latest_version() functions + upgrade() pin guard + main() dispatch
-- [ ] 31-02-PLAN.md — TestPin, TestUnpin, TestCheck classes + TestUpgrade pin-block test + TestMain dispatch tests
-
----
-
-#### Phase 32: Update Notifications
-
-**Goal**: Users are informed of available updates at CLI startup without being spammed — banner appears at most once per calendar day, shows modified message when pinned, and never delays CLI beyond 1-2s.
-**Depends on**: Phase 31
-**Requirements**: UPDATE-07, UPDATE-08
-**Success Criteria** (what must be TRUE):
-  1. When a newer MC version is available, a Rich Panel update banner appears on stderr at CLI startup
-  2. The banner does not appear more than once per calendar day (calendar-day reset, not rolling 24h)
-  3. When a version pin is active and a newer version exists, banner shows modified message with unpin instruction
-  4. The banner check completes within 1-2s; on timeout a brief note is printed and the command runs
-  5. `mc --version` suppresses the banner entirely (clean/parseable output)
-  6. Non-interactive (piped) runs do not trigger suppression timestamp
-**Plans**: 2 plans
-
-Plans:
-- [ ] 32-01-PLAN.md — src/mc/banner.py (show_update_banner, suppression helpers, Rich Panel rendering, timeout via threading.Event) + ConfigManager last_banner_shown field
-- [ ] 32-02-PLAN.md — Wire show_update_banner() into cli/main.py (replace VersionChecker background check), tests/unit/test_banner.py (15+ tests), full quality gate
-
----
+</details>
 
 ## Progress
 
@@ -149,3 +78,5 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 30. mc-update Core | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 31. Version Pinning | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |
+
+**v2.0.5 SHIPPED 2026-03-12** — See milestones/v2.0.5-ROADMAP.md

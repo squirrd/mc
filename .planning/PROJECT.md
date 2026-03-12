@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.4 (2026-02-19)
+**Latest Release:** v2.0.5 (2026-03-12)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -27,6 +27,11 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Runtime mode detection preventing containerized auto-updates
 - ✓ Configuration foundation with atomic writes and version management fields
 - ✓ Production-ready test suite: 597 tests passing with 75% coverage
+- ✓ iTerm2 Python API migration — MCC-Term profile, podman exec hidden from scrollback, Terminal.app fallback
+- ✓ mc-update upgrade command — standalone entry point, live streaming, post-upgrade verification, recovery instructions
+- ✓ Version pinning (mc-update pin/unpin/check) with GitHub validation and config.toml persistence
+- ✓ Update notification banner — Rich Panel on stderr, calendar-day suppression, pin-aware messaging, 1.5s timeout
+- ✓ Production-ready test suite: 579 unit tests passing with 67.84% coverage
 
 ## Requirements
 
@@ -150,24 +155,36 @@ Shipped in v2.0.4 (2026-02-19):
 - ✓ Auto-update guard prevents version checks in containerized environments — v2.0.4
 - ✓ Informational messaging via Rich Console for container context — v2.0.4
 
+Shipped in v2.0.5 (2026-03-12):
+
+**iTerm2 Python API Migration:**
+- ✓ MacOSLauncher creates iTerm2 windows via iterm2 Python library (not AppleScript) — v2.0.5
+- ✓ New windows opened with MCC-Term iTerm2 profile applied — v2.0.5
+- ✓ Raw `podman exec` command hidden from terminal scrollback (command= param) — v2.0.5
+- ✓ Terminal.app fallback when iTerm2 Python API unavailable; once-per-day fallback notice — v2.0.5
+- ✓ iterm2>=2.14 as optional [macos] extra; Linux installs unaffected — v2.0.5
+
+**MC Auto-Update:**
+- ✓ `mc-update upgrade` — runs `uv tool upgrade mc`, streams live output, post-upgrade verification — v2.0.5
+- ✓ Recovery instructions (`uv tool install --force mc`) on upgrade failure — v2.0.5
+- ✓ `mc-update pin X.Y.Z` — GitHub release validation, config.toml atomic persistence — v2.0.5
+- ✓ `mc-update unpin` — clears pinned_mc sentinel in config — v2.0.5
+- ✓ `mc-update check` — shows installed/latest/pin/update status table — v2.0.5
+- ✓ `upgrade` blocked when pin is active with actionable message — v2.0.5
+
+**Update Notification Banner:**
+- ✓ Rich Panel banner on stderr at CLI startup when newer version available — v2.0.5
+- ✓ Calendar-day suppression (at most once per day, resets at midnight) — v2.0.5
+- ✓ Pin-aware banner message with unpin instruction when version pinned — v2.0.5
+- ✓ 1.5s threaded timeout — CLI never blocked beyond timeout — v2.0.5
+- ✓ `mc --version` suppresses banner entirely — v2.0.5
+- ✓ Non-interactive (piped) runs do not write suppression timestamp — v2.0.5
+
 ### Active
 
-**Current Milestone: v2.0.5 Auto-Update & Terminal**
+**Next Milestone: TBD**
 
-**Goal:** MC CLI auto-update functionality and iTerm2 Python API migration for cleaner terminal management.
-
-**Track 1 — MC Auto-Update:**
-- MC auto-update using `uv tool upgrade mc` subprocess
-- mc-update utility for version control (pin/unpin/list/check commands)
-- Update notifications as Rich banners on stderr
-- Version pinning support with grace periods and stale warnings
-- Post-upgrade validation with recovery instructions
-
-**Track 2 — iTerm2 Python API Migration:**
-- Replace AppleScript approach with `iterm2` Python library in `MacOSLauncher`
-- Use `MCC-Term` iTerm2 profile for all new case terminal windows
-- Clean terminal startup — hide raw `podman exec` command from view
-- Fallback to Terminal.app if iTerm2 Python API unavailable
+Run `/gsd:new-milestone` to define the next milestone.
 
 ### Out of Scope
 
@@ -181,26 +198,26 @@ Shipped in v2.0.4 (2026-02-19):
 
 ## Context
 
-**Current State (v2.0.4 shipped 2026-02-19):**
+**Current State (v2.0.5 shipped 2026-03-12):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
-- 7,914 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
+- 9,921 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
-- External dependencies: Red Hat API, Podman, SQLite, GitHub API
-- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, packaging, wmctrl/xdotool (Linux X11), skopeo, yq
-- Configuration: TOML-based (~/mc/config/config.toml) with version management section
+- External dependencies: Red Hat API, Podman, SQLite, GitHub API, iTerm2 Python API (optional, macOS)
+- Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, packaging, wmctrl/xdotool (Linux X11), skopeo, yq, iterm2 (optional macOS)
+- Configuration: TOML-based (~/mc/config/config.toml) with version management section (pinned_mc, last_banner_shown)
 - Type-safe: mypy strict mode passing with 100% type coverage
 - Container build: Multi-stage architecture with automated versioning and registry publishing
-- Version management: Background checks via daemon threads with ETag caching
+- Version management: mc-update command (upgrade/pin/unpin/check) + Rich Panel startup banner
 
 **Key Features:**
 - Container orchestration with per-case isolated workspaces
-- Automatic terminal attachment (iTerm2, Terminal.app, gnome-terminal, konsole)
+- Automatic terminal attachment via iTerm2 Python API (MCC-Term profile, podman exec hidden) or Terminal.app fallback
 - Container lifecycle management (create, list, stop, delete, exec)
 - Multi-stage container builds with 12-layer cache optimization
 - Build automation with intelligent auto-versioning and registry publishing
-- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.4)
-- Version check infrastructure with non-blocking daemon threads
-- GitHub API integration with ETag caching and hourly throttling
+- Independent image versioning (1.0.0) decoupled from MC CLI version (2.0.5)
+- mc-update upgrade/pin/unpin/check for explicit version management
+- Rich Panel update notification banner at startup with calendar-day suppression
 - Runtime mode detection preventing containerized auto-updates
 - Red Hat API integration with 5-minute cache TTL
 - SQLite state persistence and reconciliation
@@ -264,6 +281,14 @@ Shipped in v2.0.4 (2026-02-19):
 | Separate check vs notification throttle | Hourly checks (3600s) but daily notifications (86400s) reduces user interruption | ✓ Good - balanced UX |
 | MC_RUNTIME_MODE env var | Explicit container detection contract, more reliable than filesystem sniffing | ✓ Good - clear semantics |
 | Descope file locking (UCTL-09) | Single-process assumption documented in CONTEXT.md, atomic writes sufficient | ✓ Good - simpler implementation |
+| iterm2 as optional [macos] extra | Keeps Linux installs unaffected; runtime ImportError guard for real gate | ✓ Good - clean platform separation |
+| asyncio.timeout(5) inside coroutine | run_until_complete() is synchronous; timeout must live inside async def | ✓ Good - correct timeout implementation |
+| mc-update independent from mc.cli.main | Survives partial package replacement during upgrade | ✓ Good - entry point survives self-upgrade |
+| Lazy imports inside function bodies | Keeps modules importable even if mc CLI is partially broken | ✓ Good - resilient during upgrade |
+| pinned_mc='latest' as no-pin sentinel | Consistent with existing ConfigManager.get_version_config() defaults | ✓ Good - symmetric read/write paths |
+| Banner uses daemon thread + threading.Event | 1.5s bounded wait; CLI never blocked beyond timeout | ✓ Good - non-blocking startup behavior |
+| Calendar-day comparison for suppression | .date() comparison, not rolling 24h window | ✓ Good - simpler; resets at midnight |
+| VersionChecker removed from main.py | Banner replaces background check; cleaner single notification path | ✓ Good - no duplicate notification logic |
 
 ---
-*Last updated: 2026-03-12 after v2.0.5 milestone start*
+*Last updated: 2026-03-12 after v2.0.5 milestone completion*
