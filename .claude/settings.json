@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-check-update.js"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node .claude/hooks/statusline.js"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(bash .claude/commands/tdd-issue/scripts/bootstrap.sh*)",
+      "Bash(bash .claude/commands/tdd-issue/scripts/update-tracking.sh*)",
+      "Bash(bash .claude/commands/tdd-issue/scripts/create-worktree.sh*)",
+      "Bash(uv run pytest*)",
+      "Bash(cd * && * uv run pytest*)",
+      "Bash(podman inspect*)",
+      "Bash(podman exec*)"
+    ]
+  }
+}

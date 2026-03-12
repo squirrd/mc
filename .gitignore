@@ -36,7 +36,6 @@ ENV/
 Thumbs.db
 
 # Claude-Related
-.claude/
 .claude-skills/
 .claude_sessions/
 claude_sessions/
