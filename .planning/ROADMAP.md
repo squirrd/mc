@@ -148,4 +148,4 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 29. iTerm2 API Migration | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 30. mc-update Core | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 31. Version Pinning | v2.0.5 | 2/2 | Complete | 2026-03-12 |
-| 32. Update Notifications | v2.0.5 | 0/2 | Not started | - |
+| 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |

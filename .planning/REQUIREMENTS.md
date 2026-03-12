@@ -13,8 +13,8 @@
 - [ ] **UPDATE-04**: User can pin MC to a specific version with `mc-update pin X.Y.Z`
 - [ ] **UPDATE-05**: User can remove a version pin with `mc-update unpin`
 - [ ] **UPDATE-06**: User can inspect current vs latest version and pin status with `mc-update check`
-- [ ] **UPDATE-07**: MC CLI displays a Rich update-available banner at startup when a newer version exists
-- [ ] **UPDATE-08**: Update banner is suppressed when already shown today or when version is pinned
+- [x] **UPDATE-07**: MC CLI displays a Rich update-available banner at startup when a newer version exists
+- [x] **UPDATE-08**: Update banner is suppressed when already shown today or when version is pinned
 
 ### iTerm2 Terminal
 
@@ -61,8 +61,8 @@
 | UPDATE-04   | Phase 31 | Complete |
 | UPDATE-05   | Phase 31 | Complete |
 | UPDATE-06   | Phase 31 | Complete |
-| UPDATE-07   | Phase 32 | Pending |
-| UPDATE-08   | Phase 32 | Pending |
+| UPDATE-07   | Phase 32 | Complete |
+| UPDATE-08   | Phase 32 | Complete |
 
 **Coverage:**
 - v1 requirements: 12 total
