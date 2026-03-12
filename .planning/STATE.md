@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 31: Version Pinning
+**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 32: Update Notifications
 
 ## Current Position
 

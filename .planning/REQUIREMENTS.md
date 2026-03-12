@@ -58,9 +58,9 @@
 | UPDATE-01   | Phase 30 | Complete |
 | UPDATE-02   | Phase 30 | Complete |
 | UPDATE-03   | Phase 30 | Complete |
-| UPDATE-04   | Phase 31 | Pending |
-| UPDATE-05   | Phase 31 | Pending |
-| UPDATE-06   | Phase 31 | Pending |
+| UPDATE-04   | Phase 31 | Complete |
+| UPDATE-05   | Phase 31 | Complete |
+| UPDATE-06   | Phase 31 | Complete |
 | UPDATE-07   | Phase 32 | Pending |
 | UPDATE-08   | Phase 32 | Pending |
 
