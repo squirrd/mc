@@ -36,6 +36,17 @@ class TestRunUpgrade:
         captured = capsys.readouterr()
         assert "uv not found" in captured.err
 
+    def test_run_upgrade_uses_list_form_not_shell(self) -> None:
+        """Test that _run_upgrade invokes subprocess with list form and never shell=True.
+
+        Security requirement: subprocess must never use shell=True to prevent shell injection.
+        The exact command list must be ['uv', 'tool', 'upgrade', 'mc'].
+        """
+        with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
+            _run_upgrade()
+        assert mock_run.call_args[0][0] == ["uv", "tool", "upgrade", "mc"]
+        assert mock_run.call_args.kwargs.get("shell", False) is False
+
 
 class TestVerifyMcVersion:
     """Tests for _verify_mc_version()."""
@@ -59,6 +70,18 @@ class TestVerifyMcVersion:
 
     def test_verify_mc_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that _verify_mc_version returns False and prints error when mc is not on PATH."""
+        with patch("mc.update.subprocess.run", side_effect=FileNotFoundError):
+            result = _verify_mc_version()
+        assert result is False
+        captured = capsys.readouterr()
+        assert "mc not found on PATH" in captured.err
+
+    def test_verify_mc_not_found_stderr_message(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test the exact user-facing error message when mc is absent from PATH post-upgrade.
+
+        RESEARCH Pitfall 2: mc disappears from PATH after uv tool upgrade. The error message
+        must be actionable — telling the user exactly what to check.
+        """
         with patch("mc.update.subprocess.run", side_effect=FileNotFoundError):
             result = _verify_mc_version()
         assert result is False
@@ -119,6 +142,56 @@ class TestUpgrade:
         assert result == 1
         captured = capsys.readouterr()
         assert "uv tool install --force mc" in captured.err
+
+    def test_upgrade_verify_step_fails_after_success(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test RESEARCH Pitfall 3: upgrade reports success but mc is broken post-upgrade.
+
+        uv tool upgrade exits 0 (reported success) but mc --version then exits non-zero.
+        The upgrade() function must return 1, print recovery instructions, and must NOT
+        print 'Upgrade complete' — that message is only for true end-to-end success.
+        """
+        monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
+        with patch("mc.update.subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=0),  # uv tool upgrade mc succeeds
+                MagicMock(returncode=1, stdout="error: something went wrong\n"),  # mc --version fails
+            ]
+            result = upgrade()
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "uv tool install --force mc" in captured.err
+        assert "Upgrade complete" not in captured.out
+
+    def test_upgrade_agent_mode_does_not_call_uv(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that agent mode guard fires before any subprocess call.
+
+        No uv subprocess must be invoked when running in agent mode. The guard
+        must short-circuit the entire upgrade flow.
+        """
+        monkeypatch.setenv("MC_RUNTIME_MODE", "agent")
+        with patch("mc.update.subprocess.run") as mock_run:
+            result = upgrade()
+        assert result == 1
+        assert mock_run.call_count == 0
+
+
+class TestPrintRecoveryInstructions:
+    """Tests for _print_recovery_instructions()."""
+
+    def test_recovery_instructions_content(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that recovery instructions contain the exact actionable command.
+
+        UPDATE-03 requirement: failure output must include 'uv tool install --force mc'
+        so the user has a clear, copy-pasteable recovery path.
+        """
+        _print_recovery_instructions()
+        captured = capsys.readouterr()
+        assert "uv tool install --force mc" in captured.err
+        assert "To recover" in captured.err
 
 
 class TestMain:
