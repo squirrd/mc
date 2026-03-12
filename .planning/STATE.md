@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 30: mc-update Core
+**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 31: Version Pinning
 
 ## Current Position
 
-Phase: 30 of 32 (mc-update Core)
-Plan: 2 of 2 in current phase
-Status: Phase complete — 30-01 and 30-02 complete
-Last activity: 2026-03-12 — Completed 30-02-PLAN.md (mc-update edge case tests and quality gate)
+Phase: 31 of 32 (Version Pinning)
+Plan: 0 of 1 in current phase
+Status: Phase 30 complete — ready to plan Phase 31
+Last activity: 2026-03-12 — Phase 30 verified (4/4 must-haves), UPDATE-01–03 marked Complete
 
 Progress: [██████████████████████░] 90% (Phase 30 complete, 2 plans remaining: Phase 31, 32)
 

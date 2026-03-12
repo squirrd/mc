@@ -55,9 +55,9 @@
 | ITERM-02    | Phase 29 | Complete |
 | ITERM-03    | Phase 29 | Complete |
 | ITERM-04    | Phase 29 | Complete |
-| UPDATE-01   | Phase 30 | Pending |
-| UPDATE-02   | Phase 30 | Pending |
-| UPDATE-03   | Phase 30 | Pending |
+| UPDATE-01   | Phase 30 | Complete |
+| UPDATE-02   | Phase 30 | Complete |
+| UPDATE-03   | Phase 30 | Complete |
 | UPDATE-04   | Phase 31 | Pending |
 | UPDATE-05   | Phase 31 | Pending |
 | UPDATE-06   | Phase 31 | Pending |
