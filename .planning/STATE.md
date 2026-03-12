@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 29 of 32 (iTerm2 Python API Migration)
-Plan: 1 of 2 in current phase
-Status: In progress — 29-01 complete, ready for 29-02 (tests)
-Last activity: 2026-03-12 — Completed 29-01-PLAN.md (Python API integration in macos.py)
+Plan: 2 of 2 in current phase
+Status: Phase complete — 29-01 and 29-02 done, Phase 29 fully complete
+Last activity: 2026-03-12 — Completed 29-02-PLAN.md (unit tests for Python API path)
 
-Progress: [████████████████████░] 82% (29 phases started, 28 fully complete)
+Progress: [█████████████████████░] 85% (29 phases fully complete, 30 next)
 
 ## Performance Metrics
 
@@ -37,7 +37,8 @@ Progress: [████████████████████░] 82% 
 
 **Recent Trend:**
 - v2.0.5 29-01 completed in 4 min — extremely focused implementation plan
-- Trend: Excellent velocity with focused infrastructure implementation
+- v2.0.5 29-02 completed in 4 min — test suite for new Python API path
+- Trend: Excellent velocity; Phase 29 complete in under 10 min total
 
 *Updated after each plan completion*
 
@@ -58,6 +59,8 @@ Recent decisions affecting current work:
 - v2.0.5 (29-01): asyncio.timeout(5) applied INSIDE coroutine, not outside run_until_complete()
 - v2.0.5 (29-01): _last_api_window_id instance attribute threads window_id from launch() to _capture_window_id()
 - v2.0.5 (29-01): _build_iterm_script() retained for backwards-compat; plan 02 adds dedicated tests
+- v2.0.5 (29-02): Explicit _try_iterm2_api=None mocking in launcher tests removes dependency on library absence
+- v2.0.5 (29-02): monkeypatch.setattr on module-level Path constant for sentinel file isolation in tests
 
 ### Pending Todos
 
@@ -72,8 +75,8 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12T04:01:47Z
-Stopped at: Completed 29-01-PLAN.md — MacOSLauncher Python API integration
+Last session: 2026-03-12T04:08:14Z
+Stopped at: Completed 29-02-PLAN.md — unit tests for iterm2 Python API path; Phase 29 complete
 Resume file: None
 
 ---
