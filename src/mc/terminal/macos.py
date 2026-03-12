@@ -1,10 +1,42 @@
 """macOS terminal launchers (iTerm2, Terminal.app)."""
 
+from __future__ import annotations
+
+import asyncio
+import datetime
+import logging
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 from typing import Literal
 
 from mc.terminal.launcher import LaunchOptions
+
+logger = logging.getLogger(__name__)
+
+try:
+    import iterm2 as _iterm2_module  # noqa: F401
+
+    _ITERM2_LIB_AVAILABLE = True
+except ImportError:
+    _ITERM2_LIB_AVAILABLE = False
+
+_ITERM2_FALLBACK_SENTINEL = Path.home() / ".cache" / "mc" / "iterm2_fallback_notice_date"
+
+
+def _should_show_iterm2_fallback_notice() -> bool:
+    today = datetime.date.today().isoformat()
+    try:
+        return _ITERM2_FALLBACK_SENTINEL.read_text().strip() != today
+    except (OSError, FileNotFoundError):
+        return True
+
+
+def _record_iterm2_fallback_notice() -> None:
+    today = datetime.date.today().isoformat()
+    _ITERM2_FALLBACK_SENTINEL.parent.mkdir(parents=True, exist_ok=True)
+    _ITERM2_FALLBACK_SENTINEL.write_text(today)
 
 
 class MacOSLauncher:
@@ -19,6 +51,7 @@ class MacOSLauncher:
             terminal: Specific terminal to use, or None for auto-detection
         """
         self.terminal = terminal or self._detect_terminal()
+        self._last_api_window_id: str | None = None
 
     def _detect_terminal(self) -> Literal["iTerm2", "Terminal.app"]:
         """Detect available terminal application.
@@ -214,10 +247,16 @@ end tell
         Returns:
             Window ID as string, or None if capture fails
 
-        Captures the "current window" (iTerm2) or "front window" (Terminal.app)
-        window ID immediately after window creation. Used for window registry
-        operations in Phase 16.
+        When the last launch used the Python API, returns the window_id
+        captured directly from the API. Otherwise, falls back to AppleScript
+        to capture the current/front window ID.
         """
+        # If last launch used the Python API, return its window_id directly
+        api_id = self._last_api_window_id
+        if api_id is not None:
+            self._last_api_window_id = None  # consume it
+            return api_id
+
         if not shutil.which("osascript"):
             return None
 
@@ -247,6 +286,29 @@ end tell
         except Exception:
             return None
 
+    def _window_exists_by_id_api(self, window_id: str) -> bool | None:
+        """Check window existence via Python API. Returns None if API unavailable."""
+        if not _ITERM2_LIB_AVAILABLE:
+            return None
+        import iterm2
+
+        result: list[bool | None] = [None]
+
+        async def _main(connection: iterm2.Connection) -> None:
+            try:
+                async with asyncio.timeout(5):
+                    app = await iterm2.async_get_app(connection)
+                    window = app.get_window_by_id(window_id)
+                    result[0] = window is not None
+            except asyncio.TimeoutError:
+                pass
+
+        try:
+            iterm2.run_until_complete(_main)
+        except Exception:
+            pass
+        return result[0]
+
     def _window_exists_by_id(self, window_id: str) -> bool:
         """Validate if window with specific ID still exists.
 
@@ -257,8 +319,15 @@ end tell
             True if window exists, False otherwise
 
         Used as validator callback for WindowRegistry.lookup() operations.
-        Iterates through all windows and checks if any match the target ID.
+        For iTerm2, tries the Python API first; falls back to AppleScript
+        if the API is unavailable. For Terminal.app, uses AppleScript only.
         """
+        if self.terminal == "iTerm2":
+            api_result = self._window_exists_by_id_api(window_id)
+            if api_result is not None:
+                return api_result
+            # API unavailable — fall through to AppleScript
+
         if not shutil.which("osascript"):
             return False
 
@@ -306,6 +375,34 @@ end tell
         except Exception:
             return False
 
+    def _focus_window_by_id_api(self, window_id: str) -> bool | None:
+        """Focus window via Python API. Returns None if API unavailable."""
+        if not _ITERM2_LIB_AVAILABLE:
+            return None
+        import iterm2
+
+        result: list[bool | None] = [None]
+
+        async def _main(connection: iterm2.Connection) -> None:
+            try:
+                async with asyncio.timeout(5):
+                    app = await iterm2.async_get_app(connection)
+                    window = app.get_window_by_id(window_id)
+                    if window is None:
+                        result[0] = False
+                        return
+                    await app.async_activate()
+                    await window.async_activate()
+                    result[0] = True
+            except asyncio.TimeoutError:
+                pass
+
+        try:
+            iterm2.run_until_complete(_main)
+        except Exception:
+            pass
+        return result[0]
+
     def focus_window_by_id(self, window_id: str) -> bool:
         """Focus window by ID, handling minimized windows and cross-Space switching.
 
@@ -315,9 +412,16 @@ end tell
         Returns:
             True if window found and focused, False otherwise
 
-        Un-minimizes Dock-minimized windows and switches macOS Spaces if needed.
-        Uses activate + set index pattern for reliable cross-Space focusing.
+        For iTerm2, tries the Python API first; falls back to AppleScript if
+        the API is unavailable. Un-minimizes Dock-minimized windows and
+        switches macOS Spaces if needed.
         """
+        if self.terminal == "iTerm2":
+            api_result = self._focus_window_by_id_api(window_id)
+            if api_result is not None:
+                return api_result
+            # API unavailable — fall through to AppleScript
+
         if not shutil.which("osascript"):
             return False
 
@@ -381,6 +485,10 @@ end tell
 
         Returns:
             AppleScript code
+
+        Note: This method is kept for backwards compatibility and test coverage.
+        It is no longer the primary code path for iTerm2 window creation —
+        the Python API (_launch_via_iterm2_api) is used instead when available.
         """
         escaped_command = self._escape_applescript(options.command)
         escaped_title = self._escape_applescript(options.title)
@@ -419,6 +527,57 @@ end tell
 '''
         return script
 
+    def _launch_via_iterm2_api(self, options: LaunchOptions) -> str | None:
+        """Launch iTerm2 window via Python API. Returns window_id or None.
+
+        Args:
+            options: Launch configuration
+
+        Returns:
+            Window ID string on success, None on timeout or exception.
+
+        Bridges the synchronous launch() to the async iterm2 API.
+        """
+        import iterm2  # imported here — guarded by _ITERM2_LIB_AVAILABLE check upstream
+
+        result: list[str | None] = [None]
+
+        async def _main(connection: iterm2.Connection) -> None:
+            try:
+                async with asyncio.timeout(5):
+                    window = await iterm2.Window.async_create(
+                        connection,
+                        profile="MCC-Term",
+                        command=options.command,
+                    )
+                    if window is not None:
+                        result[0] = window.window_id
+            except asyncio.TimeoutError:
+                pass  # result stays None → caller falls back
+
+        iterm2.run_until_complete(_main)
+        return result[0]
+
+    def _try_iterm2_api(self, options: LaunchOptions) -> str | None:
+        """Attempt iTerm2 Python API launch. Returns window_id or None if unavailable.
+
+        Args:
+            options: Launch configuration
+
+        Returns:
+            Window ID string on success, None if API unavailable or failed.
+
+        Safe wrapper around _launch_via_iterm2_api — catches all exceptions
+        from run_until_complete (connection refused, API disabled, etc.).
+        """
+        if not _ITERM2_LIB_AVAILABLE:
+            return None
+        try:
+            return self._launch_via_iterm2_api(options)
+        except Exception:
+            logger.debug("iTerm2 Python API unavailable", exc_info=True)
+            return None
+
     def launch(self, options: LaunchOptions) -> None:
         """Launch a new terminal window.
 
@@ -426,20 +585,33 @@ end tell
             options: Launch configuration
 
         Raises:
-            FileNotFoundError: If osascript not found
+            FileNotFoundError: If osascript not found and iTerm2 API is unavailable
             RuntimeError: If terminal launch fails
         """
-        # Check osascript availability
+        if self.terminal == "iTerm2":
+            window_id = self._try_iterm2_api(options)
+            if window_id is not None:
+                # API success — store window_id for _capture_window_id() to return
+                self._last_api_window_id = window_id
+                return
+            # API unavailable — show fallback notice (once per day) then use Terminal.app path
+            if _should_show_iterm2_fallback_notice():
+                print(
+                    "iTerm2 API unavailable, using Terminal.app. "
+                    "Enable via iTerm2 > Settings > General > Magic > Enable Python API",
+                    file=sys.stderr,
+                )
+                _record_iterm2_fallback_notice()
+            # Fall through to Terminal.app AppleScript path
+            script = self._build_terminal_app_script(options)
+        else:
+            script = self._build_terminal_app_script(options)
+
+        # Check osascript availability (needed for Terminal.app fallback path)
         if not shutil.which("osascript"):
             raise FileNotFoundError(
                 "osascript not found. AppleScript required for macOS terminal launching."
             )
-
-        # Build appropriate AppleScript
-        if self.terminal == "iTerm2":
-            script = self._build_iterm_script(options)
-        else:
-            script = self._build_terminal_app_script(options)
 
         # Launch terminal (non-blocking)
         try:

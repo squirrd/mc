@@ -258,11 +258,13 @@ class TestMacOSLauncher:
         assert 'set custom title of front window to "Test Window"' in script
 
     def test_macos_launcher_launch_iterm2(self, mocker: Mock) -> None:
-        """Test launching iTerm2."""
-        mocker.patch("shutil.which", return_value="/usr/bin/osascript")
-        mock_popen = mocker.patch("subprocess.Popen")
-        mock_process = MagicMock()
-        mock_popen.return_value = mock_process
+        """Test launching iTerm2 via Python API (primary path)."""
+        # Mock the Python API to return a window_id (simulates successful API launch)
+        mocker.patch.object(
+            MacOSLauncher,
+            "_try_iterm2_api",
+            return_value="w0ABC123",
+        )
 
         launcher = MacOSLauncher(terminal="iTerm2")
         options = LaunchOptions(
@@ -273,12 +275,11 @@ class TestMacOSLauncher:
 
         launcher.launch(options)
 
-        # Verify osascript called with AppleScript
-        assert mock_popen.call_count == 1
-        call_args = mock_popen.call_args
-        assert call_args[0][0][0] == "osascript"
-        assert call_args[0][0][1] == "-e"
-        assert "iTerm" in call_args[0][0][2]
+        # Verify API path was taken: window_id stored for capture
+        assert launcher._last_api_window_id == "w0ABC123"
+        # Verify _capture_window_id returns the API-provided ID
+        assert launcher._capture_window_id() == "w0ABC123"
+        assert launcher._last_api_window_id is None  # consumed
 
     def test_macos_launcher_launch_terminal_app(self, mocker: Mock) -> None:
         """Test launching Terminal.app."""
