@@ -16,7 +16,11 @@ def test_mc_version(script_runner: ScriptRunner) -> None:
     result = script_runner.run(['mc', '--version'])
     assert result.returncode == 0
     assert 'mc' in result.stdout
-    assert '2.0.1' in result.stdout
+    # Version number must be present in semver format (e.g. 2.0.4, not a hardcoded literal)
+    import re
+    assert re.search(r'\d+\.\d+\.\d+', result.stdout), (
+        f"Expected semver in stdout, got: {result.stdout!r}"
+    )
 
 
 def test_mc_help(script_runner: ScriptRunner) -> None:

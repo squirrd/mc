@@ -279,6 +279,14 @@ def upgrade() -> ExitCode:
         )
         return 1
 
+    from mc.config.manager import ConfigManager
+
+    version_config = ConfigManager().get_version_config()
+    pinned = version_config.get("pinned_mc", "latest")
+    if pinned != "latest":
+        print(f"Version pinned to {pinned}. Run mc-update unpin first.", file=sys.stderr)
+        return 1
+
     print("Upgrading MC CLI...")
     rc = _run_upgrade()
 
@@ -304,11 +312,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="mc-update", description="MC CLI updater")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("upgrade", help="Upgrade MC CLI via uv tool upgrade")
+    pin_parser = subparsers.add_parser("pin", help="Pin MC CLI to a specific version")
+    pin_parser.add_argument("version", help="Version to pin to (e.g. 2.0.3 or v2.0.3)")
+    subparsers.add_parser("unpin", help="Remove version pin")
+    subparsers.add_parser("check", help="Show current version, latest version, and pin status")
 
     args = parser.parse_args()
 
     if args.command == "upgrade":
         sys.exit(upgrade())
+    elif args.command == "pin":
+        sys.exit(pin(args.version))
+    elif args.command == "unpin":
+        sys.exit(unpin())
+    elif args.command == "check":
+        sys.exit(check())
     else:
         parser.print_help()
         sys.exit(0)
