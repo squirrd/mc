@@ -114,18 +114,21 @@ Plans:
 
 #### Phase 32: Update Notifications
 
-**Goal**: Users are informed of available updates at CLI startup without being spammed — banner appears at most once per day and is silent when pinned.
+**Goal**: Users are informed of available updates at CLI startup without being spammed — banner appears at most once per calendar day, shows modified message when pinned, and never delays CLI beyond 1-2s.
 **Depends on**: Phase 31
 **Requirements**: UPDATE-07, UPDATE-08
 **Success Criteria** (what must be TRUE):
-  1. When a newer MC version is available, a Rich update-available banner appears on stderr at CLI startup
-  2. The banner does not appear more than once per calendar day (suppressed after first display)
-  3. The banner is fully suppressed when a version pin is active
-  4. The banner check never delays CLI command execution (non-blocking, uses existing daemon thread infrastructure)
-**Plans**: TBD
+  1. When a newer MC version is available, a Rich Panel update banner appears on stderr at CLI startup
+  2. The banner does not appear more than once per calendar day (calendar-day reset, not rolling 24h)
+  3. When a version pin is active and a newer version exists, banner shows modified message with unpin instruction
+  4. The banner check completes within 1-2s; on timeout a brief note is printed and the command runs
+  5. `mc --version` suppresses the banner entirely (clean/parseable output)
+  6. Non-interactive (piped) runs do not trigger suppression timestamp
+**Plans**: 2 plans
 
 Plans:
-- [ ] 32-01: Rich update banner and suppression logic
+- [ ] 32-01-PLAN.md — src/mc/banner.py (show_update_banner, suppression helpers, Rich Panel rendering, timeout via threading.Event) + ConfigManager last_banner_shown field
+- [ ] 32-02-PLAN.md — Wire show_update_banner() into cli/main.py (replace VersionChecker background check), tests/unit/test_banner.py (15+ tests), full quality gate
 
 ---
 
@@ -145,4 +148,4 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 29. iTerm2 API Migration | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 30. mc-update Core | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 31. Version Pinning | v2.0.5 | 2/2 | Complete | 2026-03-12 |
-| 32. Update Notifications | v2.0.5 | 0/1 | Not started | - |
+| 32. Update Notifications | v2.0.5 | 0/2 | Not started | - |
