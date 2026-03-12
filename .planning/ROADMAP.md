@@ -104,10 +104,11 @@ Plans:
   2. User can run `mc-update unpin` to remove the version pin from the TOML config
   3. User can run `mc-update check` to see current installed version, latest available version, and whether a pin is active
   4. Pinned version is persisted in `~/mc/config/config.toml` [version] section using existing atomic write infrastructure
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 31-01: pin, unpin, and check commands with TOML persistence
+- [ ] 31-01-PLAN.md — pin(), unpin(), check(), _fetch_latest_version() functions + upgrade() pin guard + main() dispatch
+- [ ] 31-02-PLAN.md — TestPin, TestUnpin, TestCheck classes + TestUpgrade pin-block test + TestMain dispatch tests
 
 ---
 
@@ -143,5 +144,5 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 26-28. Foundation | v2.0.4 | 6/6 | Complete | 2026-02-19 |
 | 29. iTerm2 API Migration | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 30. mc-update Core | v2.0.5 | 2/2 | Complete | 2026-03-12 |
-| 31. Version Pinning | v2.0.5 | 0/1 | Not started | - |
+| 31. Version Pinning | v2.0.5 | 0/2 | Not started | - |
 | 32. Update Notifications | v2.0.5 | 0/1 | Not started | - |
