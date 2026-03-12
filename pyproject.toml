@@ -48,6 +48,9 @@ dev = [
     "responses>=0.25.0",
     "types-requests>=2.32.0",
 ]
+macos = [
+    "iterm2>=2.14; sys_platform == 'darwin'",
+]
 
 [project.scripts]
 mc = "mc.cli.main:main"
@@ -116,6 +119,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "simple_salesforce.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "iterm2.*"
 ignore_missing_imports = true
 
 [tool.bandit]
