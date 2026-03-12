@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 
 ## Current Position
 
-Phase: 31 of 32 (Version Pinning)
-Plan: 2 of 2 in current phase
-Status: Phase complete — both plans done; ready for Phase 32
-Last activity: 2026-03-12 — Completed 31-02-PLAN.md (unit tests for pin/unpin/check)
+Phase: 32 of 32 (Update Notifications)
+Plan: 1 of 2 in current phase
+Status: In progress — plan 01 done; plan 02 (banner tests) remaining
+Last activity: 2026-03-12 — Completed 32-01-PLAN.md (banner module + ConfigManager extension)
 
-Progress: [████████████████████████░] 96% (Phase 31 complete, Phase 32 remaining)
+Progress: [████████████████████████░] 98% (Phase 32 plan 01 complete, plan 02 remaining)
 
 ## Performance Metrics
 
@@ -72,6 +72,9 @@ Recent decisions affecting current work:
 - v2.0.5 (31-01): pinned_mc='latest' is sentinel meaning no pin active; check() omits Update line when GitHub unreachable
 - v2.0.5 (31-01): _AGENT_MODE_PIN_MSG shared constant unifies pin/unpin/check agent mode stderr message
 - v2.0.5 (31-02): Lazy-imported modules patched at source (mc.config.manager.ConfigManager) not at calling module (mc.update.ConfigManager)
+- v2.0.5 (32-01): threading.Event + daemon thread for 1.5s banner timeout; result in mutable list [None]
+- v2.0.5 (32-01): Network failure from _fetch_latest_version treated same as timeout — no suppression written
+- v2.0.5 (32-01): pinned_mc=='latest' sentinel maps to pinned_arg=None in _render_banner for clean None/str check
 
 ### Pending Todos
 
@@ -86,10 +89,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12T10:38:17Z
-Stopped at: Completed 31-02-PLAN.md — unit tests for pin/unpin/check/upgrade-pin-block
+Last session: 2026-03-12T11:02:12Z
+Stopped at: Completed 32-01-PLAN.md — banner module (src/mc/banner.py) + ConfigManager last_banner_shown extension
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (Phase 31 complete — both plans done; 624 unit tests, 75% coverage)*
+*Last updated: 2026-03-12 (Phase 32 plan 01 complete — banner module created; test_update.py 35 passing)*
