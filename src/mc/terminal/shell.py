@@ -6,12 +6,61 @@ and helper functions.
 """
 
 import os
+import platform
+import re
+import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from platformdirs import user_data_dir
 
 from mc.terminal.banner import generate_banner
+
+
+def detect_macos_proxy() -> Optional[str]:
+    """Detect macOS system proxy via scutil --proxy.
+
+    On macOS with a PAC-based corporate proxy, HTTPS_PROXY env var is often
+    empty even though Go binaries on the host auto-detect the proxy via
+    CFNetworkCopySystemProxySettings. This function bridges that gap for the
+    Linux container which only reads env vars.
+
+    Returns:
+        Proxy URL string (e.g. "http://proxy.corp.example.com:8080"), or None
+        if not on macOS, no proxy configured, or detection fails.
+    """
+    if platform.system() != "Darwin":
+        return None
+    try:
+        r = subprocess.run(["scutil", "--proxy"], capture_output=True, text=True, timeout=3)
+        output = r.stdout
+
+        # Direct HTTPS proxy configured?
+        if "HTTPSProxy" in output and "HTTPSPort" in output:
+            host_match = re.search(r"HTTPSProxy\s*:\s*(\S+)", output)
+            port_match = re.search(r"HTTPSPort\s*:\s*(\d+)", output)
+            if host_match and port_match:
+                return f"http://{host_match.group(1)}:{port_match.group(1)}"
+
+        # PAC URL configured? Fetch the PAC file and parse out the first PROXY directive.
+        pac_match = re.search(r"ProxyAutoConfigURLString\s*:\s*(\S+)", output)
+        if not pac_match:
+            return None
+        pac_url = pac_match.group(1)
+
+        curl_result = subprocess.run(
+            ["curl", "--silent", "--max-time", "5", pac_url],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        # PAC files contain lines like: return "PROXY host:port; DIRECT"
+        proxy_match = re.search(r'return\s+"PROXY\s+([^:;"]+):(\d+)', curl_result.stdout)
+        if proxy_match:
+            return f"http://{proxy_match.group(1)}:{proxy_match.group(2)}"
+    except Exception:
+        pass
+    return None
 
 
 def generate_bashrc(case_number: str, case_metadata: dict[str, Any]) -> str:
@@ -36,8 +85,10 @@ def generate_bashrc(case_number: str, case_metadata: dict[str, Any]) -> str:
     # Generate welcome banner
     banner = generate_banner(case_metadata)
     
-    # Read optional proxy from host environment
+    # Read optional proxy from host environment; fall back to macOS system detection
     https_proxy = os.environ.get("HTTPS_PROXY")
+    if https_proxy is None and platform.system() == "Darwin":
+        https_proxy = detect_macos_proxy()
 
     # Build bashrc content
     bashrc_lines = [
@@ -53,11 +104,12 @@ def generate_bashrc(case_number: str, case_metadata: dict[str, Any]) -> str:
         "",
     ]
 
-    # Conditionally propagate HTTPS_PROXY from host environment
+    # Conditionally propagate proxy from host environment or macOS system proxy
     if https_proxy is not None:
         bashrc_lines += [
-            "# Proxy configuration from host environment",
+            "# Proxy configuration (from host environment or macOS system proxy)",
             f"export HTTPS_PROXY='{https_proxy}'",
+            f"export HTTP_PROXY='{https_proxy}'",
             "",
         ]
 

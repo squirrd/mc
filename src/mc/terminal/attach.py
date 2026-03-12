@@ -6,6 +6,7 @@ auto-create, auto-start, and TTY detection.
 """
 
 import os
+import platform
 import sys
 import logging
 from typing import Any
@@ -15,7 +16,7 @@ from mc.container.manager import ContainerManager
 from mc.integrations.redhat_api import RedHatAPIClient
 from mc.terminal.launcher import LaunchOptions, get_launcher
 from mc.terminal.registry import WindowRegistry
-from mc.terminal.shell import write_bashrc
+from mc.terminal.shell import detect_macos_proxy, write_bashrc
 from mc.utils.validation import validate_case_number
 from mc.utils.cache import get_case_metadata
 from mc.utils.formatters import shorten_and_format
@@ -49,10 +50,24 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
     Returns:
         Complete podman exec command string with auto-close on exit
 
-    Example:
-        >>> build_exec_command("mc-12345678", "/path/to/bashrc", "12345678")
-        'podman exec -it --env BASH_ENV=/path/to/bashrc --env PS1=[MC-12345678] \\w\\$ mc-12345678 /bin/bash; exit'
+    Note:
+        BASH_ENV is only read by non-interactive shells. Interactive bash sessions
+        launched via `podman exec -it` ignore BASH_ENV. Proxy env vars must be
+        passed explicitly via --env flags so they reach the interactive shell.
     """
+    # Detect proxy from host environment or macOS system proxy.
+    # IMPORTANT: BASH_ENV is ignored by interactive shells — proxy MUST go via --env.
+    https_proxy = os.environ.get("HTTPS_PROXY")
+    if https_proxy is None and platform.system() == "Darwin":
+        https_proxy = detect_macos_proxy()
+
+    proxy_env = ""
+    if https_proxy:
+        proxy_env = (
+            f"--env 'HTTPS_PROXY={https_proxy}' "
+            f"--env 'HTTP_PROXY={https_proxy}' "
+        )
+
     # Build command with BASH_ENV for custom config and PS1 for prompt
     # Use single quotes to prevent shell glob expansion of brackets and handle paths with spaces
     # Append '; exit' to auto-close terminal when shell exits
@@ -60,6 +75,7 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
         f"podman exec -it "
         f"--env 'BASH_ENV={bashrc_path}' "
         f"--env 'PS1=[MC-{case_number}] \\w\\$ ' "
+        f"{proxy_env}"
         f"{container_id} /bin/bash; exit"
     )
 

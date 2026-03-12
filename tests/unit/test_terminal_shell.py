@@ -1,6 +1,7 @@
 """Unit tests for terminal shell customization and banner generation."""
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
@@ -8,7 +9,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from mc.terminal.banner import format_field, generate_banner
-from mc.terminal.shell import generate_bashrc, get_bashrc_path, write_bashrc
+from mc.terminal.shell import detect_macos_proxy, generate_bashrc, get_bashrc_path, write_bashrc
 
 
 class TestGenerateBashrc:
@@ -81,6 +82,131 @@ class TestGenerateBashrc:
         # Should contain banner content
         assert "Case: 12345678" in bashrc
         assert "Customer: Test Corp" in bashrc
+
+
+class TestDetectMacosProxy:
+    """Tests for detect_macos_proxy function."""
+
+    def test_returns_none_on_non_darwin(self):
+        """Non-macOS platforms must return None without calling scutil."""
+        with patch("mc.terminal.shell.platform.system", return_value="Linux"):
+            result = detect_macos_proxy()
+        assert result is None
+
+    def test_macos_direct_https_proxy(self):
+        """macOS with explicit HTTPSProxy/HTTPSPort returns proxy URL."""
+        scutil_output = (
+            "<dictionary> {\n"
+            "  HTTPSProxy : proxy.corp.example.com\n"
+            "  HTTPSPort : 8080\n"
+            "}\n"
+        )
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=scutil_output, stderr="", returncode=0)
+            result = detect_macos_proxy()
+        assert result == "http://proxy.corp.example.com:8080"
+
+    def test_macos_pac_url_curl_detects_proxy(self):
+        """macOS with PAC URL → curl fetches PAC file → proxy URL parsed."""
+        scutil_output = (
+            "<dictionary> {\n"
+            "  ProxyAutoConfigURLString : https://nexus.corp.redhat.com/proxy.pac\n"
+            "}\n"
+        )
+        pac_content = (
+            'function FindProxyForURL(url, host) {\n'
+            '  return "PROXY squid.corp.example.com:3128; DIRECT";\n'
+            '}\n'
+        )
+
+        def fake_run(cmd, **kwargs):
+            if "scutil" in cmd:
+                return MagicMock(stdout=scutil_output, stderr="", returncode=0)
+            # curl fetching PAC file
+            return MagicMock(stdout=pac_content, stderr="", returncode=0)
+
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = detect_macos_proxy()
+        assert result == "http://squid.corp.example.com:3128"
+
+    def test_macos_no_proxy_configured(self):
+        """macOS with no proxy settings returns None."""
+        scutil_output = "<dictionary> {\n  ExceptionsList : ...\n}\n"
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=scutil_output, stderr="", returncode=0)
+            result = detect_macos_proxy()
+        assert result is None
+
+    def test_macos_pac_url_curl_timeout_returns_none(self):
+        """Curl timeout during PAC resolution returns None (fail silently)."""
+        scutil_output = (
+            "<dictionary> {\n"
+            "  ProxyAutoConfigURLString : https://nexus.corp.redhat.com/proxy.pac\n"
+            "}\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            if "scutil" in cmd:
+                return MagicMock(stdout=scutil_output, stderr="", returncode=0)
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 10))
+
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = detect_macos_proxy()
+        assert result is None
+
+    def test_scutil_exception_returns_none(self):
+        """Any exception from scutil returns None (fail silently)."""
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run", side_effect=FileNotFoundError("scutil not found")):
+            result = detect_macos_proxy()
+        assert result is None
+
+
+class TestGenerateBashrcProxy:
+    """Tests for proxy injection in generate_bashrc."""
+
+    def test_https_proxy_env_var_used_directly(self):
+        """HTTPS_PROXY env var present → injected into bashrc (existing behaviour)."""
+        metadata = {"case_number": "12345678"}
+        with patch.dict(os.environ, {"HTTPS_PROXY": "http://env-proxy:3128"}):
+            bashrc = generate_bashrc("12345678", metadata)
+        assert "export HTTPS_PROXY='http://env-proxy:3128'" in bashrc
+        assert "export HTTP_PROXY='http://env-proxy:3128'" in bashrc
+
+    def test_macos_system_proxy_injected_when_env_var_absent(self):
+        """On macOS with PAC proxy but no env var, system proxy injected into bashrc."""
+        metadata = {"case_number": "12345678"}
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True), \
+             patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.detect_macos_proxy", return_value="http://pac-proxy:8080"):
+            bashrc = generate_bashrc("12345678", metadata)
+        assert "export HTTPS_PROXY='http://pac-proxy:8080'" in bashrc
+        assert "export HTTP_PROXY='http://pac-proxy:8080'" in bashrc
+
+    def test_no_proxy_when_none_configured(self):
+        """No proxy in env and detect_macos_proxy returns None → no HTTPS_PROXY line."""
+        metadata = {"case_number": "12345678"}
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True), \
+             patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.detect_macos_proxy", return_value=None):
+            bashrc = generate_bashrc("12345678", metadata)
+        assert "HTTPS_PROXY" not in bashrc
+
+    def test_detect_macos_proxy_not_called_on_linux(self):
+        """detect_macos_proxy not called when platform is Linux."""
+        metadata = {"case_number": "12345678"}
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True), \
+             patch("mc.terminal.shell.platform.system", return_value="Linux"), \
+             patch("mc.terminal.shell.detect_macos_proxy") as mock_detect:
+            generate_bashrc("12345678", metadata)
+        mock_detect.assert_not_called()
 
 
 class TestGetBashrcPath:

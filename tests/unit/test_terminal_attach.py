@@ -1,5 +1,6 @@
 """Unit tests for terminal attachment orchestration."""
 
+import os
 import sys
 from unittest.mock import MagicMock, Mock, patch
 
@@ -43,7 +44,9 @@ class TestBuildExecCommand:
         bashrc_path = "/tmp/bashrc"
         case_number = "12345678"
 
-        result = build_exec_command(container_id, bashrc_path, case_number)
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                result = build_exec_command(container_id, bashrc_path, case_number)
 
         # Verify command structure
         assert result.startswith("podman exec -it")
@@ -57,10 +60,60 @@ class TestBuildExecCommand:
         bashrc_path = "/tmp/path with spaces/bashrc"
         case_number = "12345678"
 
-        result = build_exec_command(container_id, bashrc_path, case_number)
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                result = build_exec_command(container_id, bashrc_path, case_number)
 
         # Path should be included as-is (shell escaping happens at launch)
         assert bashrc_path in result
+
+    def test_build_exec_command_includes_proxy_from_env(self) -> None:
+        """Proxy from HTTPS_PROXY env var is passed as --env to podman exec."""
+        container_id = "mc-12345678"
+        bashrc_path = "/tmp/bashrc"
+        case_number = "12345678"
+
+        with patch.dict(os.environ, {"HTTPS_PROXY": "http://proxy.example.com:3128"}):
+            result = build_exec_command(container_id, bashrc_path, case_number)
+
+        assert "--env 'HTTPS_PROXY=http://proxy.example.com:3128'" in result
+        assert "--env 'HTTP_PROXY=http://proxy.example.com:3128'" in result
+
+    def test_build_exec_command_includes_proxy_from_macos_detection(self) -> None:
+        """macOS system proxy is passed as --env when HTTPS_PROXY env var is absent.
+
+        Regression: BASH_ENV is ignored by interactive shells, so the proxy in the
+        bashrc file was never sourced. It must be passed directly via --env.
+        """
+        container_id = "mc-12345678"
+        bashrc_path = "/tmp/bashrc"
+        case_number = "12345678"
+
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True):
+            with patch("mc.terminal.attach.platform.system", return_value="Darwin"):
+                with patch(
+                    "mc.terminal.attach.detect_macos_proxy",
+                    return_value="http://squid.corp.redhat.com:3128",
+                ):
+                    result = build_exec_command(container_id, bashrc_path, case_number)
+
+        assert "--env 'HTTPS_PROXY=http://squid.corp.redhat.com:3128'" in result
+        assert "--env 'HTTP_PROXY=http://squid.corp.redhat.com:3128'" in result
+
+    def test_build_exec_command_no_proxy_on_linux(self) -> None:
+        """No proxy env injected on Linux when env var absent (no system proxy detection)."""
+        container_id = "mc-12345678"
+        bashrc_path = "/tmp/bashrc"
+        case_number = "12345678"
+
+        env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
+        with patch.dict(os.environ, env_without_proxy, clear=True):
+            with patch("mc.terminal.attach.platform.system", return_value="Linux"):
+                result = build_exec_command(container_id, bashrc_path, case_number)
+
+        assert "HTTPS_PROXY" not in result
+        assert "HTTP_PROXY" not in result
 
 
 class TestBuildWindowTitle:

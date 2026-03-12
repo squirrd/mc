@@ -351,7 +351,38 @@ def test_container_create():
     # Missing cleanup! Container left running
 ```
 
-### ❌ Mistake 3: Hardcoded Paths
+### ❌ Mistake 3: Asserting at the Wrong Layer (host→container boundary)
+
+```python
+# ❌ BAD: Tests the intermediate Python value, not the actual container result
+def test_proxy_in_container():
+    bashrc = generate_bashrc("12345678", metadata)
+    assert "HTTPS_PROXY" in bashrc   # Passes even if the container shell never sees it!
+    # This test passed while the bug (BASH_ENV ignored by interactive shells) still existed
+
+# ✅ GOOD: Uses real podman exec to verify the env var reaches the container process
+def test_proxy_in_container():
+    https_proxy = detect_macos_proxy()
+    result = subprocess.run(
+        ["podman", "exec", "--env", f"HTTPS_PROXY={https_proxy}", container_name,
+         "bash", "-c", "echo $HTTPS_PROXY"],
+        capture_output=True, text=True, timeout=15,
+    )
+    assert result.stdout.strip() == https_proxy
+```
+
+**Rule:** For host→container boundary bugs, the test MUST use `podman exec` to verify
+the actual in-container state. If the test can pass without a container running, it is
+testing at the wrong depth and will miss bugs at the boundary (e.g. env vars in a bashrc
+file that is never sourced, wrong mount target path, wrong file permissions inside the container).
+
+**Lesson (2026-03-11):** A test asserting `"HTTPS_PROXY" in generate_bashrc(...)` passed
+after the first (incomplete) fix, but `HTTPS_PROXY` was still not accessible in the
+container shell because `BASH_ENV` is ignored by interactive bash sessions. The real fix
+was in `build_exec_command()` adding `--env` flags — a completely different layer. Only a
+`podman exec` test would have caught this.
+
+### ❌ Mistake 4: Hardcoded Paths
 
 ```python
 def test_config_load():

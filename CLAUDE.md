@@ -288,6 +288,11 @@ Window registry and container state use SQLite with WAL (Write-Ahead Logging) mo
    - Handle sensitive data securely (tokens, credentials)
    - Use retry logic with exponential backoff
 
+5. **No kubeconfig mount** — `~/.kube/` must NEVER be mounted into the container.
+   Cluster isolation per case is a core design principle. Each container gets its own
+   isolated `~/.kube/` inside the container filesystem. Mounting the host kubeconfig
+   would allow accidental operations on the wrong cluster.
+
 ## Project-Specific Features
 
 ### Quick Access Pattern

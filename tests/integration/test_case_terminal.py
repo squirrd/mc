@@ -5,6 +5,8 @@ Skipped unless Podman and Salesforce are available.
 """
 
 import os
+import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -33,6 +35,22 @@ def _podman_available() -> bool:
     try:
         client = PodmanClient()
         return client.ping()
+    except Exception:
+        return False
+
+
+def _macos_pac_proxy_configured() -> bool:
+    """Check if macOS has a PAC-based proxy configured.
+
+    Returns:
+        bool: True if running on macOS and scutil --proxy shows ProxyAutoConfigURLString
+    """
+    import platform
+    if platform.system() != "Darwin":
+        return False
+    try:
+        r = subprocess.run(["scutil", "--proxy"], capture_output=True, text=True, timeout=3)
+        return "ProxyAutoConfigURLString" in r.stdout
     except Exception:
         return False
 
@@ -1405,4 +1423,120 @@ def test_ocm_config_mount_regression(tmp_path: Path) -> None:
     _src, spec = ocm_mounts[0]
     assert spec["mode"] == "ro", (
         f"OCM config mount must be read-only (mode='ro'), got mode='{spec['mode']}'"
+    )
+
+
+def _find_running_mc_container() -> str | None:
+    """Return the name of the first running mc-* container, or None."""
+    try:
+        result = subprocess.run(
+            ["podman", "ps", "--filter", "name=mc-", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        names = [n.strip() for n in result.stdout.strip().splitlines() if n.strip()]
+        return names[0] if names else None
+    except Exception:
+        return None
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _podman_available(),
+    reason="Podman not available",
+)
+@pytest.mark.skipif(
+    not _macos_pac_proxy_configured(),
+    reason="macOS PAC proxy not configured — proxy detection not applicable on this host",
+)
+def test_container_macos_proxy_detection_regression():
+    """Regression: HTTPS_PROXY must reach an interactive container shell via --env, not BASH_ENV.
+
+    Bug class: host→container boundary
+    Bug discovered: 2026-03-11
+    Severity: major
+
+    Problem:
+        ocm backplane login times out inside containers with:
+          WARN[0000] proxy-url must be set explicitly in either config file or via the
+                     environment HTTPS_PROXY
+          ERRO[0030] cannot connect to Backplane API URL: context deadline exceeded
+
+    Root cause (two-part):
+        1. On macOS with a PAC-based corporate proxy, os.environ['HTTPS_PROXY'] is empty.
+           Go binaries on macOS auto-detect the system proxy via CFNetworkCopySystemProxySettings,
+           but the Linux container only reads env vars.
+        2. BASH_ENV is only sourced by non-interactive shells. Interactive bash sessions
+           launched via `podman exec -it` ignore BASH_ENV entirely. Even if the proxy is in
+           the bashrc (which was fixed first), it never reaches the shell.
+
+    Fix:
+        build_exec_command() now detects the proxy (env var or macOS system) and passes it
+        directly as --env flags to podman exec, guaranteeing it reaches the interactive shell.
+
+    Test approach (host→container boundary — MUST use real podman exec):
+        1. Detect the host proxy via detect_macos_proxy()
+        2. Find a real running mc container
+        3. Run `podman exec --env HTTPS_PROXY=<value> <container> bash -c 'echo $HTTPS_PROXY'`
+        4. Assert the proxy value is printed — confirming the env var reaches the container
+
+    This test cannot pass without a running container because the bug is at the
+    host→container boundary. Testing the Python string returned by generate_bashrc()
+    or build_exec_command() is insufficient — it does not prove the env var reaches
+    the running container process.
+    """
+    from mc.terminal.shell import detect_macos_proxy
+    from mc.terminal.attach import build_exec_command
+
+    # Step 1: Detect the proxy on the host (same logic as the fix)
+    https_proxy = os.environ.get("HTTPS_PROXY")
+    if not https_proxy:
+        https_proxy = detect_macos_proxy()
+
+    assert https_proxy is not None, (
+        "PAC proxy is configured (scutil --proxy shows ProxyAutoConfigURLString) "
+        "but detect_macos_proxy() returned None. The detection logic is broken."
+    )
+
+    # Step 2: Find a running mc container to exec into
+    container_name = _find_running_mc_container()
+    if container_name is None:
+        pytest.skip(
+            "No running mc container found. Run 'mc case <number>' first to create one, "
+            "then re-run this test."
+        )
+
+    # Step 3: Verify proxy IS accessible when passed via --env (end-to-end, no mocks)
+    exec_result = subprocess.run(
+        [
+            "podman", "exec",
+            "--env", f"HTTPS_PROXY={https_proxy}",
+            "--env", f"HTTP_PROXY={https_proxy}",
+            container_name,
+            "bash", "-c", "echo $HTTPS_PROXY",
+        ],
+        capture_output=True, text=True, timeout=15,
+    )
+    assert exec_result.returncode == 0, (
+        f"podman exec failed with exit code {exec_result.returncode}.\n"
+        f"stderr: {exec_result.stderr}"
+    )
+    assert exec_result.stdout.strip() == https_proxy, (
+        f"HTTPS_PROXY not accessible inside container when passed via --env.\n"
+        f"Container: {container_name}\n"
+        f"Expected: {https_proxy!r}\n"
+        f"Got:      {exec_result.stdout.strip()!r}\n"
+        f"Bug: proxy must be passed as --env to podman exec, not only via BASH_ENV.\n"
+        f"BASH_ENV is ignored by interactive bash sessions."
+    )
+
+    # Step 4: Verify build_exec_command() generates a command that contains the proxy --env flags
+    cmd = build_exec_command(container_name, "/tmp/test.bashrc", "12345678")
+    assert f"HTTPS_PROXY={https_proxy}" in cmd, (
+        f"build_exec_command() did not include HTTPS_PROXY in the podman exec command.\n"
+        f"Command: {cmd}\n"
+        f"Expected it to contain: HTTPS_PROXY={https_proxy}"
+    )
+    assert f"HTTP_PROXY={https_proxy}" in cmd, (
+        f"build_exec_command() did not include HTTP_PROXY in the podman exec command.\n"
+        f"Command: {cmd}"
     )
