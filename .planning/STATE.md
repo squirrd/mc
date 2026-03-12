@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 32: Update Notifications
+**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 32: Update Notifications (COMPLETE)
 
 ## Current Position
 
 Phase: 32 of 32 (Update Notifications)
-Plan: 1 of 2 in current phase
-Status: In progress — plan 01 done; plan 02 (banner tests) remaining
-Last activity: 2026-03-12 — Completed 32-01-PLAN.md (banner module + ConfigManager extension)
+Plan: 2 of 2 in current phase
+Status: Phase complete — all plans done; v2.0.5 milestone complete
+Last activity: 2026-03-12 — Completed 32-02-PLAN.md (banner CLI hook + unit tests)
 
-Progress: [████████████████████████░] 98% (Phase 32 plan 01 complete, plan 02 remaining)
+Progress: [█████████████████████████] 100% (Phase 32 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 57+ plans (across phases 1-29)
+- Total plans completed: 59+ plans (across phases 1-32)
 - Average duration: ~45 min per plan (estimated from v2.0.2 and v2.0.3 data)
 - Total execution time: ~42 hours across v1.0, v2.0, v2.0.2, v2.0.3, v2.0.4
 
@@ -33,14 +33,18 @@ Progress: [███████████████████████
 | v2.0.2 Window Tracking | 5 | 10 | 6 hours |
 | v2.0.3 Container Tools | 6 | 9 | 14 hours |
 | v2.0.4 Foundation | 3 | 6 | 3 hours |
-| v2.0.5 Terminal (in progress) | 4 | 2+ | ~4 min so far |
+| v2.0.5 Terminal (complete) | 4 | 8 | ~40 min total |
 
 **Recent Trend:**
 - v2.0.5 29-01 completed in 4 min — extremely focused implementation plan
 - v2.0.5 29-02 completed in 4 min — test suite for new Python API path
 - v2.0.5 30-01 completed in 8 min — mc-update module and entry point
 - v2.0.5 30-02 completed in 5 min — edge case tests and quality gate
-- Trend: Excellent velocity; Phase 30 complete in under 15 min total
+- v2.0.5 31-01 completed in ~5 min — version pinning module
+- v2.0.5 31-02 completed in ~5 min — version pinning tests
+- v2.0.5 32-01 completed in 2 min — banner module creation
+- v2.0.5 32-02 completed in 6 min — banner CLI hook + 21 unit tests
+- Trend: v2.0.5 milestone complete in ~40 min total across 8 plans
 
 *Updated after each plan completion*
 
@@ -75,6 +79,8 @@ Recent decisions affecting current work:
 - v2.0.5 (32-01): threading.Event + daemon thread for 1.5s banner timeout; result in mutable list [None]
 - v2.0.5 (32-01): Network failure from _fetch_latest_version treated same as timeout — no suppression written
 - v2.0.5 (32-01): pinned_mc=='latest' sentinel maps to pinned_arg=None in _render_banner for clean None/str check
+- v2.0.5 (32-02): Lazy imports in banner.py require patching at source (mc.update.*, mc.version.*, rich.*) not at mc.banner.*
+- v2.0.5 (32-02): When removing an import from cli/main.py, update tests that patch that symbol
 
 ### Pending Todos
 
@@ -85,14 +91,14 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- None — iterm2 library blocker resolved in 29-01
+- None — v2.0.5 milestone complete
 
 ## Session Continuity
 
-Last session: 2026-03-12T11:02:12Z
-Stopped at: Completed 32-01-PLAN.md — banner module (src/mc/banner.py) + ConfigManager last_banner_shown extension
+Last session: 2026-03-12T11:09:46Z
+Stopped at: Completed 32-02-PLAN.md — banner CLI hook wired, 21 unit tests added, 579 unit tests passing
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (Phase 32 plan 01 complete — banner module created; test_update.py 35 passing)*
+*Last updated: 2026-03-12 (Phase 32 plan 02 complete — v2.0.5 milestone complete)*
