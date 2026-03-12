@@ -51,10 +51,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ITERM-01    | Phase 29 | Pending |
-| ITERM-02    | Phase 29 | Pending |
-| ITERM-03    | Phase 29 | Pending |
-| ITERM-04    | Phase 29 | Pending |
+| ITERM-01    | Phase 29 | Complete |
+| ITERM-02    | Phase 29 | Complete |
+| ITERM-03    | Phase 29 | Complete |
+| ITERM-04    | Phase 29 | Complete |
 | UPDATE-01   | Phase 30 | Pending |
 | UPDATE-02   | Phase 30 | Pending |
 | UPDATE-03   | Phase 30 | Pending |

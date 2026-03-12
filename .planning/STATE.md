@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 29: iTerm2 Python API Migration
+**Current focus:** v2.0.5 Auto-Update & Terminal — Phase 30: mc-update Core
 
 ## Current Position
 
-Phase: 29 of 32 (iTerm2 Python API Migration)
-Plan: 2 of 2 in current phase
-Status: Phase complete — 29-01 and 29-02 done, Phase 29 fully complete
-Last activity: 2026-03-12 — Completed 29-02-PLAN.md (unit tests for Python API path)
+Phase: 30 of 32 (mc-update Core)
+Plan: 0 of 2 in current phase
+Status: Phase 29 complete — ready to plan Phase 30
+Last activity: 2026-03-12 — Phase 29 verified (4/4 must-haves), ITERM-01–04 marked Complete
 
 Progress: [█████████████████████░] 85% (29 phases fully complete, 30 next)
 
@@ -81,4 +81,4 @@ Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (29-01 complete)*
+*Last updated: 2026-03-12 (Phase 29 complete, verified 4/4)*

@@ -141,7 +141,7 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 15-19. Window Tracking | v2.0.2 | 10/10 | Complete | 2026-02-08 |
 | 20-25. Container Tools | v2.0.3 | 9/9 | Complete | 2026-02-10 |
 | 26-28. Foundation | v2.0.4 | 6/6 | Complete | 2026-02-19 |
-| 29. iTerm2 API Migration | v2.0.5 | 0/2 | Not started | - |
+| 29. iTerm2 API Migration | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 30. mc-update Core | v2.0.5 | 0/2 | Not started | - |
 | 31. Version Pinning | v2.0.5 | 0/1 | Not started | - |
 | 32. Update Notifications | v2.0.5 | 0/1 | Not started | - |
