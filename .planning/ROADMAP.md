@@ -68,11 +68,11 @@ Phases 26-28 delivered: GitHub API version checking with daemon threads, ETag ca
   2. The new window opens with the `MCC-Term` iTerm2 profile applied
   3. The user sees only the container shell prompt — the `podman exec ...` command is not visible in the terminal scrollback
   4. When iTerm2 Python API is unavailable (library missing, API not enabled, or iTerm2 not running), the launcher falls back to Terminal.app without error
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 29-01: iterm2 library integration and MacOSLauncher refactor
-- [ ] 29-02: Profile application, command hiding, and fallback logic
+- [ ] 29-01-PLAN.md — iterm2 optional dependency, pyproject.toml extras + mypy override, MacOSLauncher refactor with Python API path for window creation, ID capture, focus, and existence check; Terminal.app AppleScript fallback preserved; once-per-day fallback notice
+- [ ] 29-02-PLAN.md — Unit tests for API path (new test file) and updated existing launcher tests; full quality gate (mypy, flake8, bandit, pytest)
 
 ---
 
