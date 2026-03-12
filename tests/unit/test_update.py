@@ -131,7 +131,7 @@ class TestUpgrade:
     def test_upgrade_verify_fails_shows_recovery(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that upgrade() returns 1 and prints recovery instructions when mc --version fails."""
+        """Test upgrade() returns 1 with recovery instructions when mc --version fails."""
         monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
         with patch("mc.update.subprocess.run") as mock_run:
             mock_run.side_effect = [
@@ -156,7 +156,7 @@ class TestUpgrade:
         with patch("mc.update.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(returncode=0),  # uv tool upgrade mc succeeds
-                MagicMock(returncode=1, stdout="error: something went wrong\n"),  # mc --version fails
+                MagicMock(returncode=1, stdout="error: something went wrong\n"),  # mc --version fails  # noqa: E501
             ]
             result = upgrade()
         assert result == 1
