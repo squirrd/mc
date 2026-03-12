@@ -175,19 +175,22 @@ class ConfigManager:
         Returns dict with keys:
         - pinned_mc: Version string (default: "latest" if not set)
         - last_check: Unix epoch timestamp (float) or None if never checked
+        - last_banner_shown: ISO 8601 datetime string or None if never shown
 
         Returns:
             Version configuration dictionary
         """
         return {
             'pinned_mc': self.get('version.pinned_mc', 'latest'),
-            'last_check': self.get('version.last_check', None)
+            'last_check': self.get('version.last_check', None),
+            'last_banner_shown': self.get('version.last_banner_shown', None),
         }
 
     def update_version_config(
         self,
         pinned_mc: str | None = None,
-        last_check: float | None = None
+        last_check: float | None = None,
+        last_banner_shown: str | None = None,
     ) -> None:
         """Update version configuration fields atomically.
 
@@ -196,6 +199,7 @@ class ConfigManager:
         Args:
             pinned_mc: Version string to pin to, or None to keep current
             last_check: Unix epoch timestamp, or None to keep current
+            last_banner_shown: ISO 8601 datetime string, or None to keep current
         """
         # Load current config (or get defaults if missing)
         try:
@@ -213,6 +217,8 @@ class ConfigManager:
             config['version']['pinned_mc'] = pinned_mc
         if last_check is not None:
             config['version']['last_check'] = last_check
+        if last_banner_shown is not None:
+            config['version']['last_banner_shown'] = last_banner_shown
 
         # Save using atomic write for safety
         self.save_atomic(config)
