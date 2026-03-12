@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 from typing import Generator
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -118,7 +118,7 @@ class TestLaunchApiPath:
         assert launcher._last_api_window_id == "w0ABC123"
 
     def test_launch_api_succeeds_window_id_stored(self, mocker: Mock) -> None:
-        """After API-success launch, _last_api_window_id is set and consumed by _capture_window_id."""
+        """After API-success launch, _last_api_window_id is set and consumed by _capture_window_id."""  # noqa: E501
         mocker.patch.object(MacOSLauncher, "_try_iterm2_api", return_value="w0ABC123")
 
         launcher = MacOSLauncher(terminal="iTerm2")
@@ -391,7 +391,9 @@ class TestFallbackNoticeSentinel:
     """Tests for fallback notice sentinel file logic."""
 
     @pytest.fixture(autouse=True)
-    def patch_sentinel(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[Path, None, None]:
+    def patch_sentinel(  # noqa: E501
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> Generator[Path, None, None]:
         """Redirect _ITERM2_FALLBACK_SENTINEL to a tmp_path file for isolation."""
         sentinel = tmp_path / "iterm2_fallback_notice_date"
         monkeypatch.setattr("mc.terminal.macos._ITERM2_FALLBACK_SENTINEL", sentinel)

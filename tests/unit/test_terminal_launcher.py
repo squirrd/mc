@@ -1,7 +1,7 @@
 """Unit tests for terminal launcher module."""
 
 import subprocess
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -257,14 +257,15 @@ class TestMacOSLauncher:
         assert "echo 'hello world'" in script
         assert 'set custom title of front window to "Test Window"' in script
 
-    def test_macos_launcher_launch_iterm2(self, mocker: Mock) -> None:
-        """Test launching iTerm2 via Python API (primary path)."""
+    def test_macos_launcher_launch_iterm2_via_api(self, mocker: Mock) -> None:
+        """Test launching iTerm2 via Python API (primary path) — Popen not called."""
         # Mock the Python API to return a window_id (simulates successful API launch)
         mocker.patch.object(
             MacOSLauncher,
             "_try_iterm2_api",
             return_value="w0ABC123",
         )
+        mock_popen = mocker.patch("subprocess.Popen")
 
         launcher = MacOSLauncher(terminal="iTerm2")
         options = LaunchOptions(
@@ -275,11 +276,40 @@ class TestMacOSLauncher:
 
         launcher.launch(options)
 
-        # Verify API path was taken: window_id stored for capture
+        # Verify API path was taken: Popen NOT called, window_id stored for capture
+        mock_popen.assert_not_called()
         assert launcher._last_api_window_id == "w0ABC123"
         # Verify _capture_window_id returns the API-provided ID
         assert launcher._capture_window_id() == "w0ABC123"
         assert launcher._last_api_window_id is None  # consumed
+
+    def test_macos_launcher_launch_iterm2_via_applescript_fallback(
+        self, mocker: Mock
+    ) -> None:
+        """Test launching iTerm2 falls back to Terminal.app AppleScript when API unavailable."""
+        # Simulate API unavailable
+        mocker.patch.object(MacOSLauncher, "_try_iterm2_api", return_value=None)
+        mocker.patch("mc.terminal.macos._should_show_iterm2_fallback_notice", return_value=False)
+        mocker.patch("shutil.which", return_value="/usr/bin/osascript")
+        mock_popen = mocker.patch("subprocess.Popen")
+        mock_popen.return_value = MagicMock()
+        mocker.patch("threading.Thread")
+
+        launcher = MacOSLauncher(terminal="iTerm2")
+        options = LaunchOptions(
+            title="12345678 - Customer - Description",
+            command="podman exec -it mc-12345678 bash",
+            auto_focus=True,
+        )
+
+        launcher.launch(options)
+
+        # Verify fallback: Popen called with Terminal.app AppleScript
+        mock_popen.assert_called_once()
+        call_args = mock_popen.call_args
+        assert call_args[0][0][0] == "osascript"
+        assert call_args[0][0][1] == "-e"
+        assert "Terminal" in call_args[0][0][2]
 
     def test_macos_launcher_launch_terminal_app(self, mocker: Mock) -> None:
         """Test launching Terminal.app."""
@@ -305,7 +335,10 @@ class TestMacOSLauncher:
         assert "Terminal" in call_args[0][0][2]
 
     def test_macos_launcher_non_blocking(self, mocker: Mock) -> None:
-        """Test terminal launch is non-blocking."""
+        """Test terminal launch is non-blocking (uses Popen, not run)."""
+        # Force API unavailable so the AppleScript/Popen path is exercised
+        mocker.patch.object(MacOSLauncher, "_try_iterm2_api", return_value=None)
+        mocker.patch("mc.terminal.macos._should_show_iterm2_fallback_notice", return_value=False)
         mocker.patch("shutil.which", return_value="/usr/bin/osascript")
         mock_popen = mocker.patch("subprocess.Popen")
         mock_process = MagicMock()
@@ -324,7 +357,10 @@ class TestMacOSLauncher:
         assert mock_popen.call_args[0][0][0] == "osascript"
 
     def test_macos_launcher_missing_osascript(self, mocker: Mock) -> None:
-        """Test error when osascript not found."""
+        """Test error when osascript not found and API unavailable."""
+        # Force API unavailable so it reaches the osascript check
+        mocker.patch.object(MacOSLauncher, "_try_iterm2_api", return_value=None)
+        mocker.patch("mc.terminal.macos._should_show_iterm2_fallback_notice", return_value=False)
         mocker.patch("shutil.which", return_value=None)
 
         launcher = MacOSLauncher(terminal="iTerm2")
@@ -334,7 +370,10 @@ class TestMacOSLauncher:
             launcher.launch(options)
 
     def test_macos_launcher_launch_failure(self, mocker: Mock) -> None:
-        """Test error handling when launch fails."""
+        """Test error handling when launch fails (AppleScript fallback path)."""
+        # Force API unavailable so it reaches the Popen call
+        mocker.patch.object(MacOSLauncher, "_try_iterm2_api", return_value=None)
+        mocker.patch("mc.terminal.macos._should_show_iterm2_fallback_notice", return_value=False)
         mocker.patch("shutil.which", return_value="/usr/bin/osascript")
         mocker.patch(
             "subprocess.Popen",
