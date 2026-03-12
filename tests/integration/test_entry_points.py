@@ -85,3 +85,79 @@ def test_remove_legacy_env_check_regression() -> None:
         f"mc version exited {result.returncode} with RH_API_OFFLINE_TOKEN set.\n"
         f"stdout: {result.stdout}\nstderr: {result.stderr}"
     )
+
+
+@pytest.mark.integration
+def test_rename_package_to_mc_regression() -> None:
+    """Regression test for ad-hoc 2026-03-12 — package renamed from mc-cli to mc.
+
+    Bug discovered: 2026-03-12
+    Platform: Both
+    Severity: minor
+    Source: ad-hoc
+
+    Problem:
+    The package was named "mc-cli" in pyproject.toml despite the project being
+    GitHub-only (not published to PyPI). This caused two concrete bugs:
+
+    1. The update notification told users to run:
+         uvx --reinstall mc-cli@latest
+       which only works for PyPI packages. Since mc is GitHub-only, this command
+       fails silently — users cannot update via the displayed instruction.
+
+    2. `uv tool install git+https://github.com/squirrd/mc` registered the tool
+       as "mc-cli", making `uv tool upgrade mc` (in update.py) target the wrong
+       tool name. Only `uv tool upgrade mc-cli` would work, but no code or
+       documentation said so.
+
+    Root cause:
+    pyproject.toml `name = "mc-cli"` creates a mismatch between the uv tool
+    registration name and the command name ("mc"). For a GitHub-only project
+    there is no reason to use a disambiguating suffix.
+
+    Expected behaviour:
+    - Package metadata name is "mc"
+    - Update notification instructs: uv tool install --reinstall git+https://github.com/squirrd/mc
+    - uv tool upgrade mc (in update.py) targets the correct tool name
+
+    Actual behaviour (before fix):
+    - Package metadata name is "mc-cli"
+    - Update notification instructs: uvx --reinstall mc-cli@latest (PyPI-only, broken)
+    """
+    from importlib.metadata import PackageNotFoundError, metadata
+    from io import StringIO
+    from unittest.mock import MagicMock, patch
+
+    from mc.version_check import VersionChecker
+
+    # --- Assert 1: package metadata name ---
+    try:
+        meta = metadata("mc")
+        assert meta["Name"] == "mc", (
+            f"Package metadata Name is '{meta['Name']}', expected 'mc'. "
+            "pyproject.toml name must be changed from 'mc-cli' to 'mc'."
+        )
+    except PackageNotFoundError:
+        pytest.fail(
+            "Package 'mc' not found via importlib.metadata. "
+            "pyproject.toml name must be changed from 'mc-cli' to 'mc' "
+            "and the package reinstalled."
+        )
+
+    # --- Assert 2: update notification uses GitHub install URL ---
+    checker = VersionChecker()
+    mock_cfg = MagicMock()
+    mock_cfg.get.return_value = None
+    mock_cfg.load.return_value = {"version": {}}
+    mock_cfg.save_atomic.return_value = None
+    checker._config_manager = mock_cfg
+
+    captured = StringIO()
+    with patch("sys.stderr", captured):
+        checker._display_notification("2.0.4", "2.0.5")
+
+    output = captured.getvalue()
+    assert "git+https://github.com/squirrd/mc" in output, (
+        f"Update notification must reference GitHub install URL, got: {output!r}\n"
+        "Expected: 'uv tool install --reinstall git+https://github.com/squirrd/mc'"
+    )
