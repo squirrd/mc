@@ -54,6 +54,7 @@ macos = [
 
 [project.scripts]
 mc = "mc.cli.main:main"
+mc-update = "mc.update:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
