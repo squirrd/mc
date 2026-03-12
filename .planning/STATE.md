@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 30 of 32 (mc-update Core)
-Plan: 0 of 2 in current phase
-Status: Phase 29 complete — ready to plan Phase 30
-Last activity: 2026-03-12 — Phase 29 verified (4/4 must-haves), ITERM-01–04 marked Complete
+Plan: 1 of 2 in current phase
+Status: In progress — 30-01 complete
+Last activity: 2026-03-12 — Completed 30-01-PLAN.md (mc-update standalone module and entry point)
 
-Progress: [█████████████████████░] 85% (29 phases fully complete, 30 next)
+Progress: [█████████████████████░] 87% (29 phases + 30-01 complete)
 
 ## Performance Metrics
 
@@ -61,6 +61,9 @@ Recent decisions affecting current work:
 - v2.0.5 (29-01): _build_iterm_script() retained for backwards-compat; plan 02 adds dedicated tests
 - v2.0.5 (29-02): Explicit _try_iterm2_api=None mocking in launcher tests removes dependency on library absence
 - v2.0.5 (29-02): monkeypatch.setattr on module-level Path constant for sentinel file isolation in tests
+- v2.0.5 (30-01): mc-update module intentionally independent from mc.cli.main — survives partial package upgrades
+- v2.0.5 (30-01): Lazy import of is_agent_mode() inside upgrade() function body keeps mc.update importable when CLI is broken
+- v2.0.5 (30-01): capture_output=False for uv tool upgrade mc (live streaming); capture_output=True for mc --version (inspect output)
 
 ### Pending Todos
 
@@ -75,10 +78,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12T04:08:14Z
-Stopped at: Completed 29-02-PLAN.md — unit tests for iterm2 Python API path; Phase 29 complete
+Last session: 2026-03-12T04:58:14Z
+Stopped at: Completed 30-01-PLAN.md — mc-update standalone module, entry point, and 12 unit tests
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (Phase 29 complete, verified 4/4)*
+*Last updated: 2026-03-12 (Phase 30 plan 01 complete)*
