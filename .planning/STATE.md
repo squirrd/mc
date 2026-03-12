@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 31 of 32 (Version Pinning)
-Plan: 0 of 1 in current phase
-Status: Phase 30 complete — ready to plan Phase 31
-Last activity: 2026-03-12 — Phase 30 verified (4/4 must-haves), UPDATE-01–03 marked Complete
+Plan: 1 of 2 in current phase
+Status: In progress — 31-01 complete, 31-02 (tests) remaining
+Last activity: 2026-03-12 — Completed 31-01-PLAN.md (pin/unpin/check subcommands)
 
-Progress: [██████████████████████░] 90% (Phase 30 complete, 2 plans remaining: Phase 31, 32)
+Progress: [███████████████████████░] 91% (Phase 31 plan 1/2 done, 1 plan remaining before Phase 32)
 
 ## Performance Metrics
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - v2.0.5 (30-01): capture_output=False for uv tool upgrade mc (live streaming); capture_output=True for mc --version (inspect output)
 - v2.0.5 (30-02): shell=False assertion via call_args.kwargs.get('shell', False) handles absent kwarg correctly
 - v2.0.5 (30-02): Negative stdout assertion ("Upgrade complete" absent) prevents false success message on partial failure paths
+- v2.0.5 (31-01): No retry logic in GitHub helpers — interactive commands fail fast, not background polling
+- v2.0.5 (31-01): pinned_mc='latest' is sentinel meaning no pin active; check() omits Update line when GitHub unreachable
+- v2.0.5 (31-01): _AGENT_MODE_PIN_MSG shared constant unifies pin/unpin/check agent mode stderr message
 
 ### Pending Todos
 
@@ -82,10 +85,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-12T05:05:00Z
-Stopped at: Completed 30-02-PLAN.md — mc-update edge case tests (17 total) and full quality gate
+Last session: 2026-03-12T10:32:01Z
+Stopped at: Completed 31-01-PLAN.md — pin/unpin/check subcommands + upgrade() pin guard
 Resume file: None
 
 ---
 *State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
-*Last updated: 2026-03-12 (Phase 30 complete — both plans done)*
+*Last updated: 2026-03-12 (Phase 31 plan 01 complete — pin/unpin/check implemented)*
