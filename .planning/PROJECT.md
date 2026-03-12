@@ -152,16 +152,22 @@ Shipped in v2.0.4 (2026-02-19):
 
 ### Active
 
-**Next Milestone: v2.0.5 MC Auto-Update**
+**Current Milestone: v2.0.5 Auto-Update & Terminal**
 
-**Goal:** MC CLI auto-update functionality, mc-update utility for MC management, and update notifications.
+**Goal:** MC CLI auto-update functionality and iTerm2 Python API migration for cleaner terminal management.
 
-**Target features:**
+**Track 1 — MC Auto-Update:**
 - MC auto-update using `uv tool upgrade mc` subprocess
 - mc-update utility for version control (pin/unpin/list/check commands)
 - Update notifications as Rich banners on stderr
 - Version pinning support with grace periods and stale warnings
 - Post-upgrade validation with recovery instructions
+
+**Track 2 — iTerm2 Python API Migration:**
+- Replace AppleScript approach with `iterm2` Python library in `MacOSLauncher`
+- Use `MCC-Term` iTerm2 profile for all new case terminal windows
+- Clean terminal startup — hide raw `podman exec` command from view
+- Fallback to Terminal.app if iTerm2 Python API unavailable
 
 ### Out of Scope
 
@@ -260,4 +266,4 @@ Shipped in v2.0.4 (2026-02-19):
 | Descope file locking (UCTL-09) | Single-process assumption documented in CONTEXT.md, atomic writes sufficient | ✓ Good - simpler implementation |
 
 ---
-*Last updated: 2026-02-19 after v2.0.4 milestone completion*
+*Last updated: 2026-03-12 after v2.0.5 milestone start*

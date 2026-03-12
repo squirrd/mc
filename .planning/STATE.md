@@ -2,17 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-19)
+See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Planning next milestone (v2.0.5 MC Auto-Update)
+**Current focus:** v2.0.5 Auto-Update & Terminal — defining requirements
 
 ## Current Position
 
-Phase: Milestone complete
-Plan: v2.0.4 Foundation shipped
-Status: Ready for next milestone
-Last activity: 2026-02-19 — v2.0.4 milestone complete, archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-12 — Milestone v2.0.5 started
 
 Progress: [████████████████████] 100% (28 of 28 phases complete across all milestones)
 
@@ -78,14 +78,14 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-None. v2.0.4 milestone complete and archived. Ready to start v2.0.5 MC Auto-Update milestone planning.
+None. Requirements being defined for v2.0.5.
 
 ## Session Continuity
 
-Last session: 2026-02-19
-Stopped at: v2.0.4 milestone completion and archival
-Resume file: None (milestone archived, ready for `/gsd:new-milestone`)
+Last session: 2026-03-12
+Stopped at: Milestone v2.0.5 requirements definition
+Resume file: None
 
 ---
-*State initialized: 2026-02-11 for v2.0.4 Foundation milestone*
-*Last updated: 2026-02-19 (v2.0.4 milestone archived)*
+*State initialized: 2026-03-12 for v2.0.5 Auto-Update & Terminal milestone*
+*Last updated: 2026-03-12 (milestone started)*
