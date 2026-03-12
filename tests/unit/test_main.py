@@ -63,7 +63,7 @@ def _run_main_go(argv: list[str]) -> None:
          patch('mc.cli.main.ConfigManager') as MockCfgMgr, \
          patch('mc.cli.main.does_path_exist', return_value=True), \
          patch('mc.cli.main.get_runtime_mode', return_value='host'), \
-         patch('mc.cli.main.VersionChecker'), \
+         patch('mc.cli.main.show_update_banner'), \
          patch('mc.cli.main.setup_logging', return_value=MagicMock()):
         # Configure fake config manager so it looks like config exists
         instance = MockCfgMgr.return_value
