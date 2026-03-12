@@ -13,6 +13,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install MC CLI from GitHub
 uv tool install git+https://github.com/squirrd/mc
 
+# Re-installing (e.g. same version or downgrade) requires --force
+uv tool install --force git+https://github.com/squirrd/mc
+
 # Verify installation
 mc --version
 ```
