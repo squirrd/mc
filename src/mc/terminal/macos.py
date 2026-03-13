@@ -547,7 +547,7 @@ end tell
                 async with asyncio.timeout(5):
                     window = await iterm2.Window.async_create(
                         connection,
-                        profile="MCC-Term",
+                        profile="MC-Term",
                         command=options.command,
                     )
                     if window is not None:

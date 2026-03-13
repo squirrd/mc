@@ -541,3 +541,69 @@ class TestLinuxLauncher:
 
         with pytest.raises(RuntimeError, match="Failed to launch gnome-terminal"):
             launcher.launch(options)
+
+
+class TestIterm2ProfileName:
+    """Regression tests for iTerm2 profile name passed to async_create."""
+
+    def test_iterm2_profile_name_regression(self) -> None:
+        """Regression: iterm2.Window.async_create must use profile='MC-Term'.
+
+        Bug discovered: 2026-03-13
+        Platform: macOS
+        Severity: Critical
+
+        Problem:
+        Running `mc case <number>` raised:
+            iterm2.window.CreateWindowException: INVALID_PROFILE_NAME
+        and no terminal window was opened for the case.
+
+        Root cause:
+        _launch_via_iterm2_api() called iterm2.Window.async_create with
+        profile="MCC-Term" (extra 'C'). The iTerm2 profile is named "MC-Term",
+        so the API rejected the call with INVALID_PROFILE_NAME.
+
+        Expected behaviour:
+        iterm2.Window.async_create is called with profile="MC-Term" and a new
+        iTerm2 window opens successfully.
+
+        Actual behaviour (when bug present):
+        iterm2.Window.async_create is called with profile="MCC-Term", raising
+        CreateWindowException: INVALID_PROFILE_NAME.
+
+        This test will fail until the profile name is corrected.
+        """
+        import asyncio
+        from unittest.mock import MagicMock, patch
+
+        from mc.terminal.launcher import LaunchOptions
+        from mc.terminal.macos import MacOSLauncher
+
+        captured: list[str] = []
+
+        async def fake_async_create(connection: object, profile: str | None = None, command: str | None = None) -> MagicMock:
+            captured.append(profile or "")
+            win = MagicMock()
+            win.window_id = "fake-win-id"
+            return win
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.Window.async_create = fake_async_create
+
+        def fake_run_until_complete(coro_fn: object) -> None:
+            connection = MagicMock()
+            asyncio.run(coro_fn(connection))  # type: ignore[operator]
+
+        mock_iterm2.run_until_complete = fake_run_until_complete
+
+        launcher = MacOSLauncher()
+        options = LaunchOptions(command="echo hello", title="TEST")
+
+        with patch.dict("sys.modules", {"iterm2": mock_iterm2}):
+            launcher._launch_via_iterm2_api(options)
+
+        assert len(captured) == 1, f"async_create was not called (captured={captured})"
+        assert captured[0] == "MC-Term", (
+            f"Wrong profile passed to iterm2.Window.async_create: "
+            f"got '{captured[0]}', expected 'MC-Term'"
+        )
