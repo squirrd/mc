@@ -537,8 +537,22 @@ end tell
             Window ID string on success, None on timeout or exception.
 
         Bridges the synchronous launch() to the async iterm2 API.
+
+        Note on command= wrapping: iTerm2's command= uses execvp() tokenisation,
+        NOT shell interpretation.  A raw "podman exec ... /bin/bash; exit" string
+        would have ';exit' treated as a literal token and 'podman' would not be
+        found without PATH from a login shell.  We therefore wrap in
+        '/bin/zsh -l -c <cmd>' so that:
+          - Shell metacharacters (;, single quotes) are interpreted by zsh.
+          - ~/.zprofile is sourced (-l), giving Homebrew PATH where podman lives.
         """
+        import shlex
+
         import iterm2  # imported here — guarded by _ITERM2_LIB_AVAILABLE check upstream
+
+        # Wrap the shell command in a login-shell invocation so iTerm2's execvp
+        # call runs zsh rather than tokenising our raw podman command string.
+        shell_command = f"/bin/zsh -l -c {shlex.quote(options.command)}"
 
         result: list[str | None] = [None]
 
@@ -548,7 +562,7 @@ end tell
                     window = await iterm2.Window.async_create(
                         connection,
                         profile="MC-Term",
-                        command=options.command,
+                        command=shell_command,
                     )
                     if window is not None:
                         result[0] = window.window_id

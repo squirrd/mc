@@ -607,3 +607,103 @@ class TestIterm2ProfileName:
             f"Wrong profile passed to iterm2.Window.async_create: "
             f"got '{captured[0]}', expected 'MC-Term'"
         )
+
+
+class TestIterm2ShellWrapper:
+    """Regression tests for shell-wrapping of the command passed to async_create."""
+
+    def test_iterm2_send_text_regression(self) -> None:
+        """Regression: iterm2.Window.async_create must receive a shell-wrapped command.
+
+        Bug discovered: 2026-03-13
+        Platform: macOS
+        Severity: Critical
+
+        Problem:
+        Running `mc case <number>` opened a terminal window that vanished within
+        1-2 seconds. Holding the terminal open long enough revealed the error:
+
+            The program could not be run (execvp failed)
+            The failing command was:
+                podman exec -it --env BASH_ENV=... ... mc-04381169 /bin/bash; exit
+            The reason for the failure was: No such file or directory (errno 2)
+
+        Root cause:
+        _launch_via_iterm2_api() passed the raw shell command string directly as
+        command= to iterm2.Window.async_create(). iTerm2's command= parameter uses
+        execvp() — it tokenises by whitespace but does NOT shell-interpret metacharacters.
+        The result:
+          - '; exit' is NOT treated as a shell separator; '/bin/bash;' (with semicolon)
+            is passed as the container executable path → ENOENT.
+          - 'podman' is not found in PATH in the non-login exec context (Homebrew
+            PATH not set up without ~/.zprofile being sourced).
+
+        Expected behaviour:
+        The command= argument passed to async_create() is a login shell invocation
+        that wraps the raw podman command, e.g.:
+            /bin/zsh -l -c 'podman exec -it ... /bin/bash; exit'
+        This ensures shell metacharacters are interpreted and PATH is set up correctly.
+
+        Actual behaviour (when bug present):
+        async_create() receives the raw podman command starting with 'podman', causing
+        execvp to fail with ENOENT on '/bin/bash;'.
+
+        This test will fail until the command is wrapped in a login shell invocation.
+        """
+        import asyncio
+        import shlex
+        from unittest.mock import MagicMock, patch
+
+        from mc.terminal.launcher import LaunchOptions
+        from mc.terminal.macos import MacOSLauncher
+
+        captured_command: list[str] = []
+
+        async def fake_async_create(
+            connection: object, profile: str | None = None, command: str | None = None
+        ) -> MagicMock:
+            captured_command.append(command or "")
+            win = MagicMock()
+            win.window_id = "fake-win-id"
+            return win
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.Window.async_create = fake_async_create
+
+        def fake_run_until_complete(coro_fn: object) -> None:
+            asyncio.run(coro_fn(MagicMock()))  # type: ignore[operator]
+
+        mock_iterm2.run_until_complete = fake_run_until_complete
+
+        launcher = MacOSLauncher()
+        options = LaunchOptions(
+            command="podman exec -it --env 'BASH_ENV=/tmp/test.bashrc' mc-test /bin/bash; exit",
+            title="TEST",
+        )
+
+        with patch.dict("sys.modules", {"iterm2": mock_iterm2}):
+            launcher._launch_via_iterm2_api(options)
+
+        assert len(captured_command) == 1, (
+            f"async_create was not called (captured={captured_command})"
+        )
+
+        cmd = captured_command[0]
+
+        assert not cmd.startswith("podman"), (
+            f"command= must NOT be the raw podman command string.\n"
+            f"iTerm2 calls execvp() on it, so ';exit' becomes a literal token,\n"
+            f"and 'podman' is not found without PATH from a login shell.\n"
+            f"Got: {cmd!r}\n"
+            f"Expected: a shell-wrapped command, e.g. '/bin/zsh -l -c <quoted_cmd>'"
+        )
+
+        # The wrapper must be a login shell so Homebrew PATH is available
+        assert cmd.startswith("/bin/zsh") or cmd.startswith("/bin/bash"), (
+            f"command= must start with a shell (/bin/zsh or /bin/bash). Got: {cmd!r}"
+        )
+
+        # The original podman command must be embedded inside the shell invocation
+        assert "podman exec" in cmd, (
+            f"The original podman command must be present in the wrapped command. Got: {cmd!r}"
+        )
