@@ -419,6 +419,50 @@ def test_config_load(tmp_path):
 
 ---
 
+## Testing Lifecycle Cleanup Operations
+
+**Principle:** Integration tests for delete/stop/remove operations must verify that **ALL**
+associated state is cleaned up — not just the primary state (e.g. the Podman container), but
+every secondary store that references the entity.
+
+For `ContainerManager`, a complete delete/stop test must assert:
+1. Podman container removed (or stopped)
+2. State database entry removed (`StateDatabase.get_container()` returns `None`)
+3. Window registry entry removed (`WindowRegistry.lookup()` returns `None`)
+4. Workspace removed (only if `remove_workspace=True`)
+
+### Why This Matters
+
+A test that mocks the terminal launcher cannot catch a missing `WindowRegistry.remove()` call.
+The mock swallows the gap silently, giving a false green. The bug only surfaces in UAT when a
+real user runs `mc container delete <case>` then `mc case <number>` and sees "Focused existing
+terminal" instead of a new window.
+
+### Pattern
+
+```python
+# Step 1: Create container, inject fake registry entry
+container_manager.create(case_number=test_case_number, ...)
+registry.register(test_case_number, "fake-window-id", "iTerm2")
+
+# Step 2: Lifecycle operation
+container_manager.delete(test_case_number)
+
+# Step 3: Assert ALL state cleaned up
+assert state_db.get_container(test_case_number) is None
+assert registry.lookup(test_case_number, lambda _: True) is None
+```
+
+### Canonical Example
+
+`tests/integration/test_window_tracking.py::test_container_delete_clears_window_registry_regression`
+
+This regression test (2026-03-13) caught that `ContainerManager.delete()` cleaned the state DB
+but left the window registry entry intact, causing `mc case <number>` to focus a dead terminal
+after delete instead of opening a fresh one. The same pattern is also applied to `stop()`.
+
+---
+
 ## See Also
 
 - `tests/integration/test_case_terminal.py::test_fresh_install_missing_config_base_directory_regression` - Example of real integration test

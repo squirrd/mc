@@ -257,6 +257,53 @@ Error: <exact failure message>
 ```
 </step>
 
+<step name="false_positive_audit">
+**STEP 4.3 — Existing integration test audit (false positive scan)**
+
+Before writing any permanent test, scan existing integration tests in the affected area
+to find any that are currently **passing but should be failing** given the confirmed bug.
+
+A false positive test is dangerous: it gives a false sense of coverage while the bug
+is already present and undetected. Finding them now means the fix plan can correct them
+alongside the fix itself.
+
+**Identify the target test file(s)** from the bug's affected module (same mapping as STEP 5):
+- `terminal/`     → `tests/integration/test_terminal.py`
+- `container/`   → `tests/integration/test_container.py`
+- `config/`      → `tests/integration/test_config.py`
+- `integrations/` → `tests/integration/test_<service>.py`
+
+**Grep for existing tests** in the target file that touch the same code path as the bug:
+```bash
+grep -n "def test_" /Users/dsquirre/Repos/mc/tests/integration/test_<area>.py
+```
+
+Read the candidate test functions to understand what each one actually asserts.
+
+For each candidate test that *appears* to cover the affected behaviour, ask:
+> "If this bug is present, should this test fail?"
+
+- If YES and it currently PASSES → it is a false positive — run it to confirm:
+  ```bash
+  cd /Users/dsquirre/Repos/mc && uv run pytest tests/integration/test_<area>.py::test_<candidate> \
+    -v -s -p no:cov --override-ini="addopts=" 2>&1
+  ```
+  Identify the weak assertion that allows it to pass despite the bug
+  (e.g., testing an intermediate value, checking the wrong layer, assertion too broad).
+
+- If NO (the test covers unrelated behaviour) → skip it.
+
+Document findings:
+```
+False positive audit:
+  - test_<name>: PASSES but should FAIL — assertion checks <X> not <Y>
+  - test_<name>: correctly skips this code path (not a false positive)
+  (none found — existing tests do not cover this code path)
+```
+
+These false positives will be listed in the STEP 4.5 bug brief and fixed as part of the fix plan.
+</step>
+
 <step name="sanity_check">
 **STEP 4.5 — Sanity check (human gate)**
 
@@ -274,19 +321,27 @@ Root cause   : <one sentence, file:line if known>
 Confidence   : <HIGH | MEDIUM | LOW>  (<reason if not HIGH>)
 Unknowns     : <none | list any open questions>
 
+False positives found
+───────────────────────────────────────────────────────────
+  <test_name> in tests/integration/<file>.py
+    Passes now because: <weak assertion — e.g. checks intermediate value, wrong layer>
+    Will be fixed: tighten assertion to verify <correct observable behaviour>
+  (none — no existing tests cover this code path)
+
 Fix plan
 ───────────────────────────────────────────────────────────
   Source files to change:
     - <src_file>:<line> — <what changes>
   Tests to add/update:
-    - <integration test name> in tests/integration/<file>.py
+    - <integration test name> in tests/integration/<file>.py  [new — permanent RED]
+    - <false positive test name> — tighten assertion          [fix weak assertion]
     - <unit test name(s)> if applicable
 
 On approval, next actions:
   1. Write failing integration test (permanent RED)
-  2. Fix <src_file>
-  3. Update any existing tests asserting wrong behaviour
-  4. Verify integration test GREEN
+  2. Fix false positive test assertions (they should now also be RED before the fix)
+  3. Fix <src_file>
+  4. Verify all tests GREEN
   5. Merge fix/<shortFixName> to main
 ═══════════════════════════════════════════════════════════
 Proceed? [yes / no / revise]
@@ -586,6 +641,8 @@ See .tdd/issues/ISSUE_TRACKING.md for full history.
 </output>
 
 <anti_patterns>
+- Do NOT skip STEP 4.3 — a passing test in a broken area is a false positive waiting to mislead the next developer
+- Do NOT assume existing tests are reliable just because they are GREEN — they may be testing at the wrong layer or with a weak assertion
 - Do NOT touch source code before the temp repro test confirms RED (STEP 4 is the gate)
 - Do NOT move to integration test step until temp_repro.py FAILS
 - Do NOT merge to main until the integration test is GREEN (STEP 10)
@@ -631,7 +688,8 @@ See .tdd/issues/ISSUE_TRACKING.md for full history.
 - [ ] STEP 2: Bug reproduced live with exact error captured
 - [ ] STEP 3: Worktree and branch created, issue added to tracking (IN_PROGRESS)
 - [ ] STEP 4: tests/temp_repro.py FAILS — RED confirmed
-- [ ] STEP 4.5: Bug brief presented, user approved with "yes" before any permanent test written
+- [ ] STEP 4.3: Existing integration tests in affected area audited for false positives — findings documented
+- [ ] STEP 4.5: Bug brief presented (including false positives), user approved with "yes" before any permanent test written
 - [ ] STEP 5: Integration test in tests/integration/ FAILS — RED confirmed, temp file deleted
 - [ ] STEP 6: Root cause identified with exact file and line
 - [ ] STEP 7: Source files triaged — agents queued or inline fixes applied

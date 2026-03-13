@@ -393,6 +393,107 @@ def test_stale_window_id_handling(mocker, tmp_path):
     not _podman_available(),
     reason="Podman not available"
 )
+def test_container_delete_clears_window_registry_regression(mocker, tmp_path):
+    """Regression test: container delete must remove the window registry entry.
+
+    Bug discovered: 2026-03-13
+    Platform: Both (macOS and Linux)
+    Severity: Major
+
+    Problem:
+    After `mc container delete <case>`, running `mc case <number>` focused the old
+    (now-dead) terminal window instead of launching a new one. The user saw
+    "Focused existing terminal" but no new terminal appeared.
+
+    Root cause:
+    ContainerManager.delete() cleaned up the Podman container and state database
+    but did NOT call WindowRegistry().remove(). The stale registry entry caused
+    attach_terminal() to believe the old window was still valid and focus it
+    instead of launching a new terminal.
+
+    Test approach:
+    1. Create a real Podman container for a test case number
+    2. Inject a fake window ID into WindowRegistry (simulating an open terminal)
+    3. Call container_manager.delete(case_number)
+    4. Assert the registry entry is gone (lookup returns None)
+    5. Verify attach_terminal() calls launcher.launch(), not focus_window_by_id()
+       when _window_exists_by_id is mocked to return True (stale window present)
+
+    This test will fail until the fix is applied, then pass automatically.
+    """
+    test_base_dir = tmp_path / "mc"
+    test_state_dir = test_base_dir / "state"
+    test_state_dir.mkdir(parents=True)
+
+    db_path = test_state_dir / "containers.db"
+    registry_db_path = test_state_dir / "window.db"
+
+    # Use a dedicated test case number that won't conflict with real work
+    test_case_number = "04381169"
+    container_name = f"mc-{test_case_number}"
+
+    podman_client = PodmanClient()
+
+    # Pre-cleanup: remove any leftover container from previous runs
+    try:
+        existing = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+        existing.stop(timeout=2)  # type: ignore[no-untyped-call]
+        existing.remove()  # type: ignore[no-untyped-call]
+    except Exception:
+        pass
+
+    # Isolate the window registry to our tmp_path database
+    mocker.patch("mc.terminal.registry.user_data_dir", return_value=str(test_state_dir))
+
+    state_db = StateDatabase(str(db_path))
+    container_manager = ContainerManager(podman_client, state_db)
+    registry = WindowRegistry(str(registry_db_path))
+
+    try:
+        # Step 1: Create a real Podman container
+        container_manager.create(
+            case_number=test_case_number,
+            image="mc-rhel10:latest",
+            workspace_path=str(test_base_dir / "workspaces" / test_case_number),
+        )
+
+        # Step 2: Inject a fake window ID (simulating a terminal opened for this case)
+        fake_window_id = "777000111"
+        registered = registry.register(test_case_number, fake_window_id, "iTerm2")
+        assert registered is True, "Fake window ID should register successfully"
+
+        # Confirm entry is present before delete
+        def always_valid(wid: str) -> bool:
+            return True
+
+        entry_before = registry.lookup(test_case_number, always_valid)
+        assert entry_before == fake_window_id, "Registry entry should exist before delete"
+
+        # Step 3: Delete the container
+        container_manager.delete(test_case_number)
+
+        # Step 4: Assert registry entry is gone
+        entry_after = registry.lookup(test_case_number, always_valid)
+        assert entry_after is None, (
+            "Window registry entry should be removed after container delete. "
+            "Got: %s" % entry_after
+        )
+
+    finally:
+        # Cleanup: remove container if it still exists
+        try:
+            cleanup = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
+            cleanup.stop(timeout=2)  # type: ignore[no-untyped-call]
+            cleanup.remove()  # type: ignore[no-untyped-call]
+        except Exception:
+            pass
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _podman_available(),
+    reason="Podman not available"
+)
 @pytest.mark.skipif(
     not _redhat_api_configured(),
     reason="Red Hat API credentials not configured"

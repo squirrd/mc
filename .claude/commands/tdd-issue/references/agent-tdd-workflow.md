@@ -31,6 +31,7 @@ Questions to answer:
 - What code path is triggered?
 - What data or state is involved?
 - Where does the divergence between expected and actual happen?
+- **Lifecycle audit:** When a lifecycle operation (delete/stop/remove) runs, does it clean up ALL associated state? Check: state DB, window registry, workspace, cache — all must be audited together.
 
 Tools:
 - Read source files from root cause outward
@@ -113,6 +114,24 @@ Run tests after every refactor step.
 **Done when:** Tests still pass, code is cleaner, nothing was added.
 
 Mindset: Aesthetic. Caring. No surprises.
+
+---
+
+## STEP 4.3 False Positive Audit
+
+Before declaring existing tests sufficient, audit any test that covers the modified code path
+and ask: **does this test actually exercise the failure scenario?**
+
+Lifecycle-cleanup checklist — for each delete/stop/remove operation, verify tests cover:
+- [ ] State database entry removed
+- [ ] Window registry entry removed
+- [ ] Workspace / cache cleaned (if applicable)
+
+If a test passes through the operation via mocks (e.g. mocking the terminal launcher), it
+cannot catch a missing cleanup call — it is a false positive for this class of bug.
+
+Reference: `tests/integration/test_window_tracking.py::test_container_delete_clears_window_registry_regression`
+— canonical example of a lifecycle cleanup regression test.
 
 ---
 

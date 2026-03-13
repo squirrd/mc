@@ -437,6 +437,12 @@ class ContainerManager:
         # Stop container gracefully
         try:
             container.stop(timeout=timeout)  # type: ignore[no-untyped-call]
+            # Clean up window registry — terminal window disconnects on stop, avoid stale focus
+            try:
+                from mc.terminal.registry import WindowRegistry
+                WindowRegistry().remove(case_number)
+            except Exception:
+                pass  # non-fatal
             return True
         except Exception as e:
             raise RuntimeError(
@@ -504,6 +510,13 @@ class ContainerManager:
             raise RuntimeError(
                 f"Failed to delete container state for case {case_number}: {e}"
             ) from e
+
+        # Clean up window registry entry so next mc case opens a fresh terminal
+        try:
+            from mc.terminal.registry import WindowRegistry
+            WindowRegistry().remove(case_number)
+        except Exception:
+            pass  # non-fatal
 
         # Delete workspace if requested
         if remove_workspace:
