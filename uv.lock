@@ -629,10 +629,11 @@ wheels = [
 
 [[package]]
 name = "mc"
-version = "2.0.4"
+version = "2.0.5"
 source = { editable = "." }
 dependencies = [
     { name = "backoff" },
+    { name = "iterm2", marker = "sys_platform == 'darwin'" },
     { name = "packaging" },
     { name = "platformdirs" },
     { name = "podman" },
@@ -667,6 +668,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "iterm2", marker = "sys_platform == 'darwin'", specifier = ">=2.14" },
     { name = "iterm2", marker = "sys_platform == 'darwin' and extra == 'macos'", specifier = ">=2.14" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "packaging", specifier = ">=26.0" },
