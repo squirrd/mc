@@ -1540,3 +1540,54 @@ def test_container_macos_proxy_detection_regression():
         f"build_exec_command() did not include HTTP_PROXY in the podman exec command.\n"
         f"Command: {cmd}"
     )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS only — iterm2 package is macOS-specific")
+def test_iterm2_macos_extra_not_installed_regression() -> None:
+    """Regression test: iterm2 Python package must be installed on macOS as a core dependency.
+
+    Bug discovered: 2026-03-13
+    Platform: macOS
+    Severity: Major
+
+    Problem:
+        Running 'mc case <number>' on macOS with iTerm2 installed always falls back to
+        Terminal.app, printing:
+            "iTerm2 API unavailable, using Terminal.app. Enable via iTerm2 > Settings > ..."
+        This happens even when the iTerm2 Python API is enabled in iTerm2 settings.
+
+    Root cause:
+        The iterm2 Python package was declared in [project.optional-dependencies.macos]
+        rather than [project.dependencies]. Neither 'uv run mc' nor 'uv tool install'
+        install optional extras by default, so the package is never present in the
+        active environment. At module import time, mc.terminal.macos sets:
+            _ITERM2_LIB_AVAILABLE = False   (ImportError caught)
+        MacOSLauncher._try_iterm2_api() then returns None immediately, triggering the
+        Terminal.app fallback every time — regardless of iTerm2's API settings.
+
+    Fix:
+        Move iterm2>=2.14 from [project.optional-dependencies.macos] to
+        [project.dependencies] with a 'sys_platform == "darwin"' marker so it is
+        always installed on macOS without requiring any extra flags.
+
+    Test approach:
+        Directly verifies that the iterm2 package is importable and that
+        mc.terminal.macos._ITERM2_LIB_AVAILABLE is True. No container or running
+        iTerm2 instance required — this is a package-installation regression test.
+    """
+    try:
+        import iterm2  # noqa: F401
+    except ImportError:
+        pytest.fail(
+            "iterm2 package is not installed in the active uv environment. "
+            "It must be in [project.dependencies] with sys_platform=='darwin' marker "
+            "so that 'uv run mc' and 'uv tool install' always install it on macOS."
+        )
+
+    from mc.terminal.macos import _ITERM2_LIB_AVAILABLE
+
+    assert _ITERM2_LIB_AVAILABLE is True, (
+        "mc.terminal.macos._ITERM2_LIB_AVAILABLE is False even though iterm2 is importable. "
+        "The module-level import guard may have a bug."
+    )
