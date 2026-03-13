@@ -205,8 +205,10 @@ class TestDeleteContainer:
              patch("shutil.rmtree") as mock_rmtree:
             manager.delete("12345678", remove_workspace=True)
 
-            # Verify workspace deleted
-            mock_exists.assert_called_once_with("/Users/user/Cases/12345678")
+            # Verify workspace deleted (use assert_any_call — delete() also calls
+            # WindowRegistry().remove() which triggers platformdirs.user_data_dir
+            # internally, causing os.path.exists to be called more than once)
+            mock_exists.assert_any_call("/Users/user/Cases/12345678")
             mock_rmtree.assert_called_once_with("/Users/user/Cases/12345678")
 
     def test_delete_workspace_removal_nonexistent_path(self, manager, mock_podman, mock_state, container_metadata):
