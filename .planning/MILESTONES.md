@@ -1,5 +1,30 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.6 iTerm2 Hotfix (Shipped: 2026-03-16)
+
+**Delivered:** Batch of post-v2.0.5 bug fixes making iTerm2 integration production-ready and fixing package naming
+
+**Key fixes:**
+
+- Renamed package from `mc-cli` → `mc` for correct GitHub install URL (`uv tool install git+...`)
+- Moved `iterm2` from optional `[macos]` extra to core dependency — auto-installs on macOS without extra flag
+- Corrected iTerm2 profile name `MCC-Term` → `MC-Term` (matched what actually exists in iTerm2)
+- Wrapped `iterm2 command=` in `/bin/zsh -l -c` to prevent `execvp` failure on shell command execution
+- Tracked actual launched app (iTerm2 vs Terminal.app fallback) to fix wrong window ID after fallback
+- Cleaned up window registry on container `delete` and `stop` to prevent stale entries
+
+**Stats:**
+
+- 16 commits since v2.0.5 tag
+- 3 files primarily changed: `src/mc/terminal/macos.py`, `pyproject.toml`, `src/mc/container/manager.py`
+- Tests added for all fixes (integration + unit)
+
+**Git range:** `375f175` (fix: rename package) → `6a90d8a` (fix: track actual launched app)
+
+**What's next:** Start next milestone via `/gsd:new-milestone`
+
+---
+
 ## v2.0.5 Auto-Update & Terminal (Shipped: 2026-03-12)
 
 **Delivered:** MC CLI auto-update functionality (upgrade/pin/unpin/check/banner) and iTerm2 Python API migration for cleaner terminal management

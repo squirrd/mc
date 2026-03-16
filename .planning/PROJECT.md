@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.5 (2026-03-12)
+**Latest Release:** v2.0.6 (2026-03-16)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -155,6 +155,15 @@ Shipped in v2.0.4 (2026-02-19):
 - ✓ Auto-update guard prevents version checks in containerized environments — v2.0.4
 - ✓ Informational messaging via Rich Console for container context — v2.0.4
 
+Shipped in v2.0.6 (2026-03-16) — hotfix batch:
+
+- ✓ Package renamed mc-cli → mc for correct GitHub install URL — v2.0.6
+- ✓ iterm2 moved to core deps, auto-installs on macOS without extra flag — v2.0.6
+- ✓ iTerm2 profile name corrected MCC-Term → MC-Term — v2.0.6
+- ✓ iTerm2 command= wrapped in /bin/zsh -l -c to prevent execvp failure — v2.0.6
+- ✓ Actual launched app tracked to fix wrong window ID after iTerm2 API fallback — v2.0.6
+- ✓ Window registry cleaned up on container delete and stop — v2.0.6
+
 Shipped in v2.0.5 (2026-03-12):
 
 **iTerm2 Python API Migration:**
@@ -198,7 +207,7 @@ Run `/gsd:new-milestone` to define the next milestone.
 
 ## Context
 
-**Current State (v2.0.5 shipped 2026-03-12):**
+**Current State (v2.0.6 shipped 2026-03-16):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
 - 9,921 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
@@ -291,4 +300,4 @@ Run `/gsd:new-milestone` to define the next milestone.
 | VersionChecker removed from main.py | Banner replaces background check; cleaner single notification path | ✓ Good - no duplicate notification logic |
 
 ---
-*Last updated: 2026-03-12 after v2.0.5 milestone completion*
+*Last updated: 2026-03-16 after v2.0.6 hotfix release*

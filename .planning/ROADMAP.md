@@ -9,6 +9,7 @@
 - ✅ **v2.0.3 Container Tools** - Phases 20-25 (shipped 2026-02-10)
 - ✅ **v2.0.4 Foundation** - Phases 26-28 (shipped 2026-02-19)
 - ✅ **v2.0.5 Auto-Update & Terminal** - Phases 29-32 (shipped 2026-03-12)
+- ✅ **v2.0.6 iTerm2 Hotfix** - unplanned fixes (shipped 2026-03-16)
 
 ## Phases
 

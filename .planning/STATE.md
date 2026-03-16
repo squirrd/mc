@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.5 complete — planning next milestone
+**Current focus:** v2.0.6 complete — planning next milestone
 
 ## Current Position
 
 Phase: N/A — v2.0.5 milestone complete, next milestone not yet defined
 Plan: Not started
 Status: Ready to plan next milestone
-Last activity: 2026-03-12 — v2.0.5 milestone archived
+Last activity: 2026-03-16 — v2.0.6 hotfix release tagged and published
 
 Progress: [█████████████████████████] 100% (v2.0.5 complete)
 
