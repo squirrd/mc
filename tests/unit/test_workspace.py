@@ -16,7 +16,7 @@ def create_workspace(tmp_path, case_number="12345678", account="Red Hat Inc", su
 
 
 def test_workspace_initialization(tmp_path):
-    """Test workspace initialization with formatted names."""
+    """Test workspace initialization with formatted names and correct entry counts."""
     ws = create_workspace(
         tmp_path,
         case_number="12345678",
@@ -24,21 +24,19 @@ def test_workspace_initialization(tmp_path):
         summary="Test Summary"
     )
 
-    # Verify formatted names use shorten_and_format
     assert ws.account_name_formatted == "Red_Hat_Inc"
     assert ws.case_summary_formatted == "Test_Summary"
 
-    # Verify file_dir_list is generated (should have 9 entries: 4 dirs + 5 files)
-    assert len(ws.file_dir_list) == 9
+    # New structure: 10 dirs + 4 files = 14 entries
+    assert len(ws.file_dir_list) == 14
 
-    # Verify structure includes expected types
     types = [entry[0] for entry in ws.file_dir_list]
-    assert types.count("D") == 4  # directories
-    assert types.count("F") == 5  # files
+    assert types.count("D") == 10
+    assert types.count("F") == 4
 
 
 def test_workspace_create_files_structure(tmp_path):
-    """Test workspace creation with proper directory and file structure."""
+    """Test workspace creation with the canonical directory and file structure."""
     ws = create_workspace(
         tmp_path,
         case_number="12345678",
@@ -46,27 +44,34 @@ def test_workspace_create_files_structure(tmp_path):
         summary="Test Summary"
     )
 
-    # Create files and directories
     ws.create_files()
 
-    # Expected base path
-    base_case_path = tmp_path / "Red_Hat_Inc" / "12345678-Test_Summary"
+    # Case dir is now under cases/
+    base_case_path = tmp_path / "cases" / "Red_Hat_Inc" / "12345678-Test_Summary"
 
-    # Verify directories created
-    assert (base_case_path / "files").exists()
-    assert (base_case_path / "files" / "attach").is_dir()
-    assert (base_case_path / "files" / "dp").is_dir()
-    assert (base_case_path / "files" / "cp").is_dir()
+    # Directories
+    assert (base_case_path / "dt").is_dir()
+    assert (base_case_path / "dt" / "logs").is_dir()
+    assert (base_case_path / "dt" / "metrics").is_dir()
+    assert (base_case_path / "jira").is_dir()
+    assert (base_case_path / "jira" / "atts").is_dir()
+    assert (base_case_path / "notes").is_dir()
+    assert (base_case_path / "notes" / "ai").is_dir()
+    assert (base_case_path / "oc").is_dir()
+    assert (base_case_path / "sfdc").is_dir()
+    assert (base_case_path / "sfdc" / "atts").is_dir()
 
-    # Verify files created
-    assert (base_case_path / "00-caseComments.md").is_file()
-    assert (base_case_path / "10-notes.md").is_file()
-    assert (base_case_path / "20-notes.md").is_file()
-    assert (base_case_path / "30-notes.md").is_file()
-    assert (base_case_path / "80-scratch.md").is_file()
+    # Files
+    assert (base_case_path / "notes" / "notes-01.md").is_file()
+    assert (base_case_path / "notes" / "notes-02.md").is_file()
+    assert (base_case_path / "notes" / "notes-03.md").is_file()
+    assert (base_case_path / "notes" / "tmp.md").is_file()
 
-    # Verify directory structure pattern
-    assert str(base_case_path).endswith("Red_Hat_Inc/12345678-Test_Summary")
+    # Old structure must not exist
+    assert not (base_case_path / "files").exists()
+
+    # Path is under cases/
+    assert str(base_case_path).endswith("cases/Red_Hat_Inc/12345678-Test_Summary")
 
 
 def test_workspace_check_status_ok(tmp_path, caplog):
@@ -79,7 +84,6 @@ def test_workspace_check_status_ok(tmp_path, caplog):
 
     status = ws.check()
 
-    # Verify status
     assert status == "OK"
     assert "CheckStatus: OK" in caplog.text
 
@@ -94,7 +98,6 @@ def test_workspace_check_status_warn(tmp_path, caplog):
 
     status = ws.check()
 
-    # Verify status
     assert status == "WARN"
     assert "does not exist" in caplog.text
 
@@ -108,30 +111,26 @@ def test_workspace_check_status_fatal(tmp_path, caplog):
     ws.create_files()
 
     # Replace a file with directory (wrong file type)
-    base_case_path = tmp_path / "Red_Hat_Inc" / "12345678-Test_Summary"
-    file_path = base_case_path / "00-caseComments.md"
+    base_case_path = tmp_path / "cases" / "Red_Hat_Inc" / "12345678-Test_Summary"
+    file_path = base_case_path / "notes" / "notes-01.md"
     file_path.unlink()  # Remove file
     file_path.mkdir()   # Create directory at file path
 
     status = ws.check()
 
-    # Verify status
     assert status == "FATAL"
     assert "Expected file, found directory" in caplog.text
 
 
 def test_get_attachment_dir(tmp_path):
-    """Test get_attachment_dir() returns correct path."""
+    """Test get_attachment_dir() returns sfdc/atts path."""
     ws = create_workspace(tmp_path)
 
     attach_dir = ws.get_attachment_dir()
 
-    # Verify it's a Path object
     assert attach_dir is not None
-    assert attach_dir.name == 'attach'
-
-    # Verify path structure
-    assert "Red_Hat_Inc/12345678-Test_Summary/files/attach" in str(attach_dir)
+    assert attach_dir.name == 'atts'
+    assert "sfdc/atts" in str(attach_dir)
 
 
 def test_workspace_with_special_characters_in_names(tmp_path):
@@ -143,15 +142,13 @@ def test_workspace_with_special_characters_in_names(tmp_path):
         summary="Issue with special chars!"
     )
 
-    # Verify formatted names use underscores (via shorten_and_format)
     assert "@" not in ws.account_name_formatted
     assert "#" not in ws.account_name_formatted
     assert "!" not in ws.case_summary_formatted
-    assert "_" in ws.account_name_formatted  # Spaces/special chars replaced
+    assert "_" in ws.account_name_formatted
 
-    # Create files and verify structure created successfully
     ws.create_files()
 
-    # Verify at least one directory exists (proves structure was created)
-    base_case_path = tmp_path / ws.account_name_formatted / f"99999999-{ws.case_summary_formatted}"
-    assert (base_case_path / "files").exists()
+    # New structure — verify sfdc/atts exists under cases/
+    base_case_path = tmp_path / "cases" / ws.account_name_formatted / f"99999999-{ws.case_summary_formatted}"
+    assert (base_case_path / "sfdc" / "atts").is_dir()

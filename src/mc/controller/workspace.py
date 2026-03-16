@@ -57,22 +57,28 @@ class WorkspaceManager:
             file_dir_list = []
             case_dir = (
                 self.base_dir /
+                "cases" /
                 self.account_name_formatted /
                 f"{self.case_number}-{self.case_summary_formatted}"
             )
 
-            # Add directories (leaf directories only)
-            file_dir_list.append(("D", case_dir / "files"))
-            file_dir_list.append(("D", case_dir / "files" / "attach"))
-            file_dir_list.append(("D", case_dir / "files" / "dp"))
-            file_dir_list.append(("D", case_dir / "files" / "cp"))
+            # Add directories
+            file_dir_list.append(("D", case_dir / "dt"))
+            file_dir_list.append(("D", case_dir / "dt" / "logs"))
+            file_dir_list.append(("D", case_dir / "dt" / "metrics"))
+            file_dir_list.append(("D", case_dir / "jira"))
+            file_dir_list.append(("D", case_dir / "jira" / "atts"))
+            file_dir_list.append(("D", case_dir / "notes"))
+            file_dir_list.append(("D", case_dir / "notes" / "ai"))
+            file_dir_list.append(("D", case_dir / "oc"))
+            file_dir_list.append(("D", case_dir / "sfdc"))
+            file_dir_list.append(("D", case_dir / "sfdc" / "atts"))
 
             # Add files
-            file_dir_list.append(("F", case_dir / "00-caseComments.md"))
-            file_dir_list.append(("F", case_dir / "10-notes.md"))
-            file_dir_list.append(("F", case_dir / "20-notes.md"))
-            file_dir_list.append(("F", case_dir / "30-notes.md"))
-            file_dir_list.append(("F", case_dir / "80-scratch.md"))
+            file_dir_list.append(("F", case_dir / "notes" / "notes-01.md"))
+            file_dir_list.append(("F", case_dir / "notes" / "notes-02.md"))
+            file_dir_list.append(("F", case_dir / "notes" / "notes-03.md"))
+            file_dir_list.append(("F", case_dir / "notes" / "tmp.md"))
 
             return file_dir_list
         except OSError as e:
@@ -137,7 +143,7 @@ class WorkspaceManager:
             Path: Attachment directory path or None if not found
         """
         for file_type, file_path in self.file_dir_list:
-            if file_path.name == 'attach':
+            if "sfdc/atts" in str(file_path):
                 return file_path
         return None
 
