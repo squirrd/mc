@@ -478,3 +478,117 @@ class TestAttachTerminal:
 
         # Should still work (constructs workspace path from config)
         deps["launcher"].launch.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Regression: attach_terminal does not create workspace directory structure
+# ---------------------------------------------------------------------------
+
+
+class TestAttachTerminalWorkspaceDirs:
+    """Regression tests for fix/attach-missing-workspace-dirs.
+
+    Bug discovered: 2026-03-16
+    Severity: major
+
+    Problem:
+        After `mc case <N>` creates a container, /case inside the container
+        only contains the top-level mount directory — the expected subdirectory
+        structure (dt/, dt/logs/, dt/metrics/, jira/, jira/atts/, notes/,
+        notes/ai/, oc/, sfdc/, sfdc/atts/) is absent.
+
+    Root cause:
+        attach_terminal calls container_manager.create() which calls
+        os.makedirs(workspace_path) for the top-level directory only.
+        WorkspaceManager.create_files() is never called, so the subdirectory
+        structure is never created on the host — and therefore never visible
+        inside the mounted /case directory.
+
+    Expected behaviour:
+        After attach_terminal auto-creates a container, the full workspace
+        directory structure exists on the host at workspace_path so it is
+        immediately visible inside /case in the container.
+
+    Actual behaviour (bug present):
+        Only the top-level workspace_path directory exists. All subdirectories
+        (dt/, sfdc/atts/, notes/, etc.) are absent from /case.
+    """
+
+    def test_auto_create_container_creates_workspace_subdirs(
+        self, tmp_path: "Path", mocker: "MagicMock"
+    ) -> None:
+        """After attach_terminal auto-creates a container, the workspace directory
+        structure (dt/, jira/, sfdc/atts/, notes/, oc/) must exist on the host.
+
+        Bug present: only the top-level case directory is created; all subdirs missing.
+        """
+        import os
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+
+        from mc.terminal.attach import attach_terminal
+
+        base_dir = tmp_path / "mc"
+        base_dir.mkdir()
+        (base_dir / "cases").mkdir()
+
+        config_manager = MagicMock()
+        config_manager.get.return_value = str(base_dir)
+
+        case_details = {"summary": "workerpool upgrade", "status": "New", "severity": "2"}
+        account_details = {"name": "IBM"}
+
+        created_workspace: list[str] = []
+
+        def fake_create(case_number: str, workspace_path: str, customer_name: str) -> None:
+            created_workspace.append(workspace_path)
+            os.makedirs(workspace_path, exist_ok=True)  # mimics container_manager
+
+        container_manager = MagicMock()
+        container_manager.create.side_effect = fake_create
+        container_manager.status.side_effect = [
+            {"status": "missing"},
+            {"status": "running", "workspace_path": None},
+        ]
+
+        with (
+            patch("mc.terminal.attach.get_case_metadata", return_value=(case_details, account_details, False)),
+            patch("mc.terminal.attach.should_launch_terminal", return_value=True),
+            patch("mc.terminal.attach.write_bashrc", return_value="/tmp/bashrc"),
+            patch("mc.terminal.attach.get_launcher") as mock_launcher_fn,
+            patch("mc.terminal.attach.WindowRegistry") as mock_registry_cls,
+        ):
+            mock_launcher = MagicMock()
+            mock_launcher._window_exists_by_id = MagicMock(return_value=False)
+            mock_launcher_fn.return_value = mock_launcher
+
+            mock_registry = MagicMock()
+            mock_registry.lookup.return_value = None
+            mock_registry_cls.return_value = mock_registry
+
+            attach_terminal(
+                case_number="04387781",
+                config_manager=config_manager,
+                api_client=MagicMock(),
+                container_manager=container_manager,
+            )
+
+        assert created_workspace, "container_manager.create was never called"
+        workspace = Path(created_workspace[0])
+
+        expected_dirs = [
+            workspace / "dt",
+            workspace / "dt" / "logs",
+            workspace / "dt" / "metrics",
+            workspace / "jira",
+            workspace / "jira" / "atts",
+            workspace / "notes",
+            workspace / "sfdc",
+            workspace / "sfdc" / "atts",
+            workspace / "oc",
+        ]
+        missing = [str(d) for d in expected_dirs if not d.is_dir()]
+        assert not missing, (
+            "Workspace subdirectories not created by attach_terminal:\n"
+            + "\n".join(f"  MISSING: {d}" for d in missing)
+        )
