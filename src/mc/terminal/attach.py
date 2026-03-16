@@ -202,6 +202,17 @@ def attach_terminal(
                 workspace_path=workspace_path,
                 customer_name=customer_name
             )
+
+            # Create the workspace directory structure on the host so /case
+            # inside the container has the expected layout (dt/, sfdc/atts/, etc.)
+            from mc.controller.workspace import WorkspaceManager
+            workspace_mgr = WorkspaceManager(
+                base_dir=base_dir,
+                case_number=case_number,
+                account_name=customer_name,
+                case_summary=description,
+            )
+            workspace_mgr.create_files()
         except Exception as e:
             error_msg = (
                 f"Failed to create container for case {case_number}. "
