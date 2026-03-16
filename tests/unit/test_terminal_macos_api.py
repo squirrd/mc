@@ -222,18 +222,55 @@ class TestCaptureWindowId:
     def test_capture_window_id_falls_back_to_applescript_when_no_api_id(
         self, mocker: Mock
     ) -> None:
-        """_capture_window_id calls osascript fallback when _last_api_window_id is None."""
+        """_capture_window_id calls iTerm2 osascript when terminal=iTerm2 and no fallback occurred."""
         mock_run = mocker.patch("subprocess.run")
         mock_run.return_value = Mock(returncode=0, stdout="12345\n")
         mocker.patch("shutil.which", return_value="/usr/bin/osascript")
 
         launcher = MacOSLauncher(terminal="iTerm2")
-        # _last_api_window_id is None by default
+        # _last_api_window_id is None by default, _last_launched_app is None (no fallback)
 
         result = launcher._capture_window_id()
 
         assert result == "12345"
         mock_run.assert_called_once()
+        script = mock_run.call_args[0][0][2]
+        assert "iTerm" in script, (
+            "When terminal=iTerm2 and no fallback launch occurred, "
+            "capture must query iTerm2 not Terminal.app"
+        )
+
+    def test_capture_window_id_queries_terminal_app_after_iterm2_api_fallback(
+        self, mocker: Mock
+    ) -> None:
+        """_capture_window_id queries Terminal.app when launch() fell back to it from iTerm2 API.
+
+        Regression guard for the bug fixed 2026-03-16: when iTerm2 API is unavailable
+        and launch() uses Terminal.app as fallback, _capture_window_id() must query
+        Terminal.app (not iTerm2) to get the correct new window ID.
+        """
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.return_value = Mock(returncode=0, stdout="5999\n")
+        mocker.patch("shutil.which", return_value="/usr/bin/osascript")
+
+        launcher = MacOSLauncher(terminal="iTerm2")
+        # Simulate that launch() fell back to Terminal.app
+        launcher._last_launched_app = "Terminal.app"
+
+        result = launcher._capture_window_id()
+
+        assert result == "5999"
+        mock_run.assert_called_once()
+        script = mock_run.call_args[0][0][2]
+        assert "Terminal" in script, (
+            "_capture_window_id() must query Terminal.app when _last_launched_app='Terminal.app'"
+        )
+        assert "iTerm" not in script, (
+            "_capture_window_id() must NOT query iTerm2 after a Terminal.app fallback launch"
+        )
+        assert launcher._last_launched_app is None, (
+            "_last_launched_app must be consumed (set to None) after _capture_window_id()"
+        )
 
 
 # ---------------------------------------------------------------------------
