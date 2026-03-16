@@ -525,10 +525,14 @@ end tell
         escaped_command = self._escape_applescript(options.command)
         escaped_title = self._escape_applescript(options.title)
 
-        script = f'''
+        script = f'''set termWasRunning to application "Terminal" is running
 tell application "Terminal"
     activate
-    do script "{escaped_command}"
+    if termWasRunning then
+        do script "{escaped_command}"
+    else
+        do script "{escaped_command}" in window 1
+    end if
     set custom title of front window to "{escaped_title}"
 end tell
 '''
