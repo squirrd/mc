@@ -473,3 +473,100 @@ class TestFallbackNoticeSentinel:
 
         content = patch_sentinel.read_text().strip()
         assert content == datetime.date.today().isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Regression: iterm2 API connection error causes sys.exit(1) crash
+# ---------------------------------------------------------------------------
+
+
+class TestLaunchViaIterm2ApiConnectionCrash:
+    """Regression tests for fix/iterm2-api-connection-crash.
+
+    Bug discovered: 2026-03-16
+    Severity: major
+
+    Problem:
+        Running `mc case <N>` crashes with a full traceback and exits with code 1
+        when the iTerm2 Python API raises ConnectionClosedError during window
+        creation (e.g. when asyncio.timeout(5) fires and websockets converts the
+        resulting CancelledError to ConnectionClosedError during cleanup).
+
+    Root cause:
+        _launch_via_iterm2_api._main only catches asyncio.TimeoutError.  Any other
+        exception (such as ConnectionClosedError) escapes _main and reaches
+        iterm2.connection.async_connect which has:
+
+            try:
+                return await coro(self)
+            except Exception as _err:
+                traceback.print_exc()
+                sys.exit(1)
+
+        sys.exit(1) raises SystemExit (a BaseException, not caught by
+        _try_iterm2_api's `except Exception`), killing the mc process.
+
+    Expected behaviour:
+        Any exception from iterm2.Window.async_create should be caught inside
+        _main so the method returns None cleanly, allowing _try_iterm2_api to
+        fall back to Terminal.app.
+
+    Actual behaviour (bug present):
+        SystemExit(1) propagates out of _launch_via_iterm2_api, through
+        _try_iterm2_api (which only catches Exception, not BaseException), and
+        kills the mc process — user sees a raw traceback.
+    """
+
+    def test_non_timeout_exception_from_async_create_returns_none(self) -> None:
+        """_launch_via_iterm2_api returns None when Window.async_create raises
+        a non-TimeoutError exception, instead of crashing via sys.exit(1).
+
+        The fake run_until_complete mimics iterm2's async_connect behaviour:
+            except Exception: sys.exit(1)
+        so that the test fails with SystemExit when the bug is present.
+        """
+        import asyncio
+        import sys
+        from unittest.mock import AsyncMock, MagicMock
+
+        import mc.terminal.macos as macos_mod
+
+        class _FakeConnectionClosedError(Exception):
+            """Stand-in for websockets.exceptions.ConnectionClosedError."""
+
+        def _fake_run_until_complete(coro: object) -> None:
+            """Mirrors iterm2 async_connect: calls sys.exit(1) on any Exception."""
+
+            async def wrapper() -> None:
+                mock_conn = MagicMock()
+                try:
+                    await coro(mock_conn)  # type: ignore[operator]
+                except Exception:
+                    sys.exit(1)
+
+            asyncio.run(wrapper())
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.Window.async_create = AsyncMock(
+            side_effect=_FakeConnectionClosedError("sent 1000 (OK); no close frame received")
+        )
+        mock_iterm2.run_until_complete = _fake_run_until_complete
+
+        original_available = macos_mod._ITERM2_LIB_AVAILABLE
+        macos_mod._ITERM2_LIB_AVAILABLE = True
+
+        try:
+            sys.modules["iterm2"] = mock_iterm2  # type: ignore[assignment]
+
+            launcher = MacOSLauncher("iTerm2")
+            options = _make_options()
+
+            # Bug present  → SystemExit(1) — mc crashes
+            # Bug fixed    → returns None  — falls back to Terminal.app
+            result = launcher._launch_via_iterm2_api(options)
+
+            assert result is None
+        finally:
+            macos_mod._ITERM2_LIB_AVAILABLE = original_available
+            if sys.modules.get("iterm2") is mock_iterm2:
+                del sys.modules["iterm2"]
