@@ -570,3 +570,102 @@ class TestLaunchViaIterm2ApiConnectionCrash:
             macos_mod._ITERM2_LIB_AVAILABLE = original_available
             if sys.modules.get("iterm2") is mock_iterm2:
                 del sys.modules["iterm2"]
+
+
+# ---------------------------------------------------------------------------
+# Regression: asyncio.timeout in _main causes double window (iTerm2 + Terminal.app)
+# ---------------------------------------------------------------------------
+
+
+class TestLaunchViaIterm2ApiDoubleWindow:
+    """Regression tests for fix/iterm2-double-window.
+
+    Bug discovered: 2026-03-16
+    Severity: major
+
+    Problem:
+        Running `mc case <N>` opens BOTH an iTerm2 window AND a Terminal.app window.
+
+    Root cause:
+        _launch_via_iterm2_api._main wrapped Window.async_create in asyncio.timeout(5).
+        The timeout fired during async_refresh() (called internally by async_create
+        after the window was already created in iTerm2). Because the exception was
+        caught before result[0] could be set, the function returned None. launch()
+        saw None and fell back to Terminal.app — producing a second window.
+
+    Expected behaviour:
+        Window.async_create runs to completion without a timeout. If it succeeds,
+        the window_id is captured and returned. Only a genuine API failure (exception
+        from async_create itself) causes the fallback to Terminal.app.
+
+    Actual behaviour (bug present):
+        asyncio.timeout(5) fires mid-call → exception caught → result[0] stays None →
+        returns None → Terminal.app opens a second window.
+    """
+
+    def test_slow_async_create_success_returns_window_id_not_none(self) -> None:
+        """When Window.async_create takes time but succeeds, _launch_via_iterm2_api
+        must return the window_id (not None due to a spurious timeout).
+
+        The test simulates the timeout scenario by patching asyncio.timeout to a
+        0.001s version and making async_create take 0.05s. With the bug the timeout
+        fires and returns None. After the fix (timeout removed) it waits and returns
+        the window_id.
+        """
+        import asyncio as real_asyncio
+        import sys
+        from contextlib import contextmanager
+        from unittest.mock import MagicMock, patch
+
+        import mc.terminal.macos as macos_mod
+
+        @contextmanager
+        def _tiny_timeout():
+            original = real_asyncio.timeout
+
+            def patched(delay: float) -> object:
+                return original(0.001)
+
+            with patch("mc.terminal.macos.asyncio.timeout", side_effect=patched):
+                yield
+
+        def _fake_run(coro: object) -> None:
+            async def wrapper() -> None:
+                await coro(MagicMock())  # type: ignore[operator]
+
+            real_asyncio.run(wrapper())
+
+        mock_window = MagicMock()
+        mock_window.window_id = "w_test_123"
+
+        async def slow_create(*args: object, **kwargs: object) -> object:
+            await real_asyncio.sleep(0.05)  # longer than patched 0.001s timeout
+            return mock_window
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.Window.async_create = slow_create
+        mock_iterm2.run_until_complete = _fake_run
+
+        original_available = macos_mod._ITERM2_LIB_AVAILABLE
+        macos_mod._ITERM2_LIB_AVAILABLE = True
+
+        try:
+            sys.modules["iterm2"] = mock_iterm2  # type: ignore[assignment]
+
+            launcher = MacOSLauncher("iTerm2")
+            options = _make_options()
+
+            # Bug present  → None (timeout intercepted the call, Terminal.app fallback)
+            # Bug fixed    → "w_test_123" (no timeout, async_create completes)
+            with _tiny_timeout():
+                result = launcher._launch_via_iterm2_api(options)
+
+            assert result == "w_test_123", (
+                f"Expected window_id but got {result!r}. "
+                "asyncio.timeout in _main is causing a double-window by returning "
+                "None even when async_create succeeds."
+            )
+        finally:
+            macos_mod._ITERM2_LIB_AVAILABLE = original_available
+            if sys.modules.get("iterm2") is mock_iterm2:
+                del sys.modules["iterm2"]

@@ -565,16 +565,15 @@ end tell
 
         async def _main(connection: iterm2.Connection) -> None:
             try:
-                async with asyncio.timeout(5):
-                    window = await iterm2.Window.async_create(
-                        connection,
-                        profile="MC-Term",
-                        command=shell_command,
-                    )
-                    if window is not None:
-                        result[0] = window.window_id
+                window = await iterm2.Window.async_create(
+                    connection,
+                    profile="MC-Term",
+                    command=shell_command,
+                )
+                if window is not None:
+                    result[0] = window.window_id
             except Exception:
-                pass  # timeout, connection closed, or any API failure → caller falls back
+                pass  # connection closed or any API failure → caller falls back
 
         iterm2.run_until_complete(_main)
         return result[0]
