@@ -573,8 +573,8 @@ end tell
                     )
                     if window is not None:
                         result[0] = window.window_id
-            except asyncio.TimeoutError:
-                pass  # result stays None → caller falls back
+            except Exception:
+                pass  # timeout, connection closed, or any API failure → caller falls back
 
         iterm2.run_until_complete(_main)
         return result[0]
