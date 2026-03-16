@@ -7,18 +7,10 @@ MC is a CLI tool for managing Red Hat support case workspaces and container envi
 ### Quick Start
 
 ```bash
-# Install uv package manager
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install MC CLI from GitHub
-uv tool install git+https://github.com/squirrd/mc
-
-# Re-installing (e.g. same version or downgrade) requires --force
-uv tool install --force git+https://github.com/squirrd/mc
-
-# Verify installation
-mc --version
+curl -LsSf https://raw.githubusercontent.com/squirrd/mc/refs/heads/main/install.sh | sh
 ```
+
+Requires `uv` — [install it here](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it.
 
 ### Upgrading
 
