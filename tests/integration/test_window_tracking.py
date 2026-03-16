@@ -655,3 +655,85 @@ def test_registry_corruption_graceful_fallback(mocker, tmp_path):
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="macOS-specific test — MacOSLauncher only runs on Darwin"
+)
+def test_iterm2_fallback_capture_regression(mocker, tmp_path):
+    """Regression: _capture_window_id() must query Terminal.app when launch() fell back to it.
+
+    Bug discovered: 2026-03-16
+    Platform: macOS
+    Severity: Major
+
+    Problem:
+    When iTerm2 is installed but its Python API is unavailable (Settings > General >
+    Magic > Enable Python API is off), launch() silently falls back to spawning a
+    Terminal.app window via AppleScript.  However _capture_window_id() checks
+    self.terminal == "iTerm2" and asks iTerm2 for its "current window", returning
+    the ID of the iTerm2 shell the user ran `mc` from - not the newly opened
+    Terminal.app case window.  That wrong ID is registered in WindowRegistry, so
+    the next `mc case <num>` call finds it valid (the iTerm2 shell is still open),
+    "focuses" the original shell, and never opens the case terminal.
+
+    Root cause:
+    MacOSLauncher._capture_window_id() does not track which app was actually used
+    for the last launch.  self.terminal is set to "iTerm2" at construction time
+    (because iTerm2 is detected), and _capture_window_id() blindly uses self.terminal
+    to select which app to query - even when launch() used Terminal.app as a fallback.
+
+    Test approach:
+    - MacOSLauncher with terminal="iTerm2", _try_iterm2_api mocked to return None
+    - subprocess.Popen mocked (Terminal.app launch is non-blocking)
+    - subprocess.run mocked to simulate Terminal.app returning a new window ID
+    - Assert _capture_window_id() sends an osascript that targets "Terminal" not "iTerm"
+    - Assert the returned ID matches what Terminal.app reported (not an iTerm2 shell ID)
+    """
+    from unittest.mock import MagicMock, patch
+    from mc.terminal.macos import MacOSLauncher
+    from mc.terminal.launcher import LaunchOptions
+
+    options = LaunchOptions(
+        title="04389182:Banque Misr:Unable to deploy application:/case",
+        command="podman exec -it mc-04389182 /bin/bash; exit",
+    )
+
+    terminal_app_window_id = "5999"   # ID Terminal.app would return for the new window
+    iterm2_shell_window_id = "5948"   # ID iTerm2 returns for the shell that ran mc
+
+    with (
+        patch.object(MacOSLauncher, "_try_iterm2_api", return_value=None),
+        patch("mc.terminal.macos._should_show_iterm2_fallback_notice", return_value=False),
+        patch("shutil.which", return_value="/usr/bin/osascript"),
+        patch("subprocess.Popen") as mock_popen,
+        patch("threading.Thread"),
+        patch("subprocess.run") as mock_run,
+    ):
+        mock_popen.return_value = MagicMock()
+        # Simulate Terminal.app reporting the new case window ID
+        mock_run.return_value = MagicMock(returncode=0, stdout=f"{terminal_app_window_id}\n")
+
+        launcher = MacOSLauncher(terminal="iTerm2")
+        launcher.launch(options)
+        captured_id = launcher._capture_window_id()
+
+        assert mock_run.called, "_capture_window_id() must call subprocess.run (osascript)"
+        capture_script = mock_run.call_args[0][0][2]  # ["osascript", "-e", <script>]
+
+        assert "Terminal" in capture_script, (
+            "_capture_window_id() must query Terminal.app after Terminal.app fallback launch. "
+            f"Script used: {capture_script!r}"
+        )
+        assert "iTerm" not in capture_script, (
+            "_capture_window_id() must NOT query iTerm2 when Terminal.app was the actual launcher. "
+            "Querying iTerm2 captures the current shell window ID, not the new case terminal. "
+            f"Script used: {capture_script!r}"
+        )
+        assert captured_id == terminal_app_window_id, (
+            f"Captured window ID '{captured_id}' is wrong. Expected Terminal.app window ID "
+            f"'{terminal_app_window_id}'. If '{iterm2_shell_window_id}' is returned, the "
+            "current iTerm2 shell is being tracked instead of the new Terminal.app case window."
+        )

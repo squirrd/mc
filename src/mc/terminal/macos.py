@@ -52,6 +52,7 @@ class MacOSLauncher:
         """
         self.terminal = terminal or self._detect_terminal()
         self._last_api_window_id: str | None = None
+        self._last_launched_app: str | None = None  # tracks actual app used by last launch()
 
     def _detect_terminal(self) -> Literal["iTerm2", "Terminal.app"]:
         """Detect available terminal application.
@@ -260,7 +261,13 @@ end tell
         if not shutil.which("osascript"):
             return None
 
-        if self.terminal == "iTerm2":
+        # Use the app that actually launched the window, not self.terminal.
+        # When terminal=="iTerm2" but the API was unavailable, launch() fell back
+        # to Terminal.app — _last_launched_app records which app was really used.
+        launched_app = self._last_launched_app or self.terminal
+        self._last_launched_app = None  # consume it
+
+        if launched_app == "iTerm2":
             script = '''
 tell application "iTerm"
     return id of current window as text
@@ -617,8 +624,10 @@ end tell
                 )
                 _record_iterm2_fallback_notice()
             # Fall through to Terminal.app AppleScript path
+            self._last_launched_app = "Terminal.app"
             script = self._build_terminal_app_script(options)
         else:
+            self._last_launched_app = "Terminal.app"
             script = self._build_terminal_app_script(options)
 
         # Check osascript availability (needed for Terminal.app fallback path)
