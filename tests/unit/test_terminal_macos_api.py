@@ -525,6 +525,7 @@ class TestLaunchViaIterm2ApiConnectionCrash:
             except Exception: sys.exit(1)
         so that the test fails with SystemExit when the bug is present.
         """
+        import sys
         import asyncio
         import sys
         from unittest.mock import AsyncMock, MagicMock
@@ -664,6 +665,154 @@ class TestLaunchViaIterm2ApiDoubleWindow:
                 f"Expected window_id but got {result!r}. "
                 "asyncio.timeout in _main is causing a double-window by returning "
                 "None even when async_create succeeds."
+            )
+        finally:
+            macos_mod._ITERM2_LIB_AVAILABLE = original_available
+            if sys.modules.get("iterm2") is mock_iterm2:
+                del sys.modules["iterm2"]
+
+
+# ---------------------------------------------------------------------------
+# Regression: iterm2 WebSocket teardown prints raw traceback to user terminal
+# ---------------------------------------------------------------------------
+
+
+class TestLaunchViaIterm2ApiWebsocketTraceback:
+    """Regression tests for fix/iterm2-websocket-traceback.
+
+    Bug discovered: 2026-03-19
+    Platform: macOS
+    Severity: major
+    Source: ad-hoc / user report
+
+    Problem:
+        Running `mc case <N>` prints a raw Python traceback to the user's
+        terminal after the iTerm2 window is successfully created.
+
+        The iterm2 library's _async_dispatch_forever runs a concurrent asyncio
+        task that reads from the WebSocket. When the WebSocket closes with a
+        ConnectionClosedError (e.g. "sent 1000 (OK); no close frame received"),
+        the library's bare except: clause calls traceback.print_exc() directly
+        to sys.stderr — before our exception handlers can suppress it.
+
+        Simultaneously, Window.async_create raises the same error, which _main's
+        except Exception: pass catches, leaving result[0] = None. Because
+        run_until_complete also raises during cleanup, result[0] (which may have
+        been set before the error) is never returned, causing an unnecessary
+        Terminal.app fallback.
+
+    Expected behaviour:
+        _launch_via_iterm2_api redirects sys.stderr during the iterm2 API call
+        so any traceback.print_exc() output is captured and discarded (or logged
+        at DEBUG). The user sees no traceback. If run_until_complete raises after
+        the window was already created, result[0] is still returned.
+
+    Actual behaviour (bug present):
+        The iterm2 library prints the traceback directly to sys.stderr and the
+        user sees a raw Python traceback in their terminal.
+    """
+
+    def test_iterm2_websocket_teardown_stderr_suppressed(self) -> None:
+        """iterm2 traceback.print_exc() during WebSocket teardown must not reach user stderr.
+
+        Simulates the iterm2 library printing a traceback to sys.stderr (as
+        _async_dispatch_forever does via its bare except: clause) and then raising.
+        Asserts that sys.stderr is clean after _launch_via_iterm2_api returns.
+        """
+        import sys
+        import traceback as tb
+        from io import StringIO
+        from unittest.mock import MagicMock
+
+        import mc.terminal.macos as macos_mod
+
+        class _FakeWSError(Exception):
+            """Stand-in for websockets.exceptions.ConnectionClosedError."""
+
+        def _fake_run_until_complete(coro: object) -> None:
+            """Simulates iterm2: prints traceback to sys.stderr then raises."""
+            try:
+                raise _FakeWSError("sent 1000 (OK); no close frame received")
+            except Exception:
+                tb.print_exc(file=sys.stderr)  # iterm2's bare except: does this
+            raise _FakeWSError("sent 1000 (OK); no close frame received")
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.run_until_complete = _fake_run_until_complete
+
+        original_available = macos_mod._ITERM2_LIB_AVAILABLE
+        macos_mod._ITERM2_LIB_AVAILABLE = True
+
+        captured = StringIO()
+        try:
+            sys.modules["iterm2"] = mock_iterm2  # type: ignore[assignment]
+
+            launcher = MacOSLauncher("iTerm2")
+            options = _make_options()
+
+            real_stderr = sys.stderr
+            sys.stderr = captured
+            try:
+                launcher._launch_via_iterm2_api(options)
+            finally:
+                sys.stderr = real_stderr
+        finally:
+            macos_mod._ITERM2_LIB_AVAILABLE = original_available
+            if sys.modules.get("iterm2") is mock_iterm2:
+                del sys.modules["iterm2"]
+
+        stderr_output = captured.getvalue()
+        assert stderr_output == "", (
+            f"BUG: iterm2 WebSocket teardown traceback reached user stderr:\n{stderr_output}"
+        )
+
+    def test_iterm2_cleanup_raise_still_returns_window_id(self) -> None:
+        """Window ID captured before cleanup raise must be returned, not lost.
+
+        When run_until_complete raises during WebSocket teardown AFTER the window
+        was already created (result[0] was set), _launch_via_iterm2_api must
+        still return the window_id rather than propagating the exception.
+        """
+        import sys
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
+        import mc.terminal.macos as macos_mod
+
+        class _FakeWSError(Exception):
+            pass
+
+        mock_window = MagicMock()
+        mock_window.window_id = "w_captured_123"
+
+        def _fake_run_until_complete(coro: object) -> None:
+            """Runs _main (sets result[0]), then raises to simulate cleanup failure."""
+
+            async def wrapper() -> None:
+                await coro(MagicMock())  # type: ignore[operator]
+
+            asyncio.run(wrapper())
+            raise _FakeWSError("WebSocket close: no close frame received")
+
+        mock_iterm2 = MagicMock()
+        mock_iterm2.Window.async_create = AsyncMock(return_value=mock_window)
+        mock_iterm2.run_until_complete = _fake_run_until_complete
+
+        original_available = macos_mod._ITERM2_LIB_AVAILABLE
+        macos_mod._ITERM2_LIB_AVAILABLE = True
+
+        try:
+            sys.modules["iterm2"] = mock_iterm2  # type: ignore[assignment]
+
+            launcher = MacOSLauncher("iTerm2")
+            options = _make_options()
+
+            result = launcher._launch_via_iterm2_api(options)
+
+            assert result == "w_captured_123", (
+                f"Expected window_id 'w_captured_123' but got {result!r}. "
+                "Cleanup exception from run_until_complete must not discard the "
+                "already-captured window_id."
             )
         finally:
             macos_mod._ITERM2_LIB_AVAILABLE = original_available
