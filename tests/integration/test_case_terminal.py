@@ -1244,12 +1244,18 @@ def test_container_ocm_env_setup_https_proxy_in_bashrc_regression() -> None:
 
 @pytest.mark.integration
 def test_container_ocm_env_setup_https_proxy_absent_when_unset_regression() -> None:
-    """Regression — HTTPS_PROXY must not appear in bashrc when host env is unset.
+    """Regression — HTTPS_PROXY must not appear in bashrc when host env is unset and no system proxy.
 
     Ensures the fix is conditional (reads from host env) and does not
     hardcode the proxy value.
 
     Bug discovered: 2026-03-08
+    Updated: 2026-03-19 — mock detect_macos_proxy() returning None so the test properly
+    isolates the "no env var AND no system proxy" scenario. Without this mock, on macOS
+    machines with a corporate system proxy, detect_macos_proxy() reads scutil --proxy and
+    injects HTTPS_PROXY into the bashrc even when the host env var is absent, causing a
+    false failure. The correct behaviour under test is: when neither the host env var nor
+    the macOS system proxy provides a value, HTTPS_PROXY must not appear in the bashrc.
     """
     import os
     from unittest.mock import patch
@@ -1259,11 +1265,12 @@ def test_container_ocm_env_setup_https_proxy_absent_when_unset_regression() -> N
     metadata = {"case_number": "12345678"}
     env_without_proxy = {k: v for k, v in os.environ.items() if k != "HTTPS_PROXY"}
 
-    with patch.dict(os.environ, env_without_proxy, clear=True):
+    with patch.dict(os.environ, env_without_proxy, clear=True), \
+         patch("mc.terminal.shell.detect_macos_proxy", return_value=None):
         bashrc = generate_bashrc("12345678", metadata)
 
     assert "HTTPS_PROXY" not in bashrc, (
-        "bashrc must not contain HTTPS_PROXY when host env var is absent"
+        "bashrc must not contain HTTPS_PROXY when host env var is absent and no system proxy"
     )
 
 
