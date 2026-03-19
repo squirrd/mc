@@ -10,6 +10,7 @@
 - ✅ **v2.0.4 Foundation** - Phases 26-28 (shipped 2026-02-19)
 - ✅ **v2.0.5 Auto-Update & Terminal** - Phases 29-32 (shipped 2026-03-12)
 - ✅ **v2.0.6 iTerm2 Hotfix** - unplanned fixes (shipped 2026-03-16)
+- 🔄 **v2.0.7 OCM Integration & Container Tooling** - Phases 33-36 (in progress)
 
 ## Phases
 
@@ -62,10 +63,78 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 
 </details>
 
+---
+
+## v2.0.7 OCM Integration & Container Tooling (Phases 33-36)
+
+### Phase 33: Container Setup — Config Mount & Claude Code
+
+**Goal:** Fix the missing mc config issue in containers and add Claude Code, both are Containerfile/mount changes that belong together.
+
+**Requirements:** CNT-01, CNT-02, CNT-03, CLD-01, CLD-02, CLD-03
+
+**Success criteria:**
+1. `mc case-comments <case>` runs inside container without triggering setup wizard
+2. Container cannot write to `~/mc/config` (mount is read-only)
+3. `claude` command is available inside container (`claude --version` succeeds)
+4. `claude` session inside container uses same auth as host (no re-login needed)
+5. All existing container tests still pass
+
+---
+
+### Phase 34: Case Data Store
+
+**Goal:** Extract all available case metadata from the Red Hat API and write it to `case.json` + `case.env` inside the case workspace before/during terminal attachment.
+
+**Requirements:** CDS-01, CDS-02, CDS-03, CDS-04, CDS-05
+
+**Success criteria:**
+1. `/case/case.json` exists and is valid JSON after `mc case N` runs
+2. `/case/case.env` exists and is `source`-able in bash after `mc case N` runs
+3. Both files contain at minimum: case_number, cluster_id (empty string if unknown), customer_name, summary, severity, status, product
+4. Files are refreshed (overwritten) on every `mc case N` invocation
+5. `cluster_id` key present in both files even when the API doesn't return one (empty string, not absent)
+6. Unit tests cover file writing and all field extraction/fallback scenarios
+
+---
+
+### Phase 35: Backplane Auto-Login
+
+**Goal:** Automatically run `ocm backplane login <cluster-id>` inside the container when a terminal is attached, using the cluster ID from case.json, with user-prompt fallback and StateDatabase persistence.
+
+**Requirements:** BPL-01, BPL-02, BPL-03, BPL-04, BPL-05
+
+**Success criteria:**
+1. When `mc case N` opens a terminal and cluster_id is present in case.json, `ocm backplane login` runs automatically inside the container
+2. `oc get nodes` succeeds in the container immediately after shell opens (cluster is logged in)
+3. When cluster_id is absent, user is prompted — entered ID is stored in StateDatabase
+4. Subsequent `mc case N` on same case reuses stored cluster ID without re-prompting
+5. Backplane login failure prints warning but does not prevent shell from opening
+6. StateDatabase `containers` table has `cluster_id` column (migration-safe)
+7. Unit tests for StateDatabase migration and cluster ID read/write
+
+---
+
+### Phase 36: OCM Token Background Monitor
+
+**Goal:** Add a host-side daemon thread that monitors OCM refresh token expiry every 30 minutes and notifies the user + triggers re-login when expiry is within 60 minutes.
+
+**Requirements:** OCM-01, OCM-02, OCM-03, OCM-04, OCM-05
+
+**Success criteria:**
+1. OCM monitor starts as daemon thread when any `mc` command runs on host
+2. When refresh token `exp` is within 60 minutes: warning message is printed to terminal
+3. `ocm login --use-auth-code --url=prd` runs in background subprocess after warning
+4. When `ocm.json` is not found: prints informational message (not silent)
+5. No mc command is delayed or blocked by the OCM monitor
+6. Unit tests cover JWT decode, expiry logic (near-expiry, expired, fresh), and file-absent case
+
+---
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 29 → 30 → 31 → 32
+Phases execute in numeric order: 33 → 34 → 35 → 36
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -79,5 +148,7 @@ Phases execute in numeric order: 29 → 30 → 31 → 32
 | 30. mc-update Core | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 31. Version Pinning | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |
-
-**v2.0.5 SHIPPED 2026-03-12** — See milestones/v2.0.5-ROADMAP.md
+| 33. Container Setup | v2.0.7 | 0/? | Pending | — |
+| 34. Case Data Store | v2.0.7 | 0/? | Pending | — |
+| 35. Backplane Auto-Login | v2.0.7 | 0/? | Pending | — |
+| 36. OCM Token Monitor | v2.0.7 | 0/? | Pending | — |
