@@ -453,7 +453,6 @@ def test_container_delete_clears_window_registry_regression(mocker, tmp_path):
         # Step 1: Create a real Podman container
         container_manager.create(
             case_number=test_case_number,
-            image="mc-rhel10:latest",
             workspace_path=str(test_base_dir / "workspaces" / test_case_number),
         )
 
