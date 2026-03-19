@@ -4,9 +4,11 @@
 # Usage:
 #   cleanup-worktree.sh <branch-path>
 #   cleanup-worktree.sh <branch-path> --merge-into <target-branch>
+#   cleanup-worktree.sh <branch-path> --keep-branch
 #
 # Examples:
 #   cleanup-worktree.sh fix/container-attach-leak --merge-into main
+#   cleanup-worktree.sh fix/container-attach-leak --keep-branch
 #   cleanup-worktree.sh fix/container-attach-leak/test-fd-cleanup --merge-into fix/container-attach-leak
 #
 # Safety:
@@ -23,14 +25,19 @@ fi
 
 BRANCH_PATH="$1"
 MERGE_INTO=""
+KEEP_BRANCH=""
 
-# Parse optional --merge-into flag
+# Parse optional flags
 shift
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --merge-into)
             MERGE_INTO="$2"
             shift 2
+            ;;
+        --keep-branch)
+            KEEP_BRANCH="1"
+            shift 1
             ;;
         *)
             echo "Unknown argument: $1" >&2
@@ -121,15 +128,22 @@ if [[ -n "$MERGE_INTO" ]]; then
     echo "Merged '$BRANCH_PATH' → '$MERGE_INTO' (sha: $MERGE_SHA)"
 fi
 
-# Delete the branch
-git branch -d "$BRANCH_PATH"
-echo "Deleted branch: $BRANCH_PATH"
+# Delete the branch (unless --keep-branch)
+if [[ -z "$KEEP_BRANCH" ]]; then
+    git branch -d "$BRANCH_PATH"
+    echo "Deleted branch: $BRANCH_PATH"
+fi
 
 if [[ -n "$MERGE_INTO" ]]; then
     echo ""
     echo "Cleanup complete:"
     echo "  Merged : $BRANCH_PATH → $MERGE_INTO"
     echo "  SHA    : $MERGE_SHA"
+elif [[ -n "$KEEP_BRANCH" ]]; then
+    echo ""
+    echo "Cleanup complete:"
+    echo "  Worktree removed : $WORKTREE_PATH"
+    echo "  Branch retained  : $BRANCH_PATH"
 else
     echo "Cleanup complete: $BRANCH_PATH"
 fi

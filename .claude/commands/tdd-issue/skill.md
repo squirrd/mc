@@ -45,14 +45,30 @@ Each issue lives in its own git worktree. Multiple issues can run concurrently.
 <step name="bootstrap">
 **STEP 0 — Bootstrap** (runs silently before anything else)
 
-Run the bootstrap script to initialise .tdd/ directory structure:
+**0a — Verify working branch is `main`:**
+
+```bash
+git -C /Users/dsquirre/Repos/mc branch --show-current
+```
+
+If the output is not `main`, STOP immediately and display:
+
+```
+ERROR: tdd-issue must start from the main branch.
+Current branch: <current-branch>
+Switch to main first:
+  git checkout main
+```
+
+**0b — Run bootstrap:**
 
 ```bash
 cd /Users/dsquirre/Repos/mc
 bash .claude/commands/tdd-issue/scripts/bootstrap.sh
 ```
 
-After bootstrap:
+**0c — Check for in-progress issues:**
+
 - Read `.tdd/issues/ISSUE_TRACKING.md`
 - If any issues have status = IN_PROGRESS, display them:
   ```
@@ -61,7 +77,36 @@ After bootstrap:
   ```
   Ask: "Would you like to resume one of these, or start a new issue?"
   - Resume → jump to the appropriate step based on last known status in the tracking file
-  - New → continue to STEP 1
+  - New → continue to 0d
+
+**0d — Pre-flight test run (new issues only):**
+
+Run the full test suite from `main`:
+
+```bash
+cd /Users/dsquirre/Repos/mc && uv run pytest tests/unit/ tests/integration/ -q --tb=short 2>&1
+```
+
+If all tests PASS → proceed to STEP 1.
+
+If any tests FAIL → STOP and display:
+
+```
+PRE-FLIGHT FAILURE — <N> tests failing on main.
+Resolve these before starting a new issue.
+
+Failing tests:
+  FAILED tests/unit/test_foo.py::test_bar_something
+    AssertionError: expected X, got Y
+  FAILED tests/integration/test_container.py::test_attach_reconnects
+    RuntimeError: ...
+
+To fix: open a new Claude Code window and run /tdd-issue, reporting one of the
+above failures as the bug. Fix all failures on main before returning here.
+
+To reproduce all failures:
+  cd /Users/dsquirre/Repos/mc && uv run pytest tests/unit/ tests/integration/ -q --tb=short
+```
 </step>
 
 <step name="intake">
@@ -591,28 +636,44 @@ bash .claude/commands/tdd-issue/scripts/update-tracking.sh \
 ```
 </step>
 
-<step name="merge_and_close">
-**STEP 11 — Merge and close**
+<step name="promote_and_close">
+**STEP 11 — Promote branch and close**
 
-Run the cleanup script:
+**11a — Remove the worktree, keep the branch:**
+
 ```bash
 cd /Users/dsquirre/Repos/mc
 bash .claude/commands/tdd-issue/scripts/cleanup-worktree.sh \
-  "fix/<shortFixName>" --merge-into main
+  "fix/<shortFixName>" --keep-branch
 ```
 
-This script:
-1. Removes worktree `.tdd/worktrees/fix/<shortFixName>`
-2. Merges `fix/<shortFixName>` into `main` with `--no-ff`
-3. Deletes branch `fix/<shortFixName>`
+This removes the worktree at `.tdd/worktrees/fix/<shortFixName>` but leaves branch
+`fix/<shortFixName>` intact in the primary repository.
 
-IF merge has conflicts: the script aborts and reports. Do NOT force-merge.
-Resolve conflicts manually, commit, then re-run cleanup.
+**11b — Rebase the fix branch onto `main`:**
 
-After successful merge, close the issue in tracking:
 ```bash
+cd /Users/dsquirre/Repos/mc
+git rebase main fix/<shortFixName>
+```
+
+If rebase has conflicts, STOP and display:
+
+```
+REBASE CONFLICT on fix/<shortFixName>.
+Resolve manually, then continue:
+  git rebase --continue   (after resolving each conflicting file)
+  git rebase --abort      (to cancel and return to pre-rebase state)
+```
+
+Do NOT proceed to 11c until the rebase completes cleanly.
+
+**11c — Mark issue as BRANCH_READY in tracking:**
+
+```bash
+cd /Users/dsquirre/Repos/mc
 bash .claude/commands/tdd-issue/scripts/update-tracking.sh \
-  --action close-issue \
+  --action promote-issue \
   --issue "fix/<shortFixName>"
 ```
 
@@ -622,7 +683,11 @@ Issue fix/<shortFixName> complete.
 
 Integration test : GREEN (test_<name>_regression)
 Unit tests fixed : <N>
-Merged to main   : <commit sha>
+Branch           : fix/<shortFixName> (rebased onto main, ready for review)
+
+The branch has NOT been merged to main.
+Review and merge when ready:
+  git checkout main && git merge --no-ff fix/<shortFixName>
 
 See .tdd/issues/ISSUE_TRACKING.md for full history.
 ```
@@ -637,7 +702,7 @@ See .tdd/issues/ISSUE_TRACKING.md for full history.
 - Unit tests for each changed source file (coverage maintained)
 - All tests GREEN before merging
 - Issue tracked in .tdd/issues/ISSUE_TRACKING.md from intake through DONE
-- Clean no-ff merge to main with no regressions
+- Branch `fix/<shortFixName>` rebased onto `main` in the primary repo, worktree removed — NOT merged to main
 </output>
 
 <anti_patterns>
@@ -683,7 +748,9 @@ See .tdd/issues/ISSUE_TRACKING.md for full history.
 </anti_patterns>
 
 <success_criteria>
-- [ ] STEP 0: .tdd/ structure created, .gitignore updated, tracking file seeded
+- [ ] STEP 0a: Confirmed working branch is `main` — blocked if not
+- [ ] STEP 0b: .tdd/ structure created, .gitignore updated, tracking file seeded
+- [ ] STEP 0d: All existing unit and integration tests GREEN on main before issue work begins
 - [ ] STEP 1: All 5 intake questions answered, shortFixName confirmed by user
 - [ ] STEP 2: Bug reproduced live with exact error captured
 - [ ] STEP 3: Worktree and branch created, issue added to tracking (IN_PROGRESS)
@@ -696,5 +763,5 @@ See .tdd/issues/ISSUE_TRACKING.md for full history.
 - [ ] STEP 8: All agents spawned in parallel (max 5)
 - [ ] STEP 9: All agents GREEN or BLOCKED resolved
 - [ ] STEP 10: Integration test PASSES — GREEN confirmed
-- [ ] STEP 11: Merged to main, worktree removed, issue status = DONE
+- [ ] STEP 11: Worktree removed, branch `fix/<shortFixName>` rebased onto main in primary repo, issue status = BRANCH_READY
 </success_criteria>

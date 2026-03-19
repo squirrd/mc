@@ -9,6 +9,7 @@
 #   update-tracking.sh --action update-integration-test --issue <branch> --test-function <fn> --status <RED|GREEN>
 #   update-tracking.sh --action add-unit-test   --issue <branch> --unit-test <name> --src-file <file> --branch <branch> --status <RED|GREEN|MERGED>
 #   update-tracking.sh --action update-unit-test --issue <branch> --unit-test <name> --status <RED|GREEN|MERGED>
+#   update-tracking.sh --action promote-issue   --issue <branch>
 #   update-tracking.sh --action close-issue     --issue <branch>
 
 set -euo pipefail
@@ -177,6 +178,39 @@ def update_unit_test(content, issue, unit_test, status):
     content = re.sub(pattern, replace_status, content)
     return content
 
+def promote_issue(content, issue):
+    # Extract the issue section from Active Issues
+    pattern = rf"(### {re.escape(issue)}\n.*?---\n)"
+    match = re.search(pattern, content, re.DOTALL)
+    if not match:
+        print(f"WARNING: Issue {issue} not found in Active Issues — may already be promoted or closed.", file=sys.stderr)
+        return content
+
+    issue_block = match.group(1)
+
+    # Update Status to BRANCH_READY and add Promoted date
+    issue_block = re.sub(r"\| Status\s+\| IN_PROGRESS\s+\|", f"| Status      | BRANCH_READY                                    |", issue_block)
+    issue_block = re.sub(r"\| Created\s+\| (\S+)\s+\|", lambda m: m.group(0).rstrip() + f"\n| Promoted    | {today()}                                       |", issue_block, count=1)
+    issue_block = re.sub(r"\| Worktree\s+\|[^\|]+\|", f"| Branch      | {issue} (rebased on main, ready for review)     |", issue_block)
+
+    # Remove from Active Issues
+    content = content.replace(match.group(1), "", 1)
+
+    # Append to Completed Issues
+    completed_section = "## Completed Issues"
+    if completed_section in content:
+        content = content.replace(
+            completed_section,
+            completed_section + "\n" + issue_block,
+            1,
+        )
+    else:
+        content += "\n## Completed Issues\n\n" + issue_block
+
+    # Clean up empty Active Issues placeholder
+    content = re.sub(r"## Active Issues\n\n---\n", "## Active Issues\n\n(none)\n\n---\n", content)
+    return content
+
 def close_issue(content, issue):
     # Extract the issue section from Active Issues
     pattern = rf"(### {re.escape(issue)}\n.*?---\n)"
@@ -256,12 +290,14 @@ elif action == "update-unit-test":
         unit_test=args["unit-test"],
         status=args["status"],
     )
+elif action == "promote-issue":
+    content = promote_issue(content, issue=args["issue"])
 elif action == "close-issue":
     content = close_issue(content, issue=args["issue"])
 else:
     print(f"ERROR: Unknown action '{action}'", file=sys.stderr)
     print("Valid actions: add-issue, add-integration-test, update-integration-test,", file=sys.stderr)
-    print("               add-unit-test, update-unit-test, close-issue", file=sys.stderr)
+    print("               add-unit-test, update-unit-test, promote-issue, close-issue", file=sys.stderr)
     sys.exit(1)
 
 content = update_last_modified(content)
