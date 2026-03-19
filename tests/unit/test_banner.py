@@ -341,3 +341,111 @@ class TestShowUpdateBanner:
                                     with patch("mc.banner._write_suppression_timestamp"):
                                         show_update_banner()
         mock_render.assert_called_once_with("2.0.4", "2.0.5", "2.0.3")
+
+
+class TestVersionCheckFailureThrottle:
+    """Regression tests for failure throttle in show_update_banner().
+
+    Bug discovered: 2026-03-19
+    Platform: Both
+    Severity: minor
+    Source: ad-hoc / user report
+
+    Problem:
+    show_update_banner() has no failure throttle. When _fetch_with_timeout()
+    returns None (GitHub 404, network error, or no releases), no failure
+    timestamp is stored. The next MC invocation immediately hits GitHub again,
+    causing a network call on every single MC run when the check is failing.
+
+    Additionally, stale config keys (last_check, last_status_code) written by
+    the now-dead version_check.py VersionChecker were never cleaned up from
+    config.toml, leaving misleading entries.
+
+    Expected: when last fetch failed < 1 hour ago, the fetch is skipped entirely.
+    Actual:   fetch is called again on every MC invocation regardless.
+
+    This test ensures the regression does not recur.
+    """
+
+    def test_skips_fetch_when_last_check_failed_recently(self) -> None:
+        """show_update_banner() must NOT fetch when last fetch failed < 1 hour ago."""
+        import time
+
+        recent_failure_ts = time.time() - 60  # 1 minute ago — within 1-hour throttle
+
+        mock_config = MagicMock()
+        mock_config.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_banner_shown": None,
+            "last_failed_fetch": recent_failure_ts,
+        }
+
+        with patch("mc.banner._is_version_invocation", return_value=False), \
+             patch("sys.stdout") as mock_stdout, \
+             patch("mc.banner._fetch_with_timeout", return_value=None) as mock_fetch, \
+             patch("mc.config.manager.ConfigManager", return_value=mock_config):
+            mock_stdout.isatty.return_value = True
+            show_update_banner()
+
+        mock_fetch.assert_not_called()
+
+    def test_does_fetch_when_last_failure_was_over_one_hour_ago(self) -> None:
+        """show_update_banner() MUST fetch when last failure was > 1 hour ago."""
+        import time
+
+        old_failure_ts = time.time() - 3700  # just over 1 hour ago
+
+        mock_config = MagicMock()
+        mock_config.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_banner_shown": None,
+            "last_failed_fetch": old_failure_ts,
+        }
+
+        with patch("mc.banner._is_version_invocation", return_value=False), \
+             patch("sys.stdout") as mock_stdout, \
+             patch("mc.banner._fetch_with_timeout", return_value=None) as mock_fetch, \
+             patch("mc.config.manager.ConfigManager", return_value=mock_config):
+            mock_stdout.isatty.return_value = True
+            show_update_banner()
+
+        mock_fetch.assert_called_once()
+
+    def test_does_fetch_when_no_previous_failure_recorded(self) -> None:
+        """show_update_banner() must fetch when last_failed_fetch is None (first run)."""
+        mock_config = MagicMock()
+        mock_config.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_banner_shown": None,
+            "last_failed_fetch": None,
+        }
+
+        with patch("mc.banner._is_version_invocation", return_value=False), \
+             patch("sys.stdout") as mock_stdout, \
+             patch("mc.banner._fetch_with_timeout", return_value=None) as mock_fetch, \
+             patch("mc.config.manager.ConfigManager", return_value=mock_config):
+            mock_stdout.isatty.return_value = True
+            show_update_banner()
+
+        mock_fetch.assert_called_once()
+
+    def test_stores_failure_timestamp_when_fetch_returns_none(self) -> None:
+        """show_update_banner() must write last_failed_fetch when fetch returns None."""
+        mock_config = MagicMock()
+        mock_config.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_banner_shown": None,
+            "last_failed_fetch": None,
+        }
+
+        with patch("mc.banner._is_version_invocation", return_value=False), \
+             patch("sys.stdout") as mock_stdout, \
+             patch("mc.banner._fetch_with_timeout", return_value=None), \
+             patch("mc.config.manager.ConfigManager", return_value=mock_config):
+            mock_stdout.isatty.return_value = True
+            show_update_banner()
+
+        mock_config.update_version_config.assert_called_once()
+        call_kwargs = mock_config.update_version_config.call_args[1]
+        assert "last_failed_fetch" in call_kwargs
+        assert isinstance(call_kwargs["last_failed_fetch"], float)

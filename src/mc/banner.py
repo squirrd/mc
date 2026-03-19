@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from datetime import date, datetime
 from typing import Optional
 
 _TIMEOUT_SECONDS = 1.5
 _BANNER_TITLE = "MC Update Available"
 _BORDER_STYLE = "yellow"
+_FAILURE_THROTTLE_SECONDS = 3600  # 1 hour between retries after a failed fetch
 
 
 def _is_version_invocation() -> bool:
@@ -106,8 +108,9 @@ def show_update_banner() -> None:
 
     - Skips entirely if not a TTY (piped run)
     - Skips if today's date matches last_banner_shown date in config
+    - Skips if last fetch failed < _FAILURE_THROTTLE_SECONDS ago (1 hour)
     - Fetches latest version from GitHub with a 1.5s timeout
-    - On timeout: prints brief note to stderr, does NOT write suppression timestamp
+    - On timeout/failure: records last_failed_fetch timestamp; skips retry for 1 hour
     - On network failure: returns None from _fetch_with_timeout (treated as timeout)
     - Skips if mc --version invocation
     """
@@ -126,11 +129,20 @@ def show_update_banner() -> None:
 
     from mc.config.manager import ConfigManager
 
-    version_config = ConfigManager().get_version_config()
+    config_manager = ConfigManager()
+    version_config = config_manager.get_version_config()
     pinned_mc: str = version_config["pinned_mc"]
+
+    # Skip fetch if the last attempt failed recently (failure throttle)
+    last_failed_fetch: Optional[float] = version_config.get("last_failed_fetch")
+    if last_failed_fetch is not None:
+        if time.time() - last_failed_fetch < _FAILURE_THROTTLE_SECONDS:
+            return
 
     latest = _fetch_with_timeout()
     if latest is None:
+        # Record failure timestamp so we don't hammer GitHub on every MC run
+        config_manager.update_version_config(last_failed_fetch=time.time())
         return
 
     from packaging.version import InvalidVersion, Version
