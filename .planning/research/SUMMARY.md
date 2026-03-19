@@ -1,251 +1,165 @@
-# Project Research Summary
+# Research Summary: v2.0.7 OCM Integration & Container Tooling
 
-**Project:** MC CLI Auto-Update and Version Management
-**Domain:** CLI tool version management with dual-artifact coordination (CLI + container)
-**Researched:** 2026-02-11
-**Confidence:** HIGH
+**Project:** MC CLI v2.0.7
+**Domain:** OCM token lifecycle, container configuration sharing, Claude Code in Podman
+**Researched:** 2026-03-19
+**Confidence:** HIGH (codebase-verified + live data)
 
 ## Executive Summary
 
-MC CLI requires a sophisticated auto-update system that manages both the CLI tool itself (distributed via uv/PyPI) and container images (hosted on Quay.io). Expert implementations in this domain emphasize non-blocking version checks with aggressive throttling, graceful degradation when APIs are unavailable, and explicit user control over update timing through version pinning. The recommended approach leverages MC's existing infrastructure (TOML config, Rich terminal output, requests library, platformdirs) and adds only one new dependency: the `packaging` library for PEP 440-compliant version comparison.
+All four v2.0.7 features have clear, low-risk implementation paths confirmed directly against the existing codebase. No new external dependencies are required. The OCM token monitor follows established daemon-thread patterns from `version_check.py`. The config mount is a one-line change to `ContainerManager.create()`. The backplane auto-login is best-effort (cluster ID from Red Hat API if available, user-prompt fallback). Claude Code installation is straightforward npm + ~/.claude mount.
 
-The critical architectural principle is separation of concerns: version checking must never block CLI operations. Background checks with hourly throttling, ETag-based conditional requests to prevent GitHub API rate limiting (60 req/hour unauthenticated), and stale-while-revalidate caching ensure the CLI remains responsive even when networks are slow or registries are down. The update execution mechanism delegates to uv's battle-tested `tool upgrade` command rather than attempting in-place self-updates, avoiding the platform-specific complexity and failure modes that plague custom update systems.
+The highest-risk item is the cluster ID extraction: the Red Hat API `/v1/cases/{case_number}` endpoint may include a `clusterId` field for OCP/ROSA cases but NOT for non-cluster cases — confirmed by inspecting cached case data. The implementation must handle absent cluster IDs gracefully.
 
-Key risks center on race conditions (concurrent config writes corrupting TOML files), version comparison bugs (infinite update loops), and notification fatigue (users training to ignore update banners). These are mitigated through file locking, semantic versioning via the `packaging` library, and notification suppression (maximum once per day per version). The dual-artifact nature introduces unique challenges around container lifecycle awareness—users must understand that pulling a new image doesn't update running containers—requiring clear messaging and version mismatch indicators in container listings.
+## Feature Research
 
-## Key Findings
+### Feature 1: OCM Token Background Monitor
 
-### Recommended Stack
+**OCM config file structure** (`~/Library/Application Support/ocm/ocm.json` on macOS, `~/.config/ocm/ocm.json` on Linux):
+```json
+{
+  "access_token": "<JWT>",    // expires in ~15 minutes
+  "client_id": "ocm-cli",
+  "refresh_token": "<JWT>",   // expires in ~10 hours (confirmed from live file)
+  "scopes": ["openid"],
+  "token_url": "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token",
+  "url": "https://api.openshift.com"
+}
+```
 
-MC CLI's existing stack provides nearly everything needed for auto-update functionality. The only required addition is the `packaging` library (>=24.0) for PEP 440-compliant version comparison. Recent performance improvements in packaging v26.0 (January 2026) deliver 2-5x faster version parsing, making it ideal for frequent background checks.
+**JWT decoding:** Python stdlib only — `base64.b64decode(payload_part + "==")` then `json.loads()`. The `exp` claim is a Unix timestamp. No new dependencies required.
 
-**Core technologies:**
-- `packaging>=24.0`: PEP 440 version comparison and parsing — de facto standard for Python versioning, handles pre-releases/post-releases/epochs correctly, 3x performance improvement in v26.0
-- `requests>=2.31.0`: GitHub/Quay.io API calls — already present, handles both JSON APIs and supports ETag conditional requests for rate limit management
-- `tomli_w>=1.0.0`: TOML config persistence — already present, safe serialization for version pins and timestamps
-- `platformdirs>=4.0.0`: Cross-platform cache paths — already present, provides XDG-compliant cache directory for throttle timestamps
-- `rich>=14.0.0`: Update notification banners — already present, Panel component perfect for non-intrusive update notifications
+**What to monitor:** Check the **refresh_token** `exp` claim. When within 1 hour of expiry, the user needs to re-authenticate via `ocm login --use-auth-code --url=prd`.
 
-**Integration with uv:**
-- Delegate upgrade execution to `uv tool upgrade mc-cli` (atomic updates, proper dependency resolution)
-- Delegate pinning to `uv tool install mc-cli==X.Y.Z` (explicit version installation)
-- No custom download/install logic needed (uv handles complexity)
+**The access_token** (15 min) is auto-refreshed by OCM internally — monitoring it would trigger too frequently.
 
-### Expected Features
+**Trigger:** `ocm login --use-auth-code --url=prd` launches a browser for auth-code flow. This is user-interactive. Best-effort: run in background subprocess, print warning ahead of time so user can be ready.
 
-Research reveals a clear hierarchy of user expectations based on how established CLI tools (GitHub CLI, rustup, uv) handle updates.
+**Notification message:** "OCM refresh token expiring in <N> min. Please complete SSO login in the browser that will open shortly."
 
-**Must have (table stakes):**
-- Background version checking with throttling — users expect tools to know about updates without manual checking
-- Update availability notifications — silence means "checked and current," not "haven't checked"
-- Manual update trigger — explicit command to upgrade (trust but verify, not automatic)
-- Graceful network failure — CLI must work offline or when APIs are down
-- Timestamp-based throttling — prevents API hammering, respects rate limits (hourly for background, daily for notifications)
-- Current version indicator — when listing versions, mark which is installed
+**Implementation pattern:** Follow `version_check.py` — daemon thread, 30-min poll interval, fail silently if `ocm.json` absent (user not logged in), store last-check in state file.
 
-**Should have (competitive advantage):**
-- Version pinning with grace period — pin + suppress warnings for 30 days, then weekly reminders (unique to MC)
-- Dual-artifact version management — manage both CLI and container from single utility (unique to containerized CLIs)
-- Smart notifications with context — not just "update available" but "pinned to v2.0.4 (30 days old), run mc-update to unpin"
-- Container auto-pull with pin respect — automatically pull new images unless pinned, warn when running stale version
-- Unified update utility — single `mc-update` command for CLI upgrades, container pulls, version listing, pinning
-- Stale pin warnings — proactive warnings when pinned version becomes outdated (>30 days old)
-
-**Defer (v2+):**
-- Changelog integration — show what's new in each version (can link to GitHub releases initially)
-- Update analytics — track update adoption rates (no telemetry infrastructure currently)
-- Multi-registry support — alternative container registries (Quay.io sufficient for v1)
-- Pre-release/beta channels — opt into unstable versions (use git install for bleeding edge)
-
-### Architecture Approach
-
-The standard architecture for CLI auto-update systems follows a layered approach with strict separation between version checking (non-blocking, background) and update execution (explicit, user-triggered). MC's implementation should hook into the existing CLI entry point immediately after logging setup but before config load, ensuring version checks run on every invocation without blocking command execution.
-
-**Major components:**
-1. **VersionChecker** (utils/version_checker.py) — Query GitHub/Quay APIs, parse responses, compare versions using packaging.version.Version, handle rate limiting with ETag conditional requests, implement hourly throttle with timestamp cache
-2. **ConfigExtension** (config/models.py) — Extend existing schema with version_management section containing pinned_mc_version, pinned_container_version, last_version_check timestamp, available versions cache
-3. **UpdateBanner** (utils/update_banner.py) — Display Rich Panel notifications at command completion (non-intrusive), show actionable commands, suppress duplicate notifications (once per day per version)
-4. **mc-update CLI** (cli/update.py) — Separate console_scripts entry point that survives package upgrades, executes subprocess(['uv', 'tool', 'upgrade', 'mc-cli']), validates post-upgrade, provides recovery instructions on failure
-
-**Critical patterns:**
-- **Non-blocking checks:** Throttle to 1 check/hour, fail silently on network errors, never block command execution
-- **ETag caching:** Use If-None-Match headers to get HTTP 304 Not Modified responses (saves API quota, doesn't count against rate limit)
-- **File locking:** Use filelock library for atomic config writes to prevent corruption from concurrent mc processes
-- **Stale-while-revalidate:** Return cached version immediately, trigger background revalidation if cache older than 1 hour
-
-### Critical Pitfalls
-
-Research identified 10 critical pitfalls with detailed prevention strategies. The top 5 most dangerous:
-
-1. **Synchronous version check blocking startup** — Version checks on every invocation blocking command execution. Prevention: hourly throttle + async background checks + aggressive 2s timeout + fail silently. Must address in Phase 1 or retrofitting is high-cost.
-
-2. **GitHub API rate limiting without fallback** — Unauthenticated API has 60 req/hour limit, easily exhausted by multiple users or CI/CD. Prevention: ETag conditional requests (304 Not Modified doesn't count against limit), cache x-ratelimit headers, exponential backoff on 429, graceful degradation to cached data. Must address in Phase 1.
-
-3. **uv tool upgrade failure leaving broken installation** — Partial upgrade leaves tool unusable. Prevention: health check before upgrade (uv tool list --outdated), validation after (mc --version), recovery instructions on failure (uv tool install --force mc-cli), never upgrade while tool is running (Windows file locks).
-
-4. **Concurrent config file writes causing corruption** — Multiple mc processes updating TOML simultaneously corrupt file. Prevention: filelock library + atomic write pattern (temp file + rename), SQLite for frequently-changing state, separate throttle cache from main config. Must address in Phase 1.
-
-5. **Infinite update loop from version comparison bug** — String comparison instead of semantic versioning causes "2.0.10" < "2.0.9" bugs. Prevention: use packaging.version.Version for all comparisons, test edge cases (pre-releases, multi-digit versions), store last_offered_version to detect loops. Must address in Phase 1.
-
-## Implications for Roadmap
-
-Based on research, the implementation should follow a 3-phase structure that builds foundation first (non-blocking checks, correct version comparison, file locking), then adds update mechanics (uv integration, validation), and finally polishes UX (notification tuning, container lifecycle awareness).
-
-### Phase 1: Version Check Infrastructure
-**Rationale:** Foundation for all version management features. Version checking, throttling, and config safety must be correct before building anything on top. Retrofitting non-blocking architecture or fixing version comparison bugs is expensive.
-
-**Delivers:** Background version checking with hourly throttle, GitHub Releases API integration with ETag support, TOML config extension with file locking, version comparison using packaging library, notification suppression (once per day per version).
-
-**Addresses features:**
-- Background version checking (table stakes)
-- Timestamp-based throttling (table stakes)
-- Graceful network failure (table stakes)
-
-**Avoids pitfalls:**
-- Synchronous version check blocking startup (critical)
-- GitHub API rate limiting without fallback (critical)
-- Concurrent config file writes causing corruption (critical)
-- Infinite update loop from version comparison bug (critical)
-
-**Stack elements:**
-- packaging library for PEP 440 version comparison
-- requests for GitHub API with ETag headers
-- tomli_w + filelock for safe config writes
-- platformdirs for cache directory
-
-**Technical details:**
-- Hook into cli/main.py after logging setup
-- Implement should_check_version() with 1-hour throttle
-- Store last_check timestamp in separate cache file (not main config)
-- Use packaging.version.Version for all comparisons
-- Implement ETag conditional requests (If-None-Match header)
-- File locking for all config writes
-
-### Phase 2: Auto-Update Mechanics
-**Rationale:** With version checking working reliably, add the ability to actually upgrade. Update execution has complex failure modes (broken installations, version mismatches) that require careful validation and recovery mechanisms.
-
-**Delivers:** mc-update CLI utility as separate console_scripts entry, uv tool upgrade integration with pre-flight checks, post-upgrade validation, version pinning (binary: pinned or latest), Quay.io API integration for container version checking.
-
-**Addresses features:**
-- Manual update trigger (table stakes)
-- Version pinning with TOML persistence (differentiator)
-- Container auto-pull preparation (foundation for Phase 3)
-
-**Avoids pitfalls:**
-- uv tool upgrade failure leaving broken installation (critical)
-- Version pinning without escape hatch (after 30 days, show warnings)
-
-**Architecture components:**
-- cli/update.py with separate entry point (survives package upgrades)
-- Pre-flight checks: uv installed, network accessible, no active sessions
-- Post-upgrade validation: run mc --version, check exit code
-- Recovery instructions on failure
-
-**Technical details:**
-- subprocess.run(['uv', 'tool', 'upgrade', 'mc-cli'], check=True)
-- Pin support: subprocess.run(['uv', 'tool', 'install', f'mc-cli=={version}'])
-- Store pinned_mc_version in config with pin_timestamp
-- Quay.io Docker Registry v2 API: /v2/{namespace}/{repo}/tags/list
-- Filter tags with packaging.version.Version (skip "latest", "stable")
-
-### Phase 3: UX Refinement and Container Integration
-**Rationale:** Core functionality (checking, upgrading) is stable. Now add polish: smart notifications with context, container lifecycle awareness, stale pin warnings. These improve UX without risking core stability.
-
-**Delivers:** Smart update notifications with context (pinned version age, versions behind), container auto-pull with pin respect, version listing with release dates and metadata, container version mismatch indicators in mc container list, stale pin warnings (30-day grace period + weekly reminders).
-
-**Addresses features:**
-- Smart notification context (differentiator)
-- Dual-artifact version management (differentiator)
-- Stale pin warnings (differentiator)
-- Version listing with metadata (differentiator)
-
-**Avoids pitfalls:**
-- Update notification spam training users to ignore (show max once per day)
-- Running container not updated but user expects it (clear messaging)
-
-**Architecture components:**
-- Enhanced update_banner.py with rich context
-- Container lifecycle awareness in container list output
-- Pin age calculation and warning logic
-
-**Technical details:**
-- Calculate pin age: datetime.now(UTC) - pin_timestamp
-- Show warnings after 30 days, weekly reminders after 60 days
-- Container list shows: CASE | STATUS | IMAGE | AVAILABLE (with mismatch indicator)
-- Notification context: "Pinned to 2.0.4 (45 days ago), latest: 2.0.9 (security fixes)"
-
-### Phase Ordering Rationale
-
-- **Phase 1 first:** Version checking is the foundation. Non-blocking architecture, correct version comparison, and file locking must be right from the start. Retrofitting these is expensive and risky. All other phases depend on reliable version checking.
-
-- **Phase 2 second:** Update mechanics build on stable version checking. Validation and recovery mechanisms require careful testing. Separating from Phase 1 allows thorough testing of version checking before introducing update execution complexity.
-
-- **Phase 3 last:** UX refinements are valuable but not critical. Can iterate on notification wording, container messaging, and pin warnings without affecting core functionality. Allows real-world feedback from Phase 1-2 to inform UX decisions.
-
-**Dependency chain:**
-- Phase 3 depends on Phase 2 (needs working pin system for stale warnings)
-- Phase 2 depends on Phase 1 (needs reliable version checking before executing upgrades)
-- Phase 1 is foundational (no dependencies)
-
-### Research Flags
-
-**Phases needing deeper research during planning:**
-- **Phase 2: Auto-Update Mechanics** — Reason: uv tool upgrade failure modes are complex (Python version mismatches, Windows file locking, partial installs). Needs research on recovery strategies and validation approaches. Research found diverse failure modes but limited documentation on detection/recovery.
-
-- **Phase 3: Container Integration** — Reason: Interaction between container auto-pull and existing ContainerManager is unclear. Needs research on podman-py integration, image pull timing (don't pull while containers running), and state management (which image version is each container using).
-
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1: Version Check Infrastructure** — Reason: Well-documented patterns. GitHub CLI, rustup, and multiple Python tools (check4updates, update-checker) provide clear implementation examples. ETag usage, throttling strategies, and file locking are established patterns with abundant documentation.
-
-## Confidence Assessment
-
-| Area | Confidence | Notes |
-|------|------------|-------|
-| Stack | HIGH | All recommended technologies verified via official documentation. Packaging library is Python standard (used by pip/setuptools). Existing stack (requests, tomli_w, platformdirs, rich) already present in MC. Only new dependency is packaging. |
-| Features | HIGH | Feature expectations validated across multiple established CLIs (GitHub CLI, rustup, uv). Table stakes features consistent across all three. Differentiators (dual-artifact management, pin grace period) are novel but low-risk additions. |
-| Architecture | HIGH | Standard patterns documented in multiple authoritative sources (Salesforce CLI, Azure CLI, check4updates library). Non-blocking check pattern proven in GitHub CLI (24-hour window). Separation of version checking from update execution is industry standard. |
-| Pitfalls | HIGH | All critical pitfalls documented with real-world examples. GitHub API rate limiting has official documentation. uv upgrade failure modes documented in uv issue tracker. Version comparison bugs have established solutions (packaging library). File locking patterns well-documented. |
-
-**Overall confidence:** HIGH
-
-Research drew from official documentation (GitHub API docs, uv docs, packaging docs, Quay.io API docs), established open-source implementations (GitHub CLI, rustup), and Python-specific libraries (check4updates, update-checker) with proven track records. All critical pitfalls have documented prevention strategies with code examples.
-
-### Gaps to Address
-
-Remaining uncertainties to resolve during implementation:
-
-- **uv installation detection:** Research assumes checking if `uv` binary exists in PATH. Unclear: should mc-update support pip-based upgrades if user installed via pip instead of uv? How to detect installation method reliably? Resolution: Start with uv-only support, document that mc-update requires uv installation. Can add pip support in v2.1 if users request it.
-
-- **Container version pinning integration:** Config schema includes `pinned_container_version` but interaction with existing ContainerManager is undefined. Which component enforces pin during container start? How to show version mismatch in container listings? Resolution: Phase 2 planning should map container pin enforcement into existing container lifecycle. Likely: check pin in container_start() before podman.images.pull().
-
-- **ETag storage location:** Should ETag be stored in config.toml or separate cache file? Config write contention vs. cache coherence tradeoff. Resolution: Store in separate cache file (~/.cache/mc/version_check.json) alongside last_check timestamp. Reduces config write frequency, allows cache clearing without losing pins.
-
-- **Notification display timing:** Show banner at start of command (high visibility, may disrupt output) or end of command (less intrusive, may be missed)? Resolution: Test both during Phase 3 UX refinement. GitHub CLI shows at end (less disruptive). Consider: show at start for major versions, at end for patches.
-
-## Sources
-
-### Primary (HIGH confidence)
-- [PEP 440 – Version Identification and Dependency Specification](https://peps.python.org/pep-0440/) — Official Python versioning standard
-- [GitHub REST API - Releases](https://docs.github.com/en/rest/releases/releases) — Official API documentation for version checking
-- [GitHub Docs: Rate Limits for REST API](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api) — Rate limiting and ETag conditional requests
-- [uv Tool Management](https://docs.astral.sh/uv/guides/tools/) — Official uv documentation for tool upgrade mechanics
-- [Quay.io API Documentation](https://docs.quay.io/api/) — Official container registry API
-- [Docker Registry v2 API](https://docs.docker.com/registry/spec/api/) — Standard for /v2/.../tags/list endpoint
-- [packaging library documentation](https://packaging.pypa.io/en/stable/version.html) — PEP 440 version comparison implementation
-- [Rich library documentation](https://rich.readthedocs.io/en/stable/) — Panel component for update banners
-
-### Secondary (MEDIUM confidence)
-- [GitHub CLI source code](https://github.com/cli/cli) — Real-world implementation of 24-hour version check pattern
-- [Rustup documentation](https://rust-lang.github.io/rustup/) — Auto-update configuration patterns
-- [check4updates Python library](https://github.com/MatthewReid854/check4updates) — Reusable version check implementation
-- [update-checker Python module](https://github.com/bboe/update_checker) — PyPI version checking patterns
-- [filelock library](https://pypi.org/project/filelock/) — File locking for concurrent config writes
-- [How we made Python's packaging library 3x faster](https://iscinumpy.dev/post/packaging-faster/) — Performance improvements in v26.0
-
-### Tertiary (LOW confidence, needs validation)
-- uv GitHub issues (#8028, #11534, #11930, #8528) — Upgrade failure modes and recovery strategies (anecdotal but informative)
-- [Quay.io rate limiting](https://access.redhat.com/solutions/6218921) — Community reports of "few requests per second" limit (not officially documented)
+**Edge cases:**
+- OCM not installed: silently skip (check `ocm_config_path.exists()`)
+- Already expired: still attempt login (it can re-auth from scratch)
+- Token just refreshed by `ocm` itself: the `exp` will have moved forward, no re-login needed
 
 ---
-*Research completed: 2026-02-11*
+
+### Feature 2: Mount ~/mc/config Read-Only in Container
+
+**Current mounts in `ContainerManager.create()`:**
+- `{workspace_path}` → `/case` (rw) — case workspace
+- `~/Library/Application Support/ocm/ocm.json` → `/home/mcuser/.config/ocm/ocm.json` (ro) — OCM credentials
+
+**What's missing:** The container's `/home/mcuser/mc/` starts empty (`~/mc/config/` has an empty `config/` dir). Running `mc case-comments` inside the container triggers the setup wizard because there's no `config.toml`.
+
+**Fix:** Add a third mount:
+- `~/mc/config` → `/home/mcuser/mc/config` (ro) — shares host mc config
+
+**Read-only** is safe because:
+- The container runs as `mcuser` with `MC_RUNTIME_MODE=agent`
+- Container commands that read config will work correctly
+- Container cannot corrupt host config
+
+**Implementation:** One mount added to the `volumes` dict in `ContainerManager.create()`. Uses the same `get_ocm_config_path()` pattern already present.
+
+**IMPORTANT:** This also shares the `cache/case_metadata.db` (SQLite). With WAL mode (already used by the cache), concurrent reads from both host and container are safe. The cache is read-only from the container's perspective (mode="ro" prevents writes).
+
+---
+
+### Feature 3: Backplane Auto-Login After Terminal Attach
+
+**Trigger:** During `attach_terminal()` in `terminal/attach.py`, after the container is started but BEFORE the user's shell opens. This gives the user a logged-in cluster when they first see the prompt.
+
+**Cluster ID source — investigation results:**
+1. **Red Hat API `/v1/cases/{case_number}`:** The response does NOT include a cluster ID for all cases. Confirmed: the cached case data (from a non-OCP case `04347612`) has no cluster field. OCP/ROSA cases likely DO have a `clusterId` or similar field — needs runtime check.
+2. **Salesforce SOQL:** `Cluster_ID__c` is queried in `salesforce_api.py` but requires direct Salesforce credentials (username/password/security_token) which the user does NOT have configured this way. Salesforce access is via the Red Hat internal API (same `rh_api_offline_token`).
+3. **User input fallback:** If cluster ID not available from API, prompt: "Enter cluster ID for backplane login (Enter to skip):"
+
+**Implementation approach:**
+1. In `attach_terminal()`, after container is ensured running, attempt to get cluster ID from `case_details` (full Red Hat API response — may include `clusterId` for OCP cases)
+2. If found: `podman exec mc-{case_number} ocm backplane login {cluster_id}` (blocking exec before shell launch)
+3. If not found: prompt user, store result in StateDatabase `containers` table (new `cluster_id` column)
+4. If empty/skipped: proceed without backplane login
+
+**StateDatabase change:** Add `cluster_id TEXT` column to `containers` table. Store the cluster ID so subsequent `mc case N` invocations don't re-prompt (retrieve and reuse).
+
+**The `ocm` binary** is already installed in the container image (from `build-container.sh`). The OCM credentials are already mounted read-only (`ocm.json`). So `ocm backplane login` will work inside the container.
+
+**User experience:**
+```
+Attaching to case 04387781...
+Logging into cluster a7fdee93-8d3c-4a05-9412-752d6b973a25 via backplane...
+✓ Cluster login successful
+[MC-04387781] /case/sfdc$
+```
+
+---
+
+### Feature 4: Claude Code in Container
+
+**Installation in Containerfile:**
+1. Install Node.js (RHEL 10 UBI requires `nodejs` from AppStream — `microdnf install nodejs`)
+2. Install Claude Code: `npm install -g @anthropic-ai/claude-code`
+
+**Auth sharing:** The `~/.claude` directory contains session tokens and configuration. The critical file is `~/.claude/credentials.json` (or similar). Mounting the full `~/.claude` is the simplest approach and ensures all session data is available.
+
+**Mount:** `~/.claude` → `/home/mcuser/.claude` (rw — session state needs to be writable for session continuity)
+
+**Key flags for container usage:**
+- `claude --dangerously-skip-permissions` — skips safety confirmation prompts for autonomous use
+- `--network=host` is not needed (container can reach external APIs on its network)
+
+**No ANTHROPIC_API_KEY env var needed** — confirmed by user: the key is empty on the host. Session tokens in `~/.claude` handle auth.
+
+**Containerfile placement:** Add after existing OCM/backplane tool installation in the `final` stage.
+
+**Version pinning:** Use `npm install -g @anthropic-ai/claude-code@latest` — or pin to a specific version. Given the rapid iteration of Claude Code, `@latest` is acceptable for the Containerfile (follows same pattern as other tools that use `latest`).
+
+---
+
+## Critical Pitfalls
+
+1. **OCM token monitor triggers too early:** Monitor the refresh_token exp, not access_token. Access token is 15min and will always look "about to expire." Refresh token is the long-lived session credential.
+
+2. **Config mount breaks container-side config writes:** With `~/mc/config` mounted read-only, any mc command that tries to WRITE config inside the container will fail. Given `MC_RUNTIME_MODE=agent`, the setup wizard is already blocked. Confirm other container-side commands don't write config.
+
+3. **Cluster ID prompt UX in non-interactive contexts:** The `attach_terminal()` prompt for cluster ID should only show in TTY mode (already guarded by `should_launch_terminal()`). For `mc container create`, skip cluster ID entirely — it's handled at terminal attach time.
+
+4. **Node.js in RHEL 10 UBI:** The UBI minimal image may not have the nodejs AppStream by default. May need `microdnf install nodejs npm` or use a Node.js module stream. Test during planning.
+
+5. **~/.claude mount with --userns=keep-id:** The container uses `--userns=keep-id` for volume permissions. The `~/.claude` mount will work correctly as host UID = container UID with this option.
+
+6. **StateDatabase schema migration:** Adding `cluster_id` column to the existing `containers` table requires a migration for existing databases. Use `ALTER TABLE ... ADD COLUMN cluster_id TEXT` with `IF NOT EXISTS` guard or check-then-add pattern.
+
+---
+
+## Implementation Order
+
+Phase ordering rationale (dependent on each other):
+
+1. **Container Config Mount** (Phase 33) — Simple, foundational. Fix the no-config issue first. Required for Claude Code and mc commands to work inside the container.
+
+2. **Claude Code in Container** (Phase 34) — Containerfile change. Independent of other features. Grouped with config mount since both touch container setup.
+
+3. **Backplane Auto-Login** (Phase 35) — Needs StateDatabase schema change. Touches terminal/attach.py. Should be isolated to its own phase to avoid complexity.
+
+4. **OCM Token Monitor** (Phase 36) — Pure host-side daemon. Independent of container changes. Last because it's purely additive and doesn't block other features.
+
+---
+
+## Stack Impact
+
+**No new Python dependencies required.** All implementation uses:
+- `base64`, `json`, `threading`, `subprocess` (stdlib) — OCM JWT decode + monitor
+- `podman-py` (already present) — container exec for backplane login
+- `npm` (Node.js) — Claude Code install in Containerfile
+
+**Containerfile additions:**
+- `microdnf install nodejs`
+- `npm install -g @anthropic-ai/claude-code`
+
+---
+*Research completed: 2026-03-19*
 *Ready for roadmap: yes*
