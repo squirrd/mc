@@ -191,9 +191,14 @@ Shipped in v2.0.5 (2026-03-12):
 
 ### Active
 
-**Next Milestone: TBD**
+**Milestone: v2.0.7 — OCM Integration & Container Tooling**
 
-Run `/gsd:new-milestone` to define the next milestone.
+**Goal:** Automate OCM token lifecycle on the host and improve container setup with shared config, backplane auto-login, and Claude Code.
+
+- [ ] OCM token background monitor — check JWT expiry every 30 mins on host; notify user + trigger `ocm login --use-auth-code --url=prd` when token expires within 1 hour
+- [ ] Mount `~/mc/config` read-only into containers — fixes "mc config not found" error when running mc commands inside case containers
+- [ ] Auto-backplane-login after `mc create` — extract cluster ID from Salesforce case data and run `ocm backplane login <cluster-id>` inside the container (fall back to prompting user if not available)
+- [ ] Claude Code in container — add `@anthropic-ai/claude-code` to container image and mount `~/.claude` from host for session token reuse
 
 ### Out of Scope
 
@@ -300,4 +305,4 @@ Run `/gsd:new-milestone` to define the next milestone.
 | VersionChecker removed from main.py | Banner replaces background check; cleaner single notification path | ✓ Good - no duplicate notification logic |
 
 ---
-*Last updated: 2026-03-16 after v2.0.6 hotfix release*
+*Last updated: 2026-03-19 after v2.0.7 milestone start*
