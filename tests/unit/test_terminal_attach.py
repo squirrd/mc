@@ -221,6 +221,9 @@ class TestAttachTerminal:
         # Mock container missing
         deps["container_manager"].status.return_value = {"status": "missing"}
 
+        # Mock WorkspaceManager so it doesn't try to validate the MagicMock path
+        mocker.patch("mc.controller.workspace.WorkspaceManager")
+
         # Mock print to verify output
         mock_print = mocker.patch("builtins.print")
 
