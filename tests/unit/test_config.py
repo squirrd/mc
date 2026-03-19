@@ -281,7 +281,7 @@ class TestVersionConfig:
         version_config = manager.get_version_config()
 
         assert version_config['pinned_mc'] == 'latest'
-        assert version_config['last_check'] is None
+        assert version_config['last_failed_fetch'] is None
 
     def test_get_version_config_returns_stored_values(self, tmp_path):
         """Test get_version_config returns stored values from file."""
@@ -291,14 +291,14 @@ class TestVersionConfig:
         # Save config with version section
         config = get_default_config()
         config['version']['pinned_mc'] = "2.0.4"
-        config['version']['last_check'] = 1234567890.0
+        config['version']['last_failed_fetch'] = 1234567890.0
         manager.save(config)
 
         # Load version config
         version_config = manager.get_version_config()
 
         assert version_config['pinned_mc'] == "2.0.4"
-        assert version_config['last_check'] == 1234567890.0
+        assert version_config['last_failed_fetch'] == 1234567890.0
 
     def test_update_version_config_creates_section_if_missing(self, tmp_path):
         """Test update_version_config creates [version] section if missing."""
@@ -321,32 +321,54 @@ class TestVersionConfig:
 
         # Update version config
         timestamp = time.time()
-        manager.update_version_config(pinned_mc="2.0.4", last_check=timestamp)
+        manager.update_version_config(pinned_mc="2.0.4", last_failed_fetch=timestamp)
 
         # Verify [version] section exists with correct values
         loaded_config = manager.load()
         assert 'version' in loaded_config
         assert loaded_config['version']['pinned_mc'] == "2.0.4"
-        assert loaded_config['version']['last_check'] == timestamp
+        assert loaded_config['version']['last_failed_fetch'] == timestamp
 
     def test_update_version_config_partial_update_preserves_fields(self, tmp_path):
         """Test update_version_config partial update preserves other fields."""
         manager = ConfigManager()
         manager._config_path = tmp_path / "config.toml"
 
-        # Create config with both version fields set
+        # Create config with version fields set
         config = get_default_config()
         config['version']['pinned_mc'] = "2.0.3"
-        config['version']['last_check'] = 1234567890.0
+        config['version']['last_failed_fetch'] = 1234567890.0
         manager.save(config)
 
         # Update only pinned_mc
         manager.update_version_config(pinned_mc="2.0.5")
 
-        # Verify pinned_mc changed but last_check unchanged
+        # Verify pinned_mc changed but last_failed_fetch preserved
         loaded_config = manager.load()
         assert loaded_config['version']['pinned_mc'] == "2.0.5"
-        assert loaded_config['version']['last_check'] == 1234567890.0
+        assert loaded_config['version']['last_failed_fetch'] == 1234567890.0
+
+    def test_update_version_config_strips_stale_version_check_keys(self, tmp_path):
+        """Test update_version_config removes stale last_check/last_status_code from config.
+
+        These keys were written by the now-dead version_check.py VersionChecker.
+        update_version_config() must clean them up when it next writes the config.
+        """
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Simulate old config with stale keys from version_check.py
+        config = get_default_config()
+        config['version']['last_check'] = 1773291771.0
+        config['version']['last_status_code'] = 404
+        manager.save(config)
+
+        # Trigger any update — stale keys should be removed
+        manager.update_version_config(pinned_mc="latest")
+
+        loaded_config = manager.load()
+        assert 'last_check' not in loaded_config['version']
+        assert 'last_status_code' not in loaded_config['version']
 
     def test_save_atomic_creates_file(self, tmp_path):
         """Test save_atomic creates file with correct content."""

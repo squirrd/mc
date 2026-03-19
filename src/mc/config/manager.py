@@ -174,32 +174,36 @@ class ConfigManager:
 
         Returns dict with keys:
         - pinned_mc: Version string (default: "latest" if not set)
-        - last_check: Unix epoch timestamp (float) or None if never checked
         - last_banner_shown: ISO 8601 datetime string or None if never shown
+        - last_failed_fetch: Unix epoch timestamp (float) of last failed GitHub
+          fetch, or None if no failure recorded
 
         Returns:
             Version configuration dictionary
         """
         return {
             'pinned_mc': self.get('version.pinned_mc', 'latest'),
-            'last_check': self.get('version.last_check', None),
             'last_banner_shown': self.get('version.last_banner_shown', None),
+            'last_failed_fetch': self.get('version.last_failed_fetch', None),
         }
 
     def update_version_config(
         self,
         pinned_mc: str | None = None,
-        last_check: float | None = None,
         last_banner_shown: str | None = None,
+        last_failed_fetch: float | None = None,
     ) -> None:
         """Update version configuration fields atomically.
 
         Only updates fields that are specified (not None). Preserves other fields.
+        Automatically removes stale keys (last_check, last_status_code) written
+        by the now-dead version_check.py VersionChecker.
 
         Args:
             pinned_mc: Version string to pin to, or None to keep current
-            last_check: Unix epoch timestamp, or None to keep current
             last_banner_shown: ISO 8601 datetime string, or None to keep current
+            last_failed_fetch: Unix epoch timestamp of last failed GitHub fetch,
+                or None to keep current
         """
         # Load current config (or get defaults if missing)
         try:
@@ -212,13 +216,17 @@ class ConfigManager:
         if 'version' not in config:
             config['version'] = {}
 
+        # Remove stale keys written by the now-dead version_check.py VersionChecker
+        config['version'].pop('last_check', None)
+        config['version'].pop('last_status_code', None)
+
         # Update only specified fields
         if pinned_mc is not None:
             config['version']['pinned_mc'] = pinned_mc
-        if last_check is not None:
-            config['version']['last_check'] = last_check
         if last_banner_shown is not None:
             config['version']['last_banner_shown'] = last_banner_shown
+        if last_failed_fetch is not None:
+            config['version']['last_failed_fetch'] = last_failed_fetch
 
         # Save using atomic write for safety
         self.save_atomic(config)
