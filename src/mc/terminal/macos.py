@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
+import io
 import logging
 import shutil
 import subprocess
@@ -579,7 +581,19 @@ end tell
             except Exception:
                 pass  # connection closed or any API failure → caller falls back
 
-        iterm2.run_until_complete(_main)
+        # The iterm2 library's _async_dispatch_forever has a bare `except:` that
+        # calls traceback.print_exc() when the WebSocket closes with an error during
+        # teardown. Redirect stderr to suppress that noise from the user's terminal.
+        # Also catch any exception from run_until_complete itself (cleanup failures
+        # after window creation) so result[0] is still returned.
+        _iterm2_stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(_iterm2_stderr):
+                iterm2.run_until_complete(_main)
+        except Exception:
+            _captured = _iterm2_stderr.getvalue().strip()
+            if _captured:
+                logger.debug("iterm2 API teardown output: %s", _captured)
         return result[0]
 
     def _try_iterm2_api(self, options: LaunchOptions) -> str | None:
