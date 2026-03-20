@@ -129,6 +129,10 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 5. No mc command is delayed or blocked by the OCM monitor
 6. Unit tests cover JWT decode, expiry logic (near-expiry, expired, fresh), and file-absent case
 
+**Plans:** 2 plans
+- [ ] 36-01-PLAN.md — OCM monitor core module (ocm_monitor.py + unit tests)
+- [ ] 36-02-PLAN.md — Wire start_background_monitor() into main.py
+
 ---
 
 ## Progress
@@ -151,4 +155,4 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 33. Container Setup | v2.0.7 | 2/2 | Complete | 2026-03-20 |
 | 34. Case Data Store | v2.0.7 | 0/? | Pending | — |
 | 35. Backplane Auto-Login | v2.0.7 | 0/? | Pending | — |
-| 36. OCM Token Monitor | v2.0.7 | 0/? | Pending | — |
+| 36. OCM Token Monitor | v2.0.7 | 0/2 | Planned | — |
