@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 33 of 33 (33-container-setup)
-Plan: 33-01 complete, 33-02 pending
-Status: In progress — 33-01 complete
-Last activity: 2026-03-20 — Completed 33-01-PLAN.md (claude-downloader stage)
+Plan: 33-02 complete — all plans in phase 33 done
+Status: Phase 33 complete
+Last activity: 2026-03-20 — Completed 33-02-PLAN.md (config/claude mounts)
 
-Progress: [█████████████░░░░░░░░░░░░] 50% (33-01 of 2 plans complete)
+Progress: [█████████████████████████] 100% (Phase 33: 2/2 plans complete)
 
 ## Performance Metrics
 
@@ -42,6 +42,12 @@ Progress: [█████████████░░░░░░░░░░
 Decisions are logged in PROJECT.md Key Decisions table.
 All v2.0.6 decisions recorded in PROJECT.md.
 
+**33-02 decisions:**
+- ~/mc/config is required for container creation (hard fail without it)
+- ~/.claude is optional (warn-and-continue if absent)
+- mc/config mounted read-only; claude dir mounted read-write
+- Pre-flight checks placed before os.makedirs to fail fast before side effects
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -59,10 +65,10 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T10:31:04Z
-Stopped at: Completed 33-01-PLAN.md — claude-downloader stage added to Containerfile
+Last session: 2026-03-20T10:34:49Z
+Stopped at: Completed 33-02-PLAN.md — config/claude mounts added to ContainerManager.create()
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
-*Last updated: 2026-03-20 (Phase 33 plans created)*
+*Last updated: 2026-03-20 (Phase 33 complete — both plans done)*
