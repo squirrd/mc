@@ -67,7 +67,25 @@ RUN set -e && \
     rm -rf /tmp/*
 
 # =============================================================================
-# Stage 3: OC CLI Downloader
+# Stage 3: Claude Code CLI Installer
+# =============================================================================
+FROM registry.access.redhat.com/ubi10/ubi:10.1 AS claude-downloader
+
+ARG CLAUDE_VERSION=2.1.80
+
+# Install nodejs and npm for the Claude Code CLI installer
+RUN dnf install -y nodejs npm && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
+
+# Install Claude Code CLI globally via npm
+# Binary installed to /usr/local/bin/claude
+# Package installed to /usr/local/lib/node_modules/@anthropic-ai/claude-code/
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_VERSION} && \
+    npm cache clean --force
+
+# =============================================================================
+# Stage 4: OC CLI Downloader
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS oc-downloader
 
@@ -101,7 +119,7 @@ RUN set -e && \
     rm -rf /tmp/*
 
 # =============================================================================
-# Stage 4: MC CLI Builder
+# Stage 5: MC CLI Builder
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/ubi:10.1 AS mc-builder
 
@@ -130,7 +148,7 @@ COPY . /opt/mc
 RUN SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} pip3 install --no-cache-dir --no-build-isolation -e /opt/mc
 
 # =============================================================================
-# Stage 5: Final Runtime Image
+# Stage 6: Final Runtime Image
 # =============================================================================
 FROM registry.access.redhat.com/ubi10/ubi:10.1 AS final
 
