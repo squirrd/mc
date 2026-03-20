@@ -1,79 +1,76 @@
 # MC CLI Installation Guide
 
-Complete installation instructions for MC CLI across development, UAT, and production environments.
+Installation instructions for MC CLI across development, UAT, and production environments.
 
 ## Prerequisites
 
-**Required:**
 - Python 3.11 or later
-- uv package manager
-
-**Optional:**
+- `uv` package manager
 - Podman (for container orchestration features)
 - Red Hat API offline token (for Salesforce integration)
 
 ## Install uv
 
-uv is a fast Python package and tool manager written in Rust. It replaces pip, pipx, and virtualenv with a unified, 10-100x faster workflow.
-
-### macOS/Linux
+uv is a fast Python package and project manager. It replaces pip, pipx, and virtualenv.
 
 ```bash
-# Install via curl
+# macOS/Linux via curl
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Or via Homebrew
 brew install uv
-
-# Configure shell PATH (one-time)
-uv tool update-shell
 ```
 
-After installation, restart your shell or run:
-```bash
-source ~/.bashrc  # or ~/.zshrc
-```
+After installation, restart your shell or run `source ~/.bashrc` (or `~/.zshrc`).
 
-Verify installation:
-```bash
-uv --version
-```
-
-## Development Workflow
-
-For developers working on the MC CLI codebase.
+## Development
 
 ### Quick Start
 
 ```bash
-# Clone the repository
 git clone <repository_url>
 cd mc
 
-# Run MC CLI (auto-creates .venv and syncs from uv.lock on first run)
+# uv auto-creates .venv and syncs from uv.lock on first run
 uv run mc --help
+```
+
+### Testing a Specific Branch
+
+To run or test MC from a particular branch (e.g. to validate a fix or pre-release):
+
+```bash
+# Clone and switch to the branch
+git clone <repository_url>
+cd mc
+git checkout v2.0.8
+
+# Sync dependencies for this branch
+uv sync
+
+# Run MC from the branch
+uv run mc --version
+uv run mc --help
+```
+
+If you already have the repo cloned:
+
+```bash
+git fetch origin
+git checkout v2.0.8
+
+# Re-sync after switching branches (picks up any dependency changes)
+uv sync
+
 uv run mc --version
 ```
 
-### Common Development Tasks
+Run tests on the branch:
 
 ```bash
-# Run the CLI
-uv run mc <command>
-
-# Run tests
-uv run pytest
-uv run pytest tests/unit/  # Specific test directory
-
-# Run type checker
-uv run mypy src/
-
-# Run linters
-uv run black src/ tests/
-uv run flake8 src/ tests/
-
-# Run security scanner
-uv run bandit -r src/
+uv run pytest                        # All tests
+uv run pytest tests/unit/            # Unit tests only
+uv run pytest -m "not integration"   # Skip integration tests (fast)
 ```
 
 ### Managing Dependencies
@@ -91,45 +88,26 @@ uv lock --upgrade-package rich
 # Upgrade all packages
 uv lock --upgrade
 
-# Sync environment after changes
+# Sync environment after pyproject.toml changes
 uv sync
 ```
 
-### How it Works
+## UAT (Pre-Release Testing)
 
-- `uv run` automatically creates `.venv/` and syncs from `uv.lock` on first use
-- No manual virtual environment activation needed
-- Changes to Python code are reflected immediately (editable install)
-- After modifying `pyproject.toml`, run `uv sync` to update the environment
-
-## UAT Workflow
-
-For User Acceptance Testing - testing a local build before release.
-
-### Install from Local Directory
+Install from a local directory to test a build before release:
 
 ```bash
-# Navigate to MC CLI source directory
 cd /path/to/mc
 
-# Install in editable mode (changes reflected immediately)
+# Install in editable mode (code changes reflected immediately)
 uv tool install -e .
 
-# Test the installed tool
+# Verify
 mc --version
 mc --help
-mc cases list
 ```
 
-### View Installed Tools
-
-```bash
-# List all uv-managed tools
-uv tool list
-
-# Show installation paths
-uv tool list --show-paths
-```
+Editable mode means the `mc` command reflects your local source without reinstalling after each change.
 
 ### Uninstall
 
@@ -137,53 +115,28 @@ uv tool list --show-paths
 uv tool uninstall mc-cli
 ```
 
-### UAT Notes
+## Production
 
-- Editable mode (`-e` flag) means code changes are reflected immediately without reinstalling
-- The `mc` command is available globally in your PATH
-- Installation is isolated - won't affect system Python or other projects
-- Use this workflow to test releases before publishing to PyPI or git
-
-## Production Workflow
-
-For end users installing MC CLI for daily use.
-
-### Install from Git Repository
+### Install from Git
 
 ```bash
-# Install latest version from main branch
-uv tool install git+https://github.com/user/mc-cli.git
+# Latest from main branch
+uv tool install git+https://github.com/squirrd/mc.git
 
-# Install specific version tag
-uv tool install git+https://github.com/user/mc-cli.git@v2.0.0
+# Specific version tag
+uv tool install git+https://github.com/squirrd/mc.git@v2.0.0
 
-# Install from specific branch
-uv tool install git+https://github.com/user/mc-cli.git@feature-branch
-```
-
-### Install from PyPI
-
-When MC CLI is published to PyPI, you can install with:
-
-```bash
-uv tool install mc-cli
-```
-
-### Verify Installation
-
-```bash
-mc --version
-mc --help
+# Specific branch
+uv tool install git+https://github.com/squirrd/mc.git@v2.0.8
 ```
 
 ### Upgrade
 
 ```bash
-# Upgrade to latest version
 uv tool upgrade mc-cli
 
-# Or reinstall from git
-uv tool install --force git+https://github.com/user/mc-cli.git
+# Or force reinstall
+uv tool install --force git+https://github.com/squirrd/mc.git
 ```
 
 ### Uninstall
@@ -192,146 +145,75 @@ uv tool install --force git+https://github.com/user/mc-cli.git
 uv tool uninstall mc-cli
 ```
 
-### Production Notes
-
-- Installs to an isolated environment in `~/.local/bin/`
-- Won't conflict with other Python tools or system packages
-- Automatic PATH configuration with `uv tool update-shell`
-- No manual virtual environment management required
-
 ## Troubleshooting
 
 ### Command Not Found After Installation
 
-**Problem:** `mc: command not found` after successful installation
-
-**Solution:**
 ```bash
-# Option 1: Configure shell automatically
+# Configure shell PATH automatically
 uv tool update-shell
 
-# Option 2: Add to PATH manually
+# Or add manually
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
 ### Conda Environment Interference
 
-**Problem:** Dependencies install to conda environment instead of `.venv`
+Use `uv add`/`uv sync` instead of `uv pip` commands to avoid installing into the conda environment:
 
-**Solution:** Use `uv run` and `uv sync` instead of `uv pip` commands:
 ```bash
-# Don't use: uv pip install <package>
-# Use instead: uv add <package>
+# Don't: uv pip install <package>
+# Do:    uv add <package>
 
-# Don't use: uv pip sync
-# Use instead: uv sync
+# Don't: uv pip sync
+# Do:    uv sync
 ```
 
-### Changes Not Reflected After Editing pyproject.toml
+### Changes Not Taking Effect After Editing pyproject.toml
 
-**Problem:** Added dependencies or modified configuration not taking effect
-
-**Solution:** Run `uv sync` to update the environment:
 ```bash
 uv sync
 ```
 
-### Virtual Environment Not Created
+### Podman Not Found or Connection Errors
 
-**Problem:** `.venv/` directory not created after running `uv run`
-
-**Solution:** Ensure you're in the project root directory with `pyproject.toml`:
 ```bash
-cd /path/to/mc
-uv run mc --help
-```
-
-### Podman Integration Errors
-
-**Problem:** Container commands fail with "podman not found" or connection errors
-
-**Solution:**
-```bash
-# macOS: Ensure Podman machine is running
+# macOS: start the Podman machine
 podman machine start
 
-# Linux: Install Podman
-sudo dnf install podman  # Fedora/RHEL
-sudo apt install podman  # Debian/Ubuntu
+# Linux (Fedora/RHEL)
+sudo dnf install podman
 
-# Verify Podman is accessible
-podman --version
+# Verify
 podman ps
 ```
 
 ### Container Image Not Found
 
-**Problem:** `mc case` or container commands fail with "Image mc-rhel10:latest not found"
-
-**Solution:** Build the container image first:
+MC CLI pulls the container image automatically on first use. If that fails:
 
 ```bash
-# Option 1: From project root
+# Pull manually
+podman pull quay.io/rhn_support_dsquirre/mc-container:latest
+
+# Or build locally (for development)
 podman build -t mc-rhel10:latest -f container/Containerfile .
-
-# Option 2: Using build script (works from anywhere)
 ./container/build.sh
-
-# Verify image exists
-podman images | grep mc-rhel10
 ```
-
-**Expected output:**
-```
-mc-rhel10    latest    <image-id>    <timestamp>    391 MB
-```
-
-### Permission Errors on Container Workspaces
-
-**Problem:** Permission denied when accessing files in container workspaces
-
-**Solution:** MC CLI uses rootless containers with UID/GID mapping. Ensure:
-- Container created with `--userns=keep-id` (automatic in MC CLI)
-- Workspace mounted with `:U` suffix for automatic ownership mapping (automatic in MC CLI)
 
 ### API Token Configuration
 
-**Problem:** Salesforce API calls fail with authentication errors
-
-**Solution:** Configure your Red Hat API offline token in the config file:
-
-**Config file location (v2.0.1+):**
-- **All platforms**: `~/mc/config/config.toml`
+Configure your Red Hat API offline token in `~/mc/config/config.toml`:
 
 ```toml
 [api]
 rh_api_offline_token = "your_token_here"
 ```
 
-**Note for upgrades:**
-- v2.0.1+ auto-migrates config from old platformdirs locations on first run
-- If upgrading from v1.x, rename `api.offline_token` to `api.rh_api_offline_token` in your config file (old key still supported but deprecated)
-
-Or export temporarily:
-```bash
-export RH_API_OFFLINE_TOKEN="your_token_here"
-```
+v2.0.1+ auto-migrates config from old platformdirs locations on first run. If upgrading from v1.x, rename `api.offline_token` to `api.rh_api_offline_token` (old key is deprecated but still supported).
 
 ## Additional Resources
 
 - [uv Documentation](https://docs.astral.sh/uv/)
-- [Python Packaging User Guide](https://packaging.python.org/)
-- MC CLI GitHub Repository: <repository_url>
-
-## Getting Help
-
-If you encounter issues not covered here:
-
-1. Check existing GitHub issues
-2. Run `mc --help` for command-specific help
-3. Open a new issue with:
-   - Output of `mc --version`
-   - Output of `uv --version`
-   - Output of `python --version`
-   - Error message and steps to reproduce
+- [MC CLI README](README.md)
