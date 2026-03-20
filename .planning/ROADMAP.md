@@ -105,18 +105,23 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 
 ### Phase 35: Backplane Auto-Login
 
-**Goal:** Automatically run `ocm backplane login <cluster-id>` inside the container when a terminal is attached, using the cluster ID from case.json, with user-prompt fallback and StateDatabase persistence.
+**Goal:** Automatically run `ocm backplane login <cluster-id>` inside the container when a terminal is attached, using the cluster ID from sfdc-case.json, with user-prompt fallback and StateDatabase persistence.
 
 **Requirements:** BPL-01, BPL-02, BPL-03, BPL-04, BPL-05
 
 **Success criteria:**
-1. When `mc case N` opens a terminal and cluster_id is present in case.json, `ocm backplane login` runs automatically inside the container
+1. When `mc case N` opens a terminal and cluster_id is present in sfdc-case.json, `ocm backplane login` runs automatically inside the container
 2. `oc get nodes` succeeds in the container immediately after shell opens (cluster is logged in)
 3. When cluster_id is absent, user is prompted — entered ID is stored in StateDatabase
 4. Subsequent `mc case N` on same case reuses stored cluster ID without re-prompting
 5. Backplane login failure prints warning but does not prevent shell from opening
 6. StateDatabase `containers` table has `cluster_id` column (migration-safe)
 7. Unit tests for StateDatabase migration and cluster ID read/write
+
+**Plans:** 3 plans
+- [ ] 35-01-PLAN.md — StateDatabase cluster_id column migration, ContainerMetadata extension, ~/mc/state volume mount
+- [ ] 35-02-PLAN.md — Agent backplane-login core module (backplane_login.py) and full unit tests
+- [ ] 35-03-PLAN.md — Wire backplane-login CLI command into agent.py, main.py, and build_exec_command()
 
 ---
 
@@ -159,5 +164,5 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 33. Container Setup | v2.0.7 | 2/2 | Complete | 2026-03-20 |
 | 34. Case Data Store | v2.0.7 | 0/3 | Pending | — |
-| 35. Backplane Auto-Login | v2.0.7 | 0/? | Pending | — |
+| 35. Backplane Auto-Login | v2.0.7 | 0/3 | Pending | — |
 | 36. OCM Token Monitor | v2.0.7 | 0/2 | Planned | — |
