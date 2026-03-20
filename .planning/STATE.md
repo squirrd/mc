@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 34 (pending — ready to plan)
-Plan: —
-Status: Phase 33 complete and verified. Ready to plan Phase 34.
-Last activity: 2026-03-20 — Phase 33 verified (5/5 must-haves passed)
+Phase: 34 (in progress)
+Plan: 01 of ? in Phase 34
+Status: In progress — 34-01 complete
+Last activity: 2026-03-20 — Completed 34-01-PLAN.md (fetch_case_comments() + CaseDetails extensions)
 
-Progress: [██████░░░░░░░░░░░░░░░░░░░] 25% (v2.0.7: Phase 33/36 complete)
+Progress: [██████░░░░░░░░░░░░░░░░░░░] 26% (v2.0.7: Phase 33 complete, Phase 34 in progress)
 
 ## Performance Metrics
 
@@ -48,6 +48,11 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - mc/config mounted read-only; claude dir mounted read-write
 - Pre-flight checks placed before os.makedirs to fail fast before side effects
 
+**34-01 decisions:**
+- fetch_case_comments() return type is list[dict[str, Any]] — no filtering or transformation of API response
+- openshiftClusterID added as NotRequired[str] to CaseDetails — may not be present on all cases
+- customerName added as NotRequired[str] to CaseDetails — matches what the API returns
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -66,9 +71,9 @@ All v2.0.6 decisions recorded in PROJECT.md.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Phase 33 verified and complete — ready to plan Phase 34 (Case Data Store)
+Stopped at: Completed 34-01-PLAN.md — fetch_case_comments() and CaseDetails extensions
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
-*Last updated: 2026-03-20 (Phase 33 verified passed — 5/5 must-haves)*
+*Last updated: 2026-03-20 (34-01 complete — fetch_case_comments() + CaseDetails extended)*
