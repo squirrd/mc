@@ -17,9 +17,9 @@ Requirements for v2.0.7 release. Each maps to roadmap phases.
 
 ### Container Config Mount
 
-- [ ] **CNT-01**: `~/mc/config` mounted read-only into container at `/home/mcuser/mc/config`
-- [ ] **CNT-02**: `mc case-comments <case>` and other mc commands work inside case container without triggering setup wizard
-- [ ] **CNT-03**: Container cannot write to host config (read-only mount enforced by podman)
+- [x] **CNT-01**: `~/mc/config` mounted read-only into container at `/home/mcuser/mc/config`
+- [x] **CNT-02**: `mc case-comments <case>` and other mc commands work inside case container without triggering setup wizard
+- [x] **CNT-03**: Container cannot write to host config (read-only mount enforced by podman)
 
 ### Case Data Store
 
@@ -39,9 +39,9 @@ Requirements for v2.0.7 release. Each maps to roadmap phases.
 
 ### Claude Code in Container
 
-- [ ] **CLD-01**: `claude` binary available in container (installed via `npm install -g @anthropic-ai/claude-code` in Containerfile)
-- [ ] **CLD-02**: `~/.claude` directory mounted read-write from host into container at `/home/mcuser/.claude`
-- [ ] **CLD-03**: No additional auth steps needed inside container — session tokens carry from host mount
+- [x] **CLD-01**: `claude` binary available in container (installed via `npm install -g @anthropic-ai/claude-code` in Containerfile)
+- [x] **CLD-02**: `~/.claude` directory mounted read-write from host into container at `/home/mcuser/.claude`
+- [x] **CLD-03**: No additional auth steps needed inside container — session tokens carry from host mount
 
 ## Future Requirements
 
@@ -75,12 +75,12 @@ Which phases cover which requirements. Updated after roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CNT-01 | Phase 33 | Pending |
-| CNT-02 | Phase 33 | Pending |
-| CNT-03 | Phase 33 | Pending |
-| CLD-01 | Phase 33 | Pending |
-| CLD-02 | Phase 33 | Pending |
-| CLD-03 | Phase 33 | Pending |
+| CNT-01 | Phase 33 | Complete |
+| CNT-02 | Phase 33 | Complete |
+| CNT-03 | Phase 33 | Complete |
+| CLD-01 | Phase 33 | Complete |
+| CLD-02 | Phase 33 | Complete |
+| CLD-03 | Phase 33 | Complete |
 | CDS-01 | Phase 34 | Pending |
 | CDS-02 | Phase 34 | Pending |
 | CDS-03 | Phase 34 | Pending |
