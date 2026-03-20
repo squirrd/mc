@@ -28,14 +28,29 @@ class TestContainerManagerInit:
 class TestCreateNewContainer:
     """Tests for creating new containers."""
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_new_container(self, mock_makedirs, mock_get_ocm_config_path):
+    def test_create_new_container(
+        self, mock_makedirs, mock_get_ocm_config_path, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test creating new container when none exists."""
-        # Mock OCM config as absent so volumes dict stays workspace-only
+        # Mock OCM config as absent
         mock_ocm_path = MagicMock()
         mock_ocm_path.exists.return_value = False
         mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        # Mock mc config as present
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        # Mock claude dir as absent so volumes stays minimal
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
 
         # Setup mocks
         podman_client = Mock(spec=PodmanClient)
@@ -97,7 +112,8 @@ class TestCreateNewContainer:
         assert create_call.kwargs["environment"]["WORKSPACE_PATH"] == "/case"
         assert create_call.kwargs["environment"]["MC_RUNTIME_MODE"] == "agent"
         assert create_call.kwargs["volumes"] == {
-            "/path/to/workspace": {"bind": "/case", "mode": "rw"}
+            "/path/to/workspace": {"bind": "/case", "mode": "rw"},
+            "/fake/home/mc/config": {"bind": "/home/mcuser/mc/config", "mode": "ro"},
         }
 
         # Verify container started
@@ -111,14 +127,27 @@ class TestCreateNewContainer:
         # Verify return value
         assert result is mock_container
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_includes_ocm_config_volume_when_present(self, mock_makedirs, mock_get_ocm_config_path):
+    def test_create_includes_ocm_config_volume_when_present(
+        self, mock_makedirs, mock_get_ocm_config_path, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test OCM config is mounted when the file exists on the host."""
         mock_ocm_path = MagicMock()
         mock_ocm_path.exists.return_value = True
         mock_ocm_path.__str__ = lambda self: "/fake/home/.config/ocm/ocm.json"
         mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
 
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
@@ -145,13 +174,26 @@ class TestCreateNewContainer:
             "mode": "ro",
         }
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_skips_ocm_config_volume_when_absent(self, mock_makedirs, mock_get_ocm_config_path):
+    def test_create_skips_ocm_config_volume_when_absent(
+        self, mock_makedirs, mock_get_ocm_config_path, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test OCM config is not mounted when the file does not exist on the host."""
         mock_ocm_path = MagicMock()
         mock_ocm_path.exists.return_value = False
         mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
 
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
@@ -171,11 +213,26 @@ class TestCreateNewContainer:
 
         create_call = podman_client.client.containers.create.call_args
         volumes = create_call.kwargs["volumes"]
-        assert volumes == {"/path/to/workspace": {"bind": "/case", "mode": "rw"}}
+        assert "/path/to/workspace" in volumes
+        assert "/fake/home/mc/config" in volumes
+        assert "/fake/home/.config/ocm/ocm.json" not in volumes
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_with_default_customer_name(self, mock_makedirs):
+    def test_create_with_default_customer_name(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test creating container with default customer name."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -329,9 +386,22 @@ class TestReuseRunning:
 class TestReconciliation:
     """Tests for state reconciliation."""
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_reconciliation_before_create(self, mock_makedirs):
+    def test_reconciliation_before_create(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test reconciliation called before create operation."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -362,9 +432,22 @@ class TestReconciliation:
         assert state_db.method_calls[0][0] == 'reconcile'
         assert state_db.method_calls[1][0] == 'get_container'
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_reconciliation_detects_external_deletion(self, mock_makedirs, capsys):
+    def test_reconciliation_detects_external_deletion(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path, capsys
+    ):
         """Test creating new container when existing was externally deleted."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -419,9 +502,22 @@ class TestReconciliation:
 class TestErrorHandling:
     """Tests for error handling."""
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_image_not_found_raises_runtime_error(self, mock_makedirs):
+    def test_image_not_found_raises_runtime_error(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test RuntimeError raised when mc-rhel10:latest image not found."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -442,9 +538,22 @@ class TestErrorHandling:
         assert "Container image mc-rhel10:latest not available" in str(exc_info.value)
         assert "podman build -t mc-rhel10:latest -f container/Containerfile ." in str(exc_info.value)
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_create_failure_raises_runtime_error(self, mock_makedirs):
+    def test_create_failure_raises_runtime_error(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test RuntimeError raised when container creation fails."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -468,9 +577,22 @@ class TestErrorHandling:
         assert "Failed to create container for case 12345678" in str(exc_info.value)
         assert "Insufficient memory" in str(exc_info.value)
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_start_failure_raises_runtime_error(self, mock_makedirs):
+    def test_start_failure_raises_runtime_error(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test RuntimeError raised when container start fails."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
@@ -495,9 +617,22 @@ class TestErrorHandling:
 
         assert "Failed to start container for case 12345678" in str(exc_info.value)
 
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_state_failure_cleanup_container(self, mock_makedirs):
+    def test_state_failure_cleanup_container(
+        self, mock_makedirs, mock_get_mc_config_path, mock_get_claude_config_path
+    ):
         """Test container cleanup when state persistence fails."""
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
         podman_client = Mock(spec=PodmanClient)
         state_db = Mock(spec=StateDatabase)
 
