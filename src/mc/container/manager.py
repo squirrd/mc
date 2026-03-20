@@ -23,6 +23,24 @@ def get_ocm_config_path() -> Path:
     return Path.home() / ".config" / "ocm" / "ocm.json"
 
 
+def get_mc_config_path() -> Path:
+    """Return the host mc config directory path.
+
+    Returns:
+        Path to ~/mc/config on this host (may or may not exist).
+    """
+    return Path.home() / "mc" / "config"
+
+
+def get_claude_config_path() -> Path:
+    """Return the host Claude Code config directory path.
+
+    Returns:
+        Path to ~/.claude on this host (may or may not exist).
+    """
+    return Path.home() / ".claude"
+
+
 class ContainerManager:
     """Orchestrate container lifecycle operations with state tracking.
 
