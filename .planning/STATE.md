@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 34 (in progress)
-Plan: 01 of ? in Phase 34
-Status: In progress — 34-01 complete
-Last activity: 2026-03-20 — Completed 34-01-PLAN.md (fetch_case_comments() + CaseDetails extensions)
+Plan: 02 of ? in Phase 34
+Status: In progress — 34-02 complete
+Last activity: 2026-03-20 — Completed 34-02-PLAN.md (mc agent init-case + init_case_data() + 19 unit tests)
 
 Progress: [██████░░░░░░░░░░░░░░░░░░░] 26% (v2.0.7: Phase 33 complete, Phase 34 in progress)
 
@@ -53,6 +53,11 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - openshiftClusterID added as NotRequired[str] to CaseDetails — may not be present on all cases
 - customerName added as NotRequired[str] to CaseDetails — matches what the API returns
 
+**34-02 decisions:**
+- ConfigManager, get_access_token, RedHatAPIClient imported inside init_case_data() body — avoids circular imports and keeps agent startup fast
+- case_number for mc agent init-case comes from CASE_NUMBER env var (set by ContainerManager), not a CLI arg
+- Unit test mocking patches at original module paths (mc.config.manager.ConfigManager) not mc.agent.case_data.X — required because lazy imports bypass module-level attribute lookup
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -71,9 +76,9 @@ All v2.0.6 decisions recorded in PROJECT.md.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 34-01-PLAN.md — fetch_case_comments() and CaseDetails extensions
+Stopped at: Completed 34-02-PLAN.md — mc agent init-case + init_case_data() + 19 unit tests
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
-*Last updated: 2026-03-20 (34-01 complete — fetch_case_comments() + CaseDetails extended)*
+*Last updated: 2026-03-20 (34-02 complete — mc agent init-case + init_case_data() + 19 unit tests)*
