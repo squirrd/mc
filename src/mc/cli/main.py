@@ -115,6 +115,10 @@ def main() -> ExitCode:
         agent_parser = subparsers.add_parser('agent', help='Agent-mode commands (container-internal)')
         agent_subparsers = agent_parser.add_subparsers(dest='agent_command')
         agent_subparsers.add_parser('init-case', help='Initialize case data files in container workspace')
+        agent_subparsers.add_parser(
+            'backplane-login',
+            help='Run ocm backplane login for case cluster (uses sfdc-case.json or prompts user)'
+        )
 
         # Parse arguments (--version/--help exit here, before config check)
         args = parser.parse_args()
@@ -197,9 +201,12 @@ def main() -> ExitCode:
         elif args.command == 'version':
             other.version(update=args.update)
         elif args.command == 'agent':
-            from mc.cli.commands.agent import init_case
             if args.agent_command == 'init-case':
+                from mc.cli.commands.agent import init_case
                 init_case(args)
+            elif args.agent_command == 'backplane-login':
+                from mc.cli.commands.agent import backplane_login
+                backplane_login(args)
             else:
                 agent_parser.print_help()
         else:
