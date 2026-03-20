@@ -96,6 +96,11 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 5. `cluster_id` key present in both files even when the API doesn't return one (empty string, not absent)
 6. Unit tests cover file writing and all field extraction/fallback scenarios
 
+**Plans:** 3 plans
+- [ ] 34-01-PLAN.md — Extend RedHatAPIClient with fetch_case_comments() and openshiftClusterID field
+- [ ] 34-02-PLAN.md — Create agent/case_data.py module, mc agent init-case CLI command, and unit tests
+- [ ] 34-03-PLAN.md — Wire mc agent init-case into build_exec_command() and update terminal attach tests
+
 ---
 
 ### Phase 35: Backplane Auto-Login
@@ -153,6 +158,6 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 31. Version Pinning | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 33. Container Setup | v2.0.7 | 2/2 | Complete | 2026-03-20 |
-| 34. Case Data Store | v2.0.7 | 0/? | Pending | — |
+| 34. Case Data Store | v2.0.7 | 0/3 | Pending | — |
 | 35. Backplane Auto-Login | v2.0.7 | 0/? | Pending | — |
 | 36. OCM Token Monitor | v2.0.7 | 0/2 | Planned | — |
