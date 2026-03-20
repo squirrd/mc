@@ -52,7 +52,7 @@ class TestBuildExecCommand:
         assert result.startswith("podman exec -it")
         assert f"--env 'BASH_ENV={bashrc_path}'" in result
         assert f"--env 'PS1=[MC-{case_number}" in result
-        assert result.endswith(f"{container_id} /bin/bash; exit")
+        assert result.endswith(f"{container_id} /bin/bash -c 'mc agent init-case || true; exec bash'; exit")
 
     def test_build_exec_command_special_chars(self) -> None:
         """Test exec command handles special characters in paths."""
@@ -100,6 +100,27 @@ class TestBuildExecCommand:
 
         assert "--env 'HTTPS_PROXY=http://squid.corp.redhat.com:3128'" in result
         assert "--env 'HTTP_PROXY=http://squid.corp.redhat.com:3128'" in result
+
+    def test_build_exec_command_includes_init_case(self) -> None:
+        """build_exec_command output includes mc agent init-case."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                cmd = build_exec_command("mc-12345678", "/tmp/bashrc", "12345678")
+        assert "mc agent init-case" in cmd
+
+    def test_build_exec_command_init_case_is_non_fatal(self) -> None:
+        """mc agent init-case uses || true so shell opens even on failure."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                cmd = build_exec_command("mc-12345678", "/tmp/bashrc", "12345678")
+        assert "mc agent init-case || true" in cmd
+
+    def test_build_exec_command_uses_exec_bash(self) -> None:
+        """exec bash replaces the bash -c subshell with interactive shell."""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                cmd = build_exec_command("mc-12345678", "/tmp/bashrc", "12345678")
+        assert "exec bash" in cmd
 
     def test_build_exec_command_no_proxy_on_linux(self) -> None:
         """No proxy env injected on Linux when env var absent (no system proxy detection)."""
@@ -346,7 +367,7 @@ class TestAttachTerminal:
         assert command.startswith("podman exec -it")
         assert "--env 'BASH_ENV=/tmp/bashrc'" in command
         assert "--env 'PS1=[MC-12345678]" in command
-        assert "mc-12345678 /bin/bash; exit" in command
+        assert "mc-12345678 /bin/bash -c 'mc agent init-case || true; exec bash'; exit" in command
 
     def test_attach_terminal_not_tty(self, mock_dependencies, mocker: Mock) -> None:
         """Test attach_terminal raises error when not in TTY."""
