@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mc.agent.backplane_login import (
+    _get_state_db,
     _is_token_expired,
     _read_sfdc_cluster_id,
     run_backplane_login,
@@ -331,3 +332,19 @@ def test_state_db_inaccessible_degrades_gracefully(tmp_path: pytest.TempPathFact
     captured = capsys.readouterr()
     # No crash — graceful return
     assert "Error" not in captured.out
+
+
+# --- _get_state_db ---
+
+
+def test_get_state_db_uses_explicit_path(mocker: MagicMock) -> None:
+    """_get_state_db() passes ~/mc/state/containers.db as db_path when no state_db provided."""
+    from pathlib import Path
+
+    expected_path = str(Path.home() / "mc" / "state" / "containers.db")
+    mock_state_db_cls = mocker.patch("mc.agent.backplane_login.StateDatabase")
+    mock_state_db_cls.return_value = MagicMock()
+
+    _get_state_db(None)
+
+    mock_state_db_cls.assert_called_once_with(db_path=expected_path)
