@@ -81,11 +81,11 @@ Which phases cover which requirements. Updated after roadmap creation.
 | CLD-01 | Phase 33 | Complete |
 | CLD-02 | Phase 33 | Complete |
 | CLD-03 | Phase 33 | Complete |
-| CDS-01 | Phase 34 | Pending |
-| CDS-02 | Phase 34 | Pending |
-| CDS-03 | Phase 34 | Pending |
-| CDS-04 | Phase 34 | Pending |
-| CDS-05 | Phase 34 | Pending |
+| CDS-01 | Phase 34 | Complete |
+| CDS-02 | Phase 34 | Complete |
+| CDS-03 | Phase 34 | Complete |
+| CDS-04 | Phase 34 | Complete |
+| CDS-05 | Phase 34 | Complete |
 | BPL-01 | Phase 35 | Pending |
 | BPL-02 | Phase 35 | Pending |
 | BPL-03 | Phase 35 | Pending |
