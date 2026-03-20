@@ -68,6 +68,12 @@ class StateDatabase:
                     updated_at INTEGER NOT NULL
                 )
             """)
+            # Migration: add cluster_id column for backplane login (Phase 35)
+            # SQLite raises OperationalError "duplicate column name" if column already exists — catch and ignore.
+            try:
+                conn.execute("ALTER TABLE containers ADD COLUMN cluster_id TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists — normal for existing databases
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_container_id ON containers(container_id)"
             )
@@ -142,7 +148,7 @@ class StateDatabase:
         with self._connection() as conn:
             row = conn.execute(
                 """
-                SELECT case_number, container_id, workspace_path, created_at, updated_at
+                SELECT case_number, container_id, workspace_path, created_at, updated_at, cluster_id
                 FROM containers
                 WHERE case_number = ?
                 """,
@@ -156,6 +162,7 @@ class StateDatabase:
                     workspace_path=row["workspace_path"],
                     created_at=row["created_at"],
                     updated_at=row["updated_at"],
+                    cluster_id=row["cluster_id"] or "",  # coerce NULL to ""
                 )
             return None
 
@@ -168,7 +175,7 @@ class StateDatabase:
         with self._connection() as conn:
             rows = conn.execute(
                 """
-                SELECT case_number, container_id, workspace_path, created_at, updated_at
+                SELECT case_number, container_id, workspace_path, created_at, updated_at, cluster_id
                 FROM containers
                 ORDER BY created_at DESC
                 """
@@ -181,6 +188,7 @@ class StateDatabase:
                     workspace_path=row["workspace_path"],
                     created_at=row["created_at"],
                     updated_at=row["updated_at"],
+                    cluster_id=row["cluster_id"] or "",  # coerce NULL to ""
                 )
                 for row in rows
             ]

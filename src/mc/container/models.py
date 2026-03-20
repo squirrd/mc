@@ -13,6 +13,7 @@ class ContainerMetadata:
         workspace_path: Host workspace directory path
         created_at: Unix timestamp when container was created
         updated_at: Unix timestamp when metadata was last updated
+        cluster_id: OCM cluster ID for backplane login (empty string if unknown)
     """
 
     case_number: str
@@ -20,3 +21,4 @@ class ContainerMetadata:
     workspace_path: str
     created_at: int
     updated_at: int
+    cluster_id: str = ""
