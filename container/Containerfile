@@ -157,8 +157,10 @@ LABEL description="RHEL 10 UBI container with MC CLI and essential tools for Red
 LABEL version="2.0"
 
 # Install runtime dependencies only (no build tools)
+# nodejs required as the runtime for the Claude Code CLI
 RUN dnf install -y \
     python3 \
+    nodejs \
     vim \
     nano \
     wget \
@@ -184,6 +186,10 @@ COPY --from=backplane-downloader --chown=mcuser:mcuser /usr/local/bin/ocm-backpl
 # Copy oc and kubectl binaries from downloader stage
 COPY --from=oc-downloader --chown=mcuser:mcuser /usr/local/bin/oc /usr/local/bin/oc
 COPY --from=oc-downloader --chown=mcuser:mcuser /usr/local/bin/kubectl /usr/local/bin/kubectl
+
+# Copy Claude Code CLI from installer stage
+COPY --from=claude-downloader --chown=mcuser:mcuser /usr/local/bin/claude /usr/local/bin/claude
+COPY --from=claude-downloader --chown=mcuser:mcuser /usr/local/lib/node_modules/@anthropic-ai/claude-code /usr/local/lib/node_modules/@anthropic-ai/claude-code
 
 # Copy MC CLI source from builder stage
 COPY --from=mc-builder --chown=mcuser:mcuser /opt/mc /opt/mc
