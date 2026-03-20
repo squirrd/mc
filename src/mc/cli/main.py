@@ -163,6 +163,14 @@ def main() -> ExitCode:
             except Exception as e:
                 logger.debug("Update banner failed: %s", e)
 
+        # OCM token monitor (host-only, daemon thread)
+        if get_runtime_mode() != 'agent':
+            try:
+                from mc.utils.ocm_monitor import start_background_monitor
+                start_background_monitor()
+            except Exception as e:
+                logger.debug("OCM monitor failed: %s", e)
+
         # Route to appropriate command
         if args.command == 'attach':
             case.attach(args.case_number, base_dir, offline_token,
