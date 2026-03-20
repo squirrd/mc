@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 36 (pending — ready to plan)
-Plan: —
-Status: Phase 35 complete and verified. Ready to plan Phase 36.
-Last activity: 2026-03-20 — Phase 35 verified (15/15 must-haves passed)
+Phase: 36 (in progress — 36-01 complete)
+Plan: 01 of TBD in phase 36
+Status: In progress — 36-01-PLAN.md complete
+Last activity: 2026-03-20 — Completed 36-01-PLAN.md (OCM monitor module + tests)
 
-Progress: [██████████████████░░░░░░░] 75% (v2.0.7: Phases 33-35 complete, Phase 36 next)
+Progress: [███████████████████░░░░░░] 76% (v2.0.7: Phases 33-36-01 complete)
 
 ## Performance Metrics
 
@@ -79,6 +79,12 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - Per-command import in routing elif blocks — each agent subcommand gets its own import (consistent, extensible pattern)
 - || true applied to backplane-login in exec chain — interactive shell must always open regardless of login outcome
 
+**36-01 decisions:**
+- _read_refresh_token casts dict value via str(value) to satisfy mypy no-any-return — avoids Any from json.loads
+- PID lock uses ~/mc/state/ocm-monitor.pid — colocated with containers.db and cluster_id state
+- subprocess.run for ocm login inherits terminal (no stdout=/stderr= redirection) so interactive auth code flow streams to user
+- PermissionError in os.kill treated as alive — conservative to prevent duplicate monitors from false-cleaning live PIDs
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -96,8 +102,8 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20
-Stopped at: Phase 35 verified passed (15/15 must-haves) — ready to plan Phase 36 (OCM Token Monitor)
+Last session: 2026-03-20T12:20:33Z
+Stopped at: Completed 36-01-PLAN.md — OCM monitor module and tests
 Resume file: None
 
 ---
