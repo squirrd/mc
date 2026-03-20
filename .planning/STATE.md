@@ -93,6 +93,11 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - db_path hardcoded to Path.home() / "mc" / "state" / "containers.db" — matches host-mounted path ContainerManager uses at container creation
 - StateDatabase() with no args is wrong for agent code: platformdirs defaults to ~/.local/share/mc/containers.db (not the mounted path)
 
+**37-02 decisions:**
+- Patch mc.cli.main.should_check_for_updates (return_value=True/False) for banner guard tests — the guard calls should_check_for_updates() which routes through mc.runtime, so patching get_runtime_mode at mc.cli.main does not affect banner
+- Keep get_runtime_mode patch alongside should_check_for_updates for OCM monitor guard at line 167 which calls get_runtime_mode directly
+- Use ['mc', 'ls', 'someuid'] command vector to reach line 160 past --help SystemExit
+
 **37-03 decisions:**
 - Mock should_check_for_updates in test_main.py (not get_runtime_mode) for banner guard tests — mock must match actual call site
 - etag or '' in 304 return branch — coerces Optional[str] to str to satisfy declared return type
@@ -108,12 +113,13 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T23:28:00Z
-Stopped at: 37-03-PLAN.md complete — orphaned helper cleanup
+Last session: 2026-03-20T23:30:36Z
+Stopped at: 37-02-PLAN.md complete — banner agent-mode guard tests
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
+*Last updated: 2026-03-20 (37-02 complete — banner agent-mode guard tests added to test_main.py)*
 *Last updated: 2026-03-20 (37-03 complete — should_check_for_updates wired, check_for_updates deleted)*
 *Last updated: 2026-03-20 (37-01 complete — BPL-04 fixed: StateDatabase explicit path in _get_state_db)*
 *Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
