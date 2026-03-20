@@ -111,6 +111,11 @@ def main() -> ExitCode:
         version_parser.add_argument('--update', action='store_true',
                                     help='Force immediate version check (bypasses hourly throttle)')
 
+        # Agent subcommand (runs inside container in agent mode)
+        agent_parser = subparsers.add_parser('agent', help='Agent-mode commands (container-internal)')
+        agent_subparsers = agent_parser.add_subparsers(dest='agent_command')
+        agent_subparsers.add_parser('init-case', help='Initialize case data files in container workspace')
+
         # Parse arguments (--version/--help exit here, before config check)
         args = parser.parse_args()
 
@@ -191,6 +196,12 @@ def main() -> ExitCode:
             container.quick_access(args)
         elif args.command == 'version':
             other.version(update=args.update)
+        elif args.command == 'agent':
+            from mc.cli.commands.agent import init_case
+            if args.agent_command == 'init-case':
+                init_case(args)
+            else:
+                agent_parser.print_help()
         else:
             parser.print_help()
 
