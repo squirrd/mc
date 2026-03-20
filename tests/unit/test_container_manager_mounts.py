@@ -1,5 +1,6 @@
 """Unit tests for ContainerManager mount and pre-flight behavior (Phase 33)."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch, call
 import pytest
 from mc.container.manager import ContainerManager
@@ -199,10 +200,12 @@ class TestAllMountsTogether:
         manager, podman = _make_manager()
         manager.create("12345678", "/workspace", "Customer")
 
+        mc_state_path = str(Path.home() / "mc" / "state")
         call_kwargs = podman.client.containers.create.call_args[1]
         volumes = call_kwargs["volumes"]
         assert "/workspace" in volumes
         assert "/home/user/mc/config" in volumes
         assert "/home/user/.config/ocm/ocm.json" in volumes
         assert "/home/user/.claude" in volumes
-        assert len(volumes) == 4
+        assert mc_state_path in volumes
+        assert len(volumes) == 5

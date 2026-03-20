@@ -99,3 +99,44 @@ class TestGoCommandCallsOtherGo:
         with patch('mc.cli.commands.other.go') as mock_go:
             _run_main_go(['mc', 'go', '12345678', '-l'])
             mock_go.assert_called_once_with('12345678', launch=False)
+
+
+# ---------------------------------------------------------------------------
+# Banner agent-mode guard tests
+# ---------------------------------------------------------------------------
+
+class TestBannerAgentModeGuard:
+    """Verify the banner is shown in host mode and suppressed in agent mode."""
+
+    def _run_main_with_mode(self, runtime_mode: str) -> MagicMock:
+        """Run main() with a controlled runtime mode; return the show_update_banner mock."""
+        import mc.cli.main as main_module
+
+        is_agent = runtime_mode == 'agent'
+        mock_banner = MagicMock()
+        with patch.object(sys, 'argv', ['mc', 'ls', 'someuid']), \
+             patch('mc.cli.main.ConfigManager') as MockCfgMgr, \
+             patch('mc.cli.main.does_path_exist', return_value=True), \
+             patch('mc.cli.main.get_runtime_mode', return_value=runtime_mode), \
+             patch('mc.cli.main.should_check_for_updates', return_value=not is_agent), \
+             patch('mc.cli.main.show_update_banner', mock_banner), \
+             patch('mc.cli.commands.other.ls'), \
+             patch('mc.cli.main.setup_logging', return_value=MagicMock()):
+            instance = MockCfgMgr.return_value
+            instance.exists.return_value = True
+            instance.load.return_value = {
+                'base_directory': '/tmp/mc',
+                'api': {'rh_api_offline_token': 'fake-token'},
+            }
+            main_module.main()
+        return mock_banner
+
+    def test_show_update_banner_called_in_host_mode(self) -> None:
+        """When runtime mode is 'host', show_update_banner must be called."""
+        mock_banner = self._run_main_with_mode('host')
+        mock_banner.assert_called_once()
+
+    def test_show_update_banner_not_called_in_agent_mode(self) -> None:
+        """When runtime mode is 'agent', show_update_banner must NOT be called."""
+        mock_banner = self._run_main_with_mode('agent')
+        mock_banner.assert_not_called()

@@ -31,7 +31,7 @@ class VersionChecker:
     GITHUB_OWNER = "squirrd"
     GITHUB_REPO = "mc"
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize version checker."""
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
@@ -150,7 +150,7 @@ class VersionChecker:
 
         # Handle 304 Not Modified
         if response.status_code == 304:
-            return None, etag, 304
+            return None, etag or '', 304
 
         # Handle 404 — repo has no releases published yet (not a real error)
         if response.status_code == 404:
@@ -314,11 +314,3 @@ class VersionChecker:
             logger.error(f"Failed to display notification: {e}")
             # Silent failure - don't raise exceptions from background thread
 
-
-def check_for_updates() -> None:
-    """Convenience function to start background version check.
-
-    Can be called from CLI startup to trigger non-blocking update check.
-    """
-    checker = VersionChecker()
-    checker.start_background_check()
