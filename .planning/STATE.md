@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 35 of ongoing (35-backplane-auto-login)
-Plan: 02 of TBD
-Status: In progress — Plan 35-02 complete
-Last activity: 2026-03-20 — Completed 35-02-PLAN.md (backplane_login module + 25 unit tests)
+Plan: 03 of 03
+Status: Phase complete — Plan 35-03 complete
+Last activity: 2026-03-20 — Completed 35-03-PLAN.md (backplane-login CLI wiring + exec chain update)
 
-Progress: [█████████████░░░░░░░░░░░░] 53% (v2.0.7: Phases 33-35.02 complete)
+Progress: [██████████████░░░░░░░░░░░] 56% (v2.0.7: Phases 33-35 complete)
 
 ## Performance Metrics
 
@@ -74,6 +74,11 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - Token expiry detected in stderr triggers targeted message ('run ocm login') separate from generic warning
 - state_db=None injection point with _get_state_db() wrapper enables unit testing without filesystem
 
+**35-03 decisions:**
+- backplane_login(args) lazy import inside function body — matches init_case() pattern, avoids import-time side effects
+- Per-command import in routing elif blocks — each agent subcommand gets its own import (consistent, extensible pattern)
+- || true applied to backplane-login in exec chain — interactive shell must always open regardless of login outcome
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -92,7 +97,7 @@ All v2.0.6 decisions recorded in PROJECT.md.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 35-02-PLAN.md — backplane_login module (run_backplane_login + 25 unit tests)
+Stopped at: Completed 35-03-PLAN.md — backplane-login CLI wiring + exec chain (Phase 35 complete)
 Resume file: None
 
 ---
