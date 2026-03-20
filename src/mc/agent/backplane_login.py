@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 from mc.container.state import StateDatabase
 
@@ -55,7 +56,8 @@ def _get_state_db(state_db: StateDatabase | None) -> StateDatabase | None:
     if state_db is not None:
         return state_db
     try:
-        return StateDatabase()
+        db_path = Path.home() / "mc" / "state" / "containers.db"
+        return StateDatabase(db_path=str(db_path))
     except Exception:
         return None
 
