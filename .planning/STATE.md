@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 37-pre-release-fixes (in progress)
-Plan: 01 of 3 complete
-Status: In progress
-Last activity: 2026-03-20 — Completed 37-01-PLAN.md (BPL-04 fix)
+Plan: 03 of 3 complete
+Status: In progress — 37-03 complete
+Last activity: 2026-03-20 — Completed 37-03-PLAN.md (orphaned helper cleanup)
 
-Progress: [█████████████████████████░░░] (37-01 done, 37-02/03 pending)
+Progress: [████████████████████████████] (37-01, 37-02, 37-03 done)
 
 ## Performance Metrics
 
@@ -93,16 +93,14 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - db_path hardcoded to Path.home() / "mc" / "state" / "containers.db" — matches host-mounted path ContainerManager uses at container creation
 - StateDatabase() with no args is wrong for agent code: platformdirs defaults to ~/.local/share/mc/containers.db (not the mounted path)
 
+**37-03 decisions:**
+- Mock should_check_for_updates in test_main.py (not get_runtime_mode) for banner guard tests — mock must match actual call site
+- etag or '' in 304 return branch — coerces Optional[str] to str to satisfy declared return type
+- Path.home() / "mc" / "state" computed directly in test assertions — mirrors production code, no need to mock Path
+
 ### Pending Todos
 
-1. **Address orphaned helper functions from v2.0.4** (planning)
-   - 3 exported functions not currently used in production
-   - All tested and functional — candidates for v2.0.5 mc-update integration
-   - File: .planning/todos/pending/2026-02-19-address-orphaned-helper-functions.md
-
-2. **Banner agent-mode guard test coverage** (tech debt from v2.0.5 audit)
-   - main.py:151 `if get_runtime_mode() != 'agent': show_update_banner()` has no test coverage
-   - Suggested fix: 2 unit tests in test_main.py
+1. **Address orphaned helper functions from v2.0.4** — RESOLVED in 37-03 (check_for_updates deleted; should_check_for_updates wired)
 
 ### Blockers/Concerns
 
@@ -110,13 +108,12 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T23:24:57Z
-Stopped at: 37-01-PLAN.md complete — BPL-04 fix
+Last session: 2026-03-20T23:28:00Z
+Stopped at: 37-03-PLAN.md complete — orphaned helper cleanup
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
-*Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
+*Last updated: 2026-03-20 (37-03 complete — should_check_for_updates wired, check_for_updates deleted)*
 *Last updated: 2026-03-20 (37-01 complete — BPL-04 fixed: StateDatabase explicit path in _get_state_db)*
-*Last updated: 2026-03-20 (Phase 35 verified passed — 15/15 must-haves)*
-*Last updated: 2026-03-20 (Phase 34 verified passed — 6/6 must-haves)*
+*Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
