@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 35 (pending — ready to plan)
-Plan: —
-Status: Phase 34 complete and verified. Ready to plan Phase 35.
-Last activity: 2026-03-20 — Phase 34 verified (6/6 must-haves passed)
+Phase: 35 of ongoing (35-backplane-auto-login)
+Plan: 01 of TBD
+Status: In progress — Plan 35-01 complete
+Last activity: 2026-03-20 — Completed 35-01-PLAN.md (cluster_id foundation)
 
-Progress: [████████████░░░░░░░░░░░░░] 50% (v2.0.7: Phases 33-34 complete, Phase 35 next)
+Progress: [█████████████░░░░░░░░░░░░] 52% (v2.0.7: Phases 33-35.01 complete)
 
 ## Performance Metrics
 
@@ -62,6 +62,12 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - exec bash used instead of plain bash — exec replaces the bash -c subshell PID with the interactive shell, providing proper job control
 - || true pattern keeps the interactive shell guarantee even if mc agent init-case fails (no network, CASE_NUMBER missing, etc.)
 
+**35-01 decisions:**
+- cluster_id defaults to "" (not None) — callers get consistent str type without None checks; empty string is the sentinel for "not yet known"
+- ALTER TABLE migration in _ensure_schema() with try/except OperationalError — no version table needed; SQLite's own "duplicate column name" error is the idempotency signal
+- ~/mc/state mounted rw (not ro) — agent must write cluster_id back to StateDatabase after backplane auth
+- add_container() INSERT unchanged — new rows get NULL cluster_id, coerced to "" at read time
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -80,7 +86,7 @@ All v2.0.6 decisions recorded in PROJECT.md.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Phase 34 verified passed — ready to plan Phase 35 (Backplane Auto-Login)
+Stopped at: Completed 35-01-PLAN.md — cluster_id foundation (StateDatabase migration + volume mount)
 Resume file: None
 
 ---
