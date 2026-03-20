@@ -119,9 +119,9 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 7. Unit tests for StateDatabase migration and cluster ID read/write
 
 **Plans:** 3 plans
-- [ ] 35-01-PLAN.md — StateDatabase cluster_id column migration, ContainerMetadata extension, ~/mc/state volume mount
-- [ ] 35-02-PLAN.md — Agent backplane-login core module (backplane_login.py) and full unit tests
-- [ ] 35-03-PLAN.md — Wire backplane-login CLI command into agent.py, main.py, and build_exec_command()
+- [x] 35-01-PLAN.md — StateDatabase cluster_id column migration, ContainerMetadata extension, ~/mc/state volume mount
+- [x] 35-02-PLAN.md — Agent backplane-login core module (backplane_login.py) and full unit tests
+- [x] 35-03-PLAN.md — Wire backplane-login CLI command into agent.py, main.py, and build_exec_command()
 
 ---
 
@@ -164,5 +164,5 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 32. Update Notifications | v2.0.5 | 2/2 | Complete | 2026-03-12 |
 | 33. Container Setup | v2.0.7 | 2/2 | Complete | 2026-03-20 |
 | 34. Case Data Store | v2.0.7 | 3/3 | Complete | 2026-03-20 |
-| 35. Backplane Auto-Login | v2.0.7 | 0/3 | Pending | — |
+| 35. Backplane Auto-Login | v2.0.7 | 3/3 | Complete | 2026-03-20 |
 | 36. OCM Token Monitor | v2.0.7 | 0/2 | Planned | — |

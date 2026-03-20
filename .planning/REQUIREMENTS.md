@@ -31,11 +31,11 @@ Requirements for v2.0.7 release. Each maps to roadmap phases.
 
 ### Container Backplane Auto-Login
 
-- [ ] **BPL-01**: After case data is written and container is started, reads cluster_id from `case.json`
-- [ ] **BPL-02**: If cluster_id is non-empty, runs `ocm backplane login <cluster-id>` inside container before user sees shell prompt
-- [ ] **BPL-03**: If cluster_id is empty, prompts user to enter cluster ID or press Enter to skip
-- [ ] **BPL-04**: User-entered cluster ID stored in StateDatabase `containers` table — reused on subsequent `mc case N` (no re-prompt)
-- [ ] **BPL-05**: Backplane login failure is non-fatal — logs warning, prints message, opens shell anyway
+- [x] **BPL-01**: After case data is written and container is started, reads cluster_id from `case.json`
+- [x] **BPL-02**: If cluster_id is non-empty, runs `ocm backplane login <cluster-id>` inside container before user sees shell prompt
+- [x] **BPL-03**: If cluster_id is empty, prompts user to enter cluster ID or press Enter to skip
+- [x] **BPL-04**: User-entered cluster ID stored in StateDatabase `containers` table — reused on subsequent `mc case N` (no re-prompt)
+- [x] **BPL-05**: Backplane login failure is non-fatal — logs warning, prints message, opens shell anyway
 
 ### Claude Code in Container
 
@@ -86,11 +86,11 @@ Which phases cover which requirements. Updated after roadmap creation.
 | CDS-03 | Phase 34 | Complete |
 | CDS-04 | Phase 34 | Complete |
 | CDS-05 | Phase 34 | Complete |
-| BPL-01 | Phase 35 | Pending |
-| BPL-02 | Phase 35 | Pending |
-| BPL-03 | Phase 35 | Pending |
-| BPL-04 | Phase 35 | Pending |
-| BPL-05 | Phase 35 | Pending |
+| BPL-01 | Phase 35 | Complete |
+| BPL-02 | Phase 35 | Complete |
+| BPL-03 | Phase 35 | Complete |
+| BPL-04 | Phase 35 | Complete |
+| BPL-05 | Phase 35 | Complete |
 | OCM-01 | Phase 36 | Pending |
 | OCM-02 | Phase 36 | Pending |
 | OCM-03 | Phase 36 | Pending |

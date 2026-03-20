@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 35 of ongoing (35-backplane-auto-login)
-Plan: 03 of 03
-Status: Phase complete — Plan 35-03 complete
-Last activity: 2026-03-20 — Completed 35-03-PLAN.md (backplane-login CLI wiring + exec chain update)
+Phase: 36 (pending — ready to plan)
+Plan: —
+Status: Phase 35 complete and verified. Ready to plan Phase 36.
+Last activity: 2026-03-20 — Phase 35 verified (15/15 must-haves passed)
 
-Progress: [██████████████░░░░░░░░░░░] 56% (v2.0.7: Phases 33-35 complete)
+Progress: [██████████████████░░░░░░░] 75% (v2.0.7: Phases 33-35 complete, Phase 36 next)
 
 ## Performance Metrics
 
@@ -92,14 +92,15 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ### Blockers/Concerns
 
-- Backplane auto-login depends on extracting cluster ID from Salesforce case data — MC does not yet have this capability. Scoped in as best-effort; fall back to prompting user if extraction is not straightforward.
+- (Resolved) Backplane auto-login cluster ID sourced from sfdc-case.json (openshiftClusterID field) with StateDatabase fallback and user-prompt as last resort.
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 35-03-PLAN.md — backplane-login CLI wiring + exec chain (Phase 35 complete)
+Stopped at: Phase 35 verified passed (15/15 must-haves) — ready to plan Phase 36 (OCM Token Monitor)
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
+*Last updated: 2026-03-20 (Phase 35 verified passed — 15/15 must-haves)*
 *Last updated: 2026-03-20 (Phase 34 verified passed — 6/6 must-haves)*
