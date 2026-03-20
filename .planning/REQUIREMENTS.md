@@ -91,11 +91,11 @@ Which phases cover which requirements. Updated after roadmap creation.
 | BPL-03 | Phase 35 | Complete |
 | BPL-04 | Phase 35 | Complete |
 | BPL-05 | Phase 35 | Complete |
-| OCM-01 | Phase 36 | Pending |
-| OCM-02 | Phase 36 | Pending |
-| OCM-03 | Phase 36 | Pending |
-| OCM-04 | Phase 36 | Pending |
-| OCM-05 | Phase 36 | Pending |
+| OCM-01 | Phase 36 | Complete |
+| OCM-02 | Phase 36 | Complete |
+| OCM-03 | Phase 36 | Complete |
+| OCM-04 | Phase 36 | Complete |
+| OCM-05 | Phase 36 | Complete |
 
 **Coverage:**
 - v1 requirements: 21 total
