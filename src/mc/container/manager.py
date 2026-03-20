@@ -147,11 +147,14 @@ class ContainerManager:
             # Re-raise with context preserved
             raise
 
-        # 6. Build volumes dict — workspace, mc config (ro), OCM config, and claude dir (rw)
+        # 6. Build volumes dict — workspace, mc config (ro), mc state (rw), OCM config, and claude dir (rw)
         volumes: dict[str, dict[str, str]] = {
             workspace_path: {"bind": "/case", "mode": "rw"},
             str(mc_config): {"bind": "/home/mcuser/mc/config", "mode": "ro"},
         }
+        mc_state = Path.home() / "mc" / "state"
+        mc_state.mkdir(parents=True, exist_ok=True)
+        volumes[str(mc_state)] = {"bind": "/home/mcuser/mc/state", "mode": "rw"}
         ocm_config = get_ocm_config_path()
         if ocm_config.exists():
             volumes[str(ocm_config)] = {"bind": "/home/mcuser/.config/ocm/ocm.json", "mode": "ro"}

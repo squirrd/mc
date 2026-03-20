@@ -366,3 +366,79 @@ class TestEdgeCases:
         assert db.list_all() == []
         db.delete_container("12345678")  # Should not raise
         db.reconcile(set())  # Should not raise
+
+
+class TestClusterIdMigration:
+    """Tests for cluster_id schema migration and round-trip persistence (Phase 35)."""
+
+    def test_cluster_id_column_added_to_existing_db(self, tmp_path):
+        """Migration adds cluster_id column to a database created before Phase 35."""
+        import sqlite3 as _sqlite3
+
+        db_path = str(tmp_path / "old.db")
+        # Create a pre-Phase-35 database (no cluster_id column)
+        conn = _sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE containers (
+                case_number TEXT PRIMARY KEY,
+                container_id TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+        """)
+        conn.execute("INSERT INTO containers VALUES ('12345678', 'cid1', '/ws', 1000, 1000)")
+        conn.commit()
+        conn.close()
+
+        # Opening StateDatabase triggers migration
+        db = StateDatabase(db_path)
+        result = db.get_container("12345678")
+        assert result is not None
+        assert result.cluster_id == ""  # NULL coerced to ""
+
+    def test_existing_rows_get_empty_cluster_id_after_migration(self, tmp_path):
+        """Existing rows return cluster_id="" after migration (NULL coercion)."""
+        import sqlite3 as _sqlite3
+
+        db_path = str(tmp_path / "pre35.db")
+        conn = _sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE containers (
+                case_number TEXT PRIMARY KEY,
+                container_id TEXT NOT NULL,
+                workspace_path TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+        """)
+        # Insert two rows
+        conn.execute("INSERT INTO containers VALUES ('11111111', 'cid1', '/ws1', 100, 100)")
+        conn.execute("INSERT INTO containers VALUES ('22222222', 'cid2', '/ws2', 200, 200)")
+        conn.commit()
+        conn.close()
+
+        db = StateDatabase(db_path)
+        for case in ["11111111", "22222222"]:
+            row = db.get_container(case)
+            assert row is not None
+            assert row.cluster_id == "", f"cluster_id should be '' for {case}, got {row.cluster_id!r}"
+
+    def test_cluster_id_update_and_retrieve(self, tmp_path):
+        """cluster_id can be written via update_container() and read back via get_container()."""
+        db = StateDatabase(str(tmp_path / "test.db"))
+        db.add_container("12345678", "cid1", "/workspace")
+        db.update_container("12345678", cluster_id="abc-cluster-123")
+        result = db.get_container("12345678")
+        assert result is not None
+        assert result.cluster_id == "abc-cluster-123"
+
+    def test_cluster_id_clear_sets_empty_string(self, tmp_path):
+        """Clearing cluster_id via update_container stores '' which reads back as ''."""
+        db = StateDatabase(str(tmp_path / "test.db"))
+        db.add_container("12345678", "cid1", "/workspace")
+        db.update_container("12345678", cluster_id="abc-cluster-123")
+        db.update_container("12345678", cluster_id="")
+        result = db.get_container("12345678")
+        assert result is not None
+        assert result.cluster_id == ""
