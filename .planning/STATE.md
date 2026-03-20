@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 34 (in progress)
-Plan: 02 of ? in Phase 34
-Status: In progress — 34-02 complete
-Last activity: 2026-03-20 — Completed 34-02-PLAN.md (mc agent init-case + init_case_data() + 19 unit tests)
+Plan: 03 of 03 in Phase 34
+Status: Phase 34 complete — all CDS requirements satisfied
+Last activity: 2026-03-20 — Completed 34-03-PLAN.md (wired mc agent init-case into terminal attach via build_exec_command)
 
-Progress: [██████░░░░░░░░░░░░░░░░░░░] 26% (v2.0.7: Phase 33 complete, Phase 34 in progress)
+Progress: [███████░░░░░░░░░░░░░░░░░░] 28% (v2.0.7: Phase 33 complete, Phase 34 complete, Phase 35 next)
 
 ## Performance Metrics
 
@@ -58,6 +58,10 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - case_number for mc agent init-case comes from CASE_NUMBER env var (set by ContainerManager), not a CLI arg
 - Unit test mocking patches at original module paths (mc.config.manager.ConfigManager) not mc.agent.case_data.X — required because lazy imports bypass module-level attribute lookup
 
+**34-03 decisions:**
+- exec bash used instead of plain bash — exec replaces the bash -c subshell PID with the interactive shell, providing proper job control
+- || true pattern keeps the interactive shell guarantee even if mc agent init-case fails (no network, CASE_NUMBER missing, etc.)
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -76,7 +80,7 @@ All v2.0.6 decisions recorded in PROJECT.md.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 34-02-PLAN.md — mc agent init-case + init_case_data() + 19 unit tests
+Stopped at: Completed 34-03-PLAN.md — wired mc agent init-case into terminal attach build_exec_command()
 Resume file: None
 
 ---
