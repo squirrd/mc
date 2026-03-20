@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 36 (in progress — 36-01 + 36-02 task 1 complete, awaiting checkpoint)
-Plan: 02 of TBD in phase 36
-Status: Checkpoint — 36-02-PLAN.md task 1 complete, awaiting human-verify at checkpoint
-Last activity: 2026-03-20 — Completed 36-02 Task 1: OCM monitor wired into main.py
+Phase: 36 (complete — 36-01 + 36-02 both complete)
+Plan: 02 of 02 in phase 36
+Status: Phase complete
+Last activity: 2026-03-20 — Completed 36-02-PLAN.md: OCM monitor wired into CLI startup, human verification approved
 
-Progress: [████████████████████░░░░░] 80% (v2.0.7: Phases 33-36-02 task 1 complete)
+Progress: [█████████████████████████] 85% (v2.0.7: Phase 36 OCM token monitor complete end-to-end)
 
 ## Performance Metrics
 
@@ -106,11 +106,12 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:24:05Z
-Stopped at: 36-02-PLAN.md Task 1 complete — hit checkpoint:human-verify (Task 2)
-Resume file: None (checkpoint requires user approval then continuation agent)
+Last session: 2026-03-20T12:38:00Z
+Stopped at: 36-02-PLAN.md complete — phase 36 fully done
+Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
+*Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
 *Last updated: 2026-03-20 (Phase 35 verified passed — 15/15 must-haves)*
 *Last updated: 2026-03-20 (Phase 34 verified passed — 6/6 must-haves)*
