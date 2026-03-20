@@ -10,7 +10,7 @@ from mc.cli.commands import case, container, other
 from mc.config.manager import ConfigManager
 from mc.config.wizard import run_setup_wizard
 from mc.exceptions import MCError
-from mc.runtime import get_runtime_mode
+from mc.runtime import get_runtime_mode, should_check_for_updates
 from mc.utils.errors import handle_cli_error
 from mc.utils.file_ops import does_path_exist
 from mc.utils.logging import setup_logging
@@ -156,8 +156,8 @@ def main() -> ExitCode:
             logger.error("The directory '%s' must exist", base_dir)
             return 1
 
-        # Show update banner (foreground check, once per calendar day, suppressed for --version)
-        if get_runtime_mode() != 'agent':
+        # Show update banner (foreground check, once per calendar day, suppressed in agent mode)
+        if should_check_for_updates():
             try:
                 show_update_banner()
             except Exception as e:
