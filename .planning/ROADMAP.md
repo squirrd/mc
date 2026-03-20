@@ -161,9 +161,9 @@ Phases 29-32 delivered: iTerm2 Python API migration, mc-update upgrade/pin/unpin
 5. All existing tests still pass after changes
 
 **Plans:** 3 plans
-- [ ] 37-01-PLAN.md — Fix _get_state_db() StateDatabase path bug (BPL-04) and add path assertion test
-- [ ] 37-02-PLAN.md — Add banner agent-mode guard tests to test_main.py
-- [ ] 37-03-PLAN.md — Wire should_check_for_updates() into main.py; delete orphaned check_for_updates()
+- [x] 37-01-PLAN.md — Fix _get_state_db() StateDatabase path bug (BPL-04) and add path assertion test
+- [x] 37-02-PLAN.md — Add banner agent-mode guard tests to test_main.py
+- [x] 37-03-PLAN.md — Wire should_check_for_updates() into main.py; delete orphaned check_for_updates()
 
 ---
 
@@ -188,4 +188,4 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 34. Case Data Store | v2.0.7 | 3/3 | Complete | 2026-03-20 |
 | 35. Backplane Auto-Login | v2.0.7 | 3/3 | Complete | 2026-03-20 |
 | 36. OCM Token Monitor | v2.0.7 | 2/2 | Complete | 2026-03-20 |
-| 37. Pre-Release Fixes | v2.0.7 | 0/3 | Pending | — |
+| 37. Pre-Release Fixes | v2.0.7 | 3/3 | Complete | 2026-03-21 |
