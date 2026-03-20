@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 36 (in progress — 36-01 complete)
-Plan: 01 of TBD in phase 36
-Status: In progress — 36-01-PLAN.md complete
-Last activity: 2026-03-20 — Completed 36-01-PLAN.md (OCM monitor module + tests)
+Phase: 36 (in progress — 36-01 + 36-02 task 1 complete, awaiting checkpoint)
+Plan: 02 of TBD in phase 36
+Status: Checkpoint — 36-02-PLAN.md task 1 complete, awaiting human-verify at checkpoint
+Last activity: 2026-03-20 — Completed 36-02 Task 1: OCM monitor wired into main.py
 
-Progress: [███████████████████░░░░░░] 76% (v2.0.7: Phases 33-36-01 complete)
+Progress: [████████████████████░░░░░] 80% (v2.0.7: Phases 33-36-02 task 1 complete)
 
 ## Performance Metrics
 
@@ -85,6 +85,10 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - subprocess.run for ocm login inherits terminal (no stdout=/stderr= redirection) so interactive auth code flow streams to user
 - PermissionError in os.kill treated as alive — conservative to prevent duplicate monitors from false-cleaning live PIDs
 
+**36-02 decisions:**
+- Two separate if get_runtime_mode() != 'agent' blocks kept adjacent — each startup concern independently guarded, not combined
+- Lazy import from mc.utils.ocm_monitor inside try/except — failures silently logged at debug level, no mc command ever blocked
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -102,9 +106,9 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:20:33Z
-Stopped at: Completed 36-01-PLAN.md — OCM monitor module and tests
-Resume file: None
+Last session: 2026-03-20T12:24:05Z
+Stopped at: 36-02-PLAN.md Task 1 complete — hit checkpoint:human-verify (Task 2)
+Resume file: None (checkpoint requires user approval then continuation agent)
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
