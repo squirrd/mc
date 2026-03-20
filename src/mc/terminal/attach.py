@@ -54,9 +54,9 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
         BASH_ENV is only read by non-interactive shells. Interactive bash sessions
         launched via `podman exec -it` ignore BASH_ENV. Proxy env vars must be
         passed explicitly via --env flags so they reach the interactive shell.
-        Prepends 'mc agent init-case || true' to refresh case data files before
-        interactive shell. The || true ensures the shell opens even if init-case
-        exits non-zero.
+        Prepends 'mc agent init-case || true; mc agent backplane-login || true' before
+        the interactive shell. The || true ensures the shell opens even if either
+        agent command exits non-zero.
     """
     # Detect proxy from host environment or macOS system proxy.
     # IMPORTANT: BASH_ENV is ignored by interactive shells — proxy MUST go via --env.
@@ -79,7 +79,7 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
         f"--env 'BASH_ENV={bashrc_path}' "
         f"--env 'PS1=[MC-{case_number}] \\w\\$ ' "
         f"{proxy_env}"
-        f"{container_id} /bin/bash -c 'mc agent init-case || true; exec bash'; exit"
+        f"{container_id} /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit"
     )
 
 

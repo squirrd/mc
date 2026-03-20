@@ -52,7 +52,7 @@ class TestBuildExecCommand:
         assert result.startswith("podman exec -it")
         assert f"--env 'BASH_ENV={bashrc_path}'" in result
         assert f"--env 'PS1=[MC-{case_number}" in result
-        assert result.endswith(f"{container_id} /bin/bash -c 'mc agent init-case || true; exec bash'; exit")
+        assert result.endswith(f"{container_id} /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit")
 
     def test_build_exec_command_special_chars(self) -> None:
         """Test exec command handles special characters in paths."""
@@ -367,7 +367,7 @@ class TestAttachTerminal:
         assert command.startswith("podman exec -it")
         assert "--env 'BASH_ENV=/tmp/bashrc'" in command
         assert "--env 'PS1=[MC-12345678]" in command
-        assert "mc-12345678 /bin/bash -c 'mc agent init-case || true; exec bash'; exit" in command
+        assert "mc-12345678 /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit" in command
 
     def test_attach_terminal_not_tty(self, mock_dependencies, mocker: Mock) -> None:
         """Test attach_terminal raises error when not in TTY."""
