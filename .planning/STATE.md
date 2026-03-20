@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 36 (complete and verified)
-Plan: —
-Status: Phase 36 verified (6/6 must-haves). v2.0.7 milestone all phases done.
-Last activity: 2026-03-20 — Phase 36 verified passed (6/6 must-haves)
+Phase: 37-pre-release-fixes (in progress)
+Plan: 01 of 3 complete
+Status: In progress
+Last activity: 2026-03-20 — Completed 37-01-PLAN.md (BPL-04 fix)
 
-Progress: [█████████████████████████] 100% (v2.0.7: Phases 33-36 all complete)
+Progress: [█████████████████████████░░░] (37-01 done, 37-02/03 pending)
 
 ## Performance Metrics
 
@@ -89,6 +89,10 @@ All v2.0.6 decisions recorded in PROJECT.md.
 - Two separate if get_runtime_mode() != 'agent' blocks kept adjacent — each startup concern independently guarded, not combined
 - Lazy import from mc.utils.ocm_monitor inside try/except — failures silently logged at debug level, no mc command ever blocked
 
+**37-01 decisions:**
+- db_path hardcoded to Path.home() / "mc" / "state" / "containers.db" — matches host-mounted path ContainerManager uses at container creation
+- StateDatabase() with no args is wrong for agent code: platformdirs defaults to ~/.local/share/mc/containers.db (not the mounted path)
+
 ### Pending Todos
 
 1. **Address orphaned helper functions from v2.0.4** (planning)
@@ -106,12 +110,13 @@ All v2.0.6 decisions recorded in PROJECT.md.
 
 ## Session Continuity
 
-Last session: 2026-03-20T12:38:00Z
-Stopped at: 36-02-PLAN.md complete — phase 36 fully done
+Last session: 2026-03-20T23:24:57Z
+Stopped at: 37-01-PLAN.md complete — BPL-04 fix
 Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
 *Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
+*Last updated: 2026-03-20 (37-01 complete — BPL-04 fixed: StateDatabase explicit path in _get_state_db)*
 *Last updated: 2026-03-20 (Phase 35 verified passed — 15/15 must-haves)*
 *Last updated: 2026-03-20 (Phase 34 verified passed — 6/6 must-haves)*
