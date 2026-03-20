@@ -118,10 +118,26 @@ class ContainerManager:
                 )
                 self.state.delete_container(case_number)
 
-        # 3. Create workspace directory if missing (prevents mount failures)
+        # 3. Pre-flight: verify required host paths before any side effects
+        mc_config = get_mc_config_path()
+        if not mc_config.exists():
+            raise RuntimeError(
+                f"MC config directory not found: {mc_config}\n"
+                f"Run mc on the host first to complete initial setup, "
+                f"then retry."
+            )
+
+        claude_dir = get_claude_config_path()
+        if not claude_dir.exists():
+            print(
+                f"Warning: Claude config directory not found: {claude_dir}\n"
+                f"claude will not be authenticated inside the container."
+            )
+
+        # 4. Create workspace directory if missing (prevents mount failures)
         os.makedirs(workspace_path, exist_ok=True)
 
-        # 4. Ensure image exists (pull from registry or use local)
+        # 5. Ensure image exists (pull from registry or use local)
         try:
             self._ensure_image(
                 image_name="mc-rhel10:latest",
@@ -131,15 +147,18 @@ class ContainerManager:
             # Re-raise with context preserved
             raise
 
-        # 5. Build volumes dict — workspace always present, OCM config if available
+        # 6. Build volumes dict — workspace, mc config (ro), OCM config, and claude dir (rw)
         volumes: dict[str, dict[str, str]] = {
-            workspace_path: {"bind": "/case", "mode": "rw"}
+            workspace_path: {"bind": "/case", "mode": "rw"},
+            str(mc_config): {"bind": "/home/mcuser/mc/config", "mode": "ro"},
         }
         ocm_config = get_ocm_config_path()
         if ocm_config.exists():
             volumes[str(ocm_config)] = {"bind": "/home/mcuser/.config/ocm/ocm.json", "mode": "ro"}
+        if claude_dir.exists():
+            volumes[str(claude_dir)] = {"bind": "/home/mcuser/.claude", "mode": "rw"}
 
-        # 6. Create new container via Podman API
+        # 7. Create new container via Podman API
         try:
             container = self.podman.client.containers.create(
                 image="mc-rhel10:latest",
@@ -167,7 +186,7 @@ class ContainerManager:
                 f"Failed to create container for case {case_number}: {e}"
             ) from e
 
-        # 6. Start container
+        # 8. Start container
         try:
             container.start()  # type: ignore[no-untyped-call]
         except Exception as e:
@@ -175,14 +194,14 @@ class ContainerManager:
                 f"Failed to start container for case {case_number}: {e}"
             ) from e
 
-        # 6b. Reload container to update status attribute
+        # 8b. Reload container to update status attribute
         try:
             container.reload()  # type: ignore[no-untyped-call]
         except Exception:
             # Reload is best-effort - if it fails, continue
             pass
 
-        # 7. Record in state database
+        # 9. Record in state database
         try:
             self.state.add_container(case_number, container.id, workspace_path)  # type: ignore[attr-defined]
         except Exception as e:
