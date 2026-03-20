@@ -27,6 +27,8 @@ class CaseDetails(TypedDict):
     status: str
     severity: NotRequired[str]
     product: NotRequired[str]
+    openshiftClusterID: NotRequired[str]
+    customerName: NotRequired[str]
 
 
 class AttachmentMetadata(TypedDict):
@@ -201,6 +203,49 @@ class RedHatAPIClient:
             )
         except requests.exceptions.RequestException as e:
             raise APIError(f"API request failed for case {case_number}: {str(e)}")
+
+    def fetch_case_comments(self, case_number: str) -> list[dict[str, Any]]:
+        """
+        Fetch comments for a specific case.
+
+        Args:
+            case_number: Case number to fetch comments for
+
+        Returns:
+            list: Raw comment objects from the API
+
+        Raises:
+            HTTPAPIError: If API request returns HTTP error
+            APITimeoutError: If request times out
+            APIConnectionError: If connection fails
+            APIError: For other request failures
+        """
+        url = f"{self.BASE_URL}/cases/{case_number}/comments"
+        logger.debug("Fetching case comments for %s from %s", case_number, url)
+
+        try:
+            response = self.session.get(url, verify=self.verify_ssl, timeout=self.timeout)
+            response.raise_for_status()
+            logger.debug("Successfully fetched comments for case %s", case_number)
+            return cast(list[dict[str, Any]], response.json())
+        except requests.exceptions.HTTPError as e:
+            raise HTTPAPIError.from_response(e.response)
+        except requests.exceptions.RetryError as e:
+            if hasattr(e, 'response') and e.response:
+                raise HTTPAPIError.from_response(e.response)
+            raise APIError(f"API request failed for case {case_number} comments after retries: {str(e)}")
+        except requests.exceptions.Timeout:
+            raise APITimeoutError(
+                f"Request timed out while fetching comments for case {case_number}",
+                "Check: Network connectivity and try again"
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise APIConnectionError(
+                f"Failed to connect to API for case {case_number} comments",
+                "Check: VPN connection and network access"
+            )
+        except requests.exceptions.RequestException as e:
+            raise APIError(f"API request failed for case {case_number} comments: {str(e)}")
 
     def fetch_account_details(self, account_number: str) -> dict[str, Any]:
         """
