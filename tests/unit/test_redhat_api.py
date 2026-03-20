@@ -5,7 +5,7 @@ import requests
 import responses
 from unittest.mock import Mock, patch
 from mc.integrations.redhat_api import RedHatAPIClient, check_download_safety
-from mc.exceptions import HTTPAPIError
+from mc.exceptions import HTTPAPIError, APITimeoutError, APIConnectionError
 
 
 @responses.activate
@@ -221,3 +221,101 @@ def test_check_download_safety_insufficient_space(mock_disk_usage):
     assert is_safe is False
     assert warning is not None
     assert "Insufficient disk space" in warning
+
+
+# --- fetch_case_comments() tests ---
+
+@responses.activate
+def test_fetch_case_comments_returns_list(api_client, mock_api_base_url):
+    """Happy path: comments endpoint returns list of dicts."""
+    case_number = "12345678"
+    expected_comments = [
+        {"id": "1", "text": "First comment", "author": "engineer1"},
+        {"id": "2", "text": "Second comment", "author": "engineer2"},
+    ]
+
+    responses.add(
+        responses.GET,
+        f"{mock_api_base_url}/cases/{case_number}/comments",
+        json=expected_comments,
+        status=200,
+    )
+
+    result = api_client.fetch_case_comments(case_number)
+
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert result[0]["id"] == "1"
+    assert result[0]["text"] == "First comment"
+    assert result[1]["author"] == "engineer2"
+
+
+@responses.activate
+def test_fetch_case_comments_returns_empty_list(api_client, mock_api_base_url):
+    """API returns empty list (no comments)."""
+    case_number = "12345678"
+
+    responses.add(
+        responses.GET,
+        f"{mock_api_base_url}/cases/{case_number}/comments",
+        json=[],
+        status=200,
+    )
+
+    result = api_client.fetch_case_comments(case_number)
+
+    assert result == []
+
+
+@responses.activate
+def test_fetch_case_comments_raises_on_401(api_client, mock_api_base_url):
+    """401 from API raises HTTPAPIError."""
+    case_number = "12345678"
+
+    responses.add(
+        responses.GET,
+        f"{mock_api_base_url}/cases/{case_number}/comments",
+        json={"error": "Unauthorized"},
+        status=401,
+    )
+
+    with pytest.raises(HTTPAPIError) as exc_info:
+        api_client.fetch_case_comments(case_number)
+
+    assert exc_info.value.status_code == 401
+
+
+@responses.activate
+def test_fetch_case_comments_raises_on_timeout(api_client, mock_api_base_url):
+    """Timeout raises APITimeoutError."""
+    case_number = "12345678"
+
+    def raise_timeout(request):
+        raise requests.exceptions.Timeout("Connection timed out")
+
+    responses.add_callback(
+        responses.GET,
+        f"{mock_api_base_url}/cases/{case_number}/comments",
+        callback=raise_timeout,
+    )
+
+    with pytest.raises(APITimeoutError):
+        api_client.fetch_case_comments(case_number)
+
+
+@responses.activate
+def test_fetch_case_comments_raises_on_connection_error(api_client, mock_api_base_url):
+    """Connection error raises APIConnectionError."""
+    case_number = "12345678"
+
+    def raise_connection_error(request):
+        raise requests.exceptions.ConnectionError("Connection refused")
+
+    responses.add_callback(
+        responses.GET,
+        f"{mock_api_base_url}/cases/{case_number}/comments",
+        callback=raise_connection_error,
+    )
+
+    with pytest.raises(APIConnectionError):
+        api_client.fetch_case_comments(case_number)
