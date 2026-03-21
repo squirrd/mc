@@ -24,7 +24,26 @@
       "Bash(uv run pytest*)",
       "Bash(cd * && * uv run pytest*)",
       "Bash(podman inspect*)",
-      "Bash(podman exec*)"
+      "Bash(podman exec*)",
+      "Bash(python3 scripts/release/suggest_version.py*)",
+      "Bash(python3 scripts/release/list_branches.py*)",
+      "Bash(python3 scripts/release/log_failure.py*)",
+      "Bash(bash scripts/release/run_tests.sh*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git push*)",
+      "Bash(git tag*)",
+      "Bash(git checkout*)",
+      "Bash(git merge*)",
+      "Bash(git rebase*)",
+      "Bash(git branch*)",
+      "Bash(git reset*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git log*)",
+      "Bash(gh release create*)",
+      "Bash(uv tool install*)",
+      "Bash(uv run mc*)"
     ]
   }
 }
