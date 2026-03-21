@@ -100,6 +100,24 @@ For each requirement in REQUIREMENTS.md mapped to this milestone:
 - Check phase verification status
 - Determine: satisfied | partial | unsatisfied
 
+## 5a. Verify Version Bump
+
+Check that `pyproject.toml` version matches the milestone version:
+
+```bash
+grep "^version" pyproject.toml
+```
+
+**If version does not match milestone:** Flag as a gap — the milestone version must be set in pyproject.toml before archiving. Bump it now:
+
+```bash
+# Edit pyproject.toml version field to match milestone
+# Then verify:
+uv run mc --version
+```
+
+Include version check result in the audit report. A mismatched version is a blocker (`gaps_found`).
+
 ## 6. Aggregate into v{version}-MILESTONE-AUDIT.md
 
 Create `.planning/v{version}-v{version}-MILESTONE-AUDIT.md` with:
