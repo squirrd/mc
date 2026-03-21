@@ -12,6 +12,8 @@
 git push origin main
 ```
 
+GitHub repo: https://github.com/squirrd/mc
+
 ---
 
 ### Step 2 — Tag and release v2.0.7
@@ -47,7 +49,7 @@ gh release create v2.0.7 \
 
 ```bash
 # Fresh install
-uv tool install git+https://github.com/OWNER/REPO@v2.0.7
+uv tool install git+https://github.com/squirrd/mc@v2.0.7
 
 # Upgrade existing install
 mc-update upgrade
@@ -59,7 +61,7 @@ EOF
 Verify install works from the tag:
 
 ```bash
-uv tool install --force "git+https://github.com/OWNER/REPO@v2.0.7"
+uv tool install --force "git+https://github.com/squirrd/mc@v2.0.7"
 mc --version   # should print: mc 2.0.7
 ```
 
@@ -108,14 +110,33 @@ git push origin v2.0.8
 git push origin latest --force
 
 gh release create v2.0.8 \
-  --title "v2.0.8 — <title from v2.0.8 branch content>" \
-  --notes "<release notes>"
+  --title "v2.0.8 — Update Banner & Integration Test Fixes" \
+  --notes "$(cat <<'EOF'
+## What's New
+
+### Bug Fixes
+
+- **Update banner failure throttle** (`src/mc/banner.py`) — when the GitHub releases API call fails (404, network error), the failure timestamp is now stored and the check is skipped for 1 hour. Previously a failed fetch stored no timestamp, causing a fresh GitHub API call on every `mc` invocation indefinitely. Adds `last_failed_fetch` field to config.
+- **Stale integration test APIs fixed** — `test_container_delete_clears_window_registry_regression` removed stale `image=` argument; `ContainerManager.create()` no longer accepts it.
+- **macOS proxy mock in integration tests** — `test_container_ocm_env_setup_https_proxy_absent_when_unset_regression` now mocks `detect_macos_proxy()` so the test correctly isolates the no-proxy path on machines with a corporate proxy configured.
+
+## Install / Upgrade
+
+```bash
+# Fresh install
+uv tool install git+https://github.com/squirrd/mc@v2.0.8
+
+# Upgrade existing install
+mc-update upgrade
+```
+EOF
+)"
 ```
 
 Verify install from tag:
 
 ```bash
-uv tool install --force "git+https://github.com/OWNER/REPO@v2.0.8"
+uv tool install --force "git+https://github.com/squirrd/mc@v2.0.8"
 mc --version   # should print: mc 2.0.8
 ```
 
