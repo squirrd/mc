@@ -67,33 +67,56 @@ mc --version   # should print: mc 2.0.7
 
 ---
 
-### Step 3 — Merge v2.0.8 branch into main
+### Step 3a — Rebase v2.0.8 onto main
+
+The v2.0.8 branch diverged before the v2.0.7 version bump, so it still has
+`version = "2.0.6"` in pyproject.toml. Rebasing first replays the 3 v2.0.8
+fixes on top of the current main tip, giving a clean linear history and
+avoiding a pyproject.toml conflict on merge.
 
 ```bash
-# Check what's on the branch first
-git log main..origin/v2.0.8 --oneline
-
-# Merge
-git checkout main
-git merge origin/v2.0.8
-
-# If there are conflicts, resolve then:
-git add <conflicted-files>
-git commit
+git checkout v2.0.8
+git rebase main
 ```
 
-After merge, verify tests still pass:
+If there are conflicts (unlikely — the 3 fixes touch different files):
+
+```bash
+# Resolve conflict, then:
+git add <file>
+git rebase --continue
+```
+
+After rebase, confirm the branch has v2.0.7 commits underneath the 3 fixes:
+
+```bash
+git log --oneline -8
+```
+
+### Step 3b — Bump version to 2.0.8
+
+Now that v2.0.8 sits on top of main (which has `version = "2.0.7"`), bump it:
+
+```bash
+# Edit pyproject.toml: version = "2.0.7" → "2.0.8"
+uv run mc --version   # confirm: mc 2.0.8
+git add pyproject.toml
+git commit -m "chore: bump version to 2.0.8"
+```
+
+### Step 3c — Merge v2.0.8 into main
+
+With the rebase done, this will be a clean fast-forward — no merge commit, no conflicts:
+
+```bash
+git checkout main
+git merge v2.0.8   # fast-forward
+```
+
+Verify tests still pass:
 
 ```bash
 uv run pytest tests/unit/ -q
-```
-
-Also verify the version in pyproject.toml — if it's still 2.0.7, bump it:
-
-```bash
-grep "^version" pyproject.toml
-# Edit to 2.0.8 if needed
-uv run mc --version   # confirm
 ```
 
 ---
