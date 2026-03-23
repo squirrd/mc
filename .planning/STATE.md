@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** v2.0.7 — OCM Integration & Container Tooling
+**Current focus:** Planning next milestone (v2.0.8 or v2.0.9)
 
 ## Current Position
 
-Phase: 37 (complete and verified)
+Phase: — (no active phase)
 Plan: —
-Status: Phase 37 verified (5/5 must-haves). v2.0.7 milestone all phases done.
-Last activity: 2026-03-21 — Phase 37 verified passed (5/5 must-haves)
+Status: v2.0.7 milestone complete and archived. v2.0.8 shipped. Ready for next milestone.
+Last activity: 2026-03-23 — v2.0.7 milestone archived; v2.0.8 shipped
 
-Progress: [█████████████████████████] 100% (v2.0.7: Phases 33-37 all complete)
+Progress: [—] Awaiting next milestone definition
 
 ## Performance Metrics
 

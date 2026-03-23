@@ -10,7 +10,7 @@ Make the codebase testable and maintainable so new features can be added confide
 
 ## Current Status
 
-**Latest Release:** v2.0.6 (2026-03-16)
+**Latest Release:** v2.0.8 (2026-03-23)
 
 **What's Shipped:**
 - ✓ Per-case containerized environments eliminating credential/config collisions
@@ -32,6 +32,13 @@ Make the codebase testable and maintainable so new features can be added confide
 - ✓ Version pinning (mc-update pin/unpin/check) with GitHub validation and config.toml persistence
 - ✓ Update notification banner — Rich Panel on stderr, calendar-day suppression, pin-aware messaging, 1.5s timeout
 - ✓ Production-ready test suite: 579 unit tests passing with 67.84% coverage
+- ✓ OCM token monitor — daemon thread checks JWT expiry, warns + triggers re-login when <60 min remaining
+- ✓ Case data store — sfdc-case.json + case.env written before shell opens with full case metadata
+- ✓ Backplane auto-login — reads cluster_id from case data, runs ocm backplane login automatically with fallback/persistence
+- ✓ Container config mount — ~/mc/config read-only in containers; mc commands work without re-running wizard
+- ✓ Claude Code in container — claude binary in image; ~/.claude mounted from host
+- ✓ Update banner failure throttle — 1-hour skip after failed GitHub API calls (v2.0.8)
+- ✓ tdd-release skill — multi-branch release orchestrator with per-merge test gating and automated publishing
 
 ## Requirements
 
@@ -189,16 +196,35 @@ Shipped in v2.0.5 (2026-03-12):
 - ✓ `mc --version` suppresses banner entirely — v2.0.5
 - ✓ Non-interactive (piped) runs do not write suppression timestamp — v2.0.5
 
+
+Shipped in v2.0.7 (2026-03-21):
+
+**OCM Integration & Container Tooling:**
+- ✓ OCM-01: Background daemon checks OCM refresh token expiry every 30 minutes — v2.0.7
+- ✓ OCM-02: Warning printed when token expires within 60 minutes — v2.0.7
+- ✓ OCM-03: `ocm login --use-auth-code --url=prd` triggered in background subprocess — v2.0.7
+- ✓ OCM-04: Informational message when ocm.json not found — v2.0.7
+- ✓ OCM-05: Daemon thread never blocks CLI commands — v2.0.7
+- ✓ CNT-01: ~/mc/config mounted read-only into container — v2.0.7
+- ✓ CNT-02: mc commands work inside container without setup wizard — v2.0.7
+- ✓ CNT-03: Container cannot write to host config — v2.0.7
+- ✓ CDS-01: sfdc-case.json written to /case/ before shell opens — v2.0.7
+- ✓ CDS-02: case.env written to /case/ for bash source-ability — v2.0.7
+- ✓ CDS-03: Files contain case_number, cluster_id, customer, summary, severity, status, product — v2.0.7
+- ✓ CDS-04: Files overwritten on every mc case N invocation — v2.0.7
+- ✓ CDS-05: cluster_id present even when empty (empty string, not absent) — v2.0.7
+- ✓ BPL-01: cluster_id read from sfdc-case.json at terminal attach time — v2.0.7
+- ✓ BPL-02: ocm backplane login runs automatically when cluster_id present — v2.0.7
+- ✓ BPL-03: User prompted for cluster ID when absent — v2.0.7
+- ✓ BPL-04: User-entered cluster ID stored in StateDatabase; reused on subsequent invocations — v2.0.7
+- ✓ BPL-05: Backplane login failure non-fatal — v2.0.7
+- ✓ CLD-01: claude binary available in container — v2.0.7
+- ✓ CLD-02: ~/.claude mounted read-write from host — v2.0.7
+- ✓ CLD-03: No re-auth needed inside container — v2.0.7
+
 ### Active
 
-**Milestone: v2.0.7 — OCM Integration & Container Tooling**
-
-**Goal:** Automate OCM token lifecycle on the host and improve container setup with shared config, backplane auto-login, and Claude Code.
-
-- [ ] OCM token background monitor — check JWT expiry every 30 mins on host; notify user + trigger `ocm login --use-auth-code --url=prd` when token expires within 1 hour
-- [ ] Mount `~/mc/config` read-only into containers — fixes "mc config not found" error when running mc commands inside case containers
-- [ ] Auto-backplane-login after `mc create` — extract cluster ID from Salesforce case data and run `ocm backplane login <cluster-id>` inside the container (fall back to prompting user if not available)
-- [ ] Claude Code in container — add `@anthropic-ai/claude-code` to container image and mount `~/.claude` from host for session token reuse
+*(No active requirements — next milestone not yet defined. Run `/gsd:new-milestone` to start.)*
 
 ### Out of Scope
 
@@ -305,4 +331,4 @@ Shipped in v2.0.5 (2026-03-12):
 | VersionChecker removed from main.py | Banner replaces background check; cleaner single notification path | ✓ Good - no duplicate notification logic |
 
 ---
-*Last updated: 2026-03-19 after v2.0.7 milestone start*
+*Last updated: 2026-03-23 after v2.0.7 milestone completion*

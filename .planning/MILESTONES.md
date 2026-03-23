@@ -1,5 +1,28 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.7 OCM Integration & Container Tooling (Shipped: 2026-03-21)
+
+**Delivered:** Host-side OCM token monitoring, shared config mount in containers, Salesforce-driven backplane auto-login, and Claude Code integration
+
+**Phases completed:** 33-37 (13 plans total)
+
+**Key accomplishments:**
+
+- **OCM token monitor** — daemon thread checks JWT expiry every 30 min; warns + triggers `ocm login --use-auth-code --url=prd` when <60 min remaining; informational message when ocm.json absent
+- **Case data store** — `sfdc-case.json` + `case.env` written to `/case/` before shell opens; includes case_number, cluster_id, customer, summary, severity, status, product
+- **Backplane auto-login** — reads cluster_id from case data, runs `ocm backplane login` automatically; falls back to user prompt; stores entered ID in StateDatabase for reuse
+- **Container config mount** — `~/mc/config` mounted read-only into containers; `mc` commands work inside without re-running setup wizard
+- **Claude Code in container** — `claude` binary in image; `~/.claude` mounted from host; no re-auth needed inside containers
+- **Pre-release fixes** — StateDatabase explicit path fix (BPL-04); banner agent-mode test coverage; orphaned `check_for_updates()` removed
+
+**Stats:**
+
+- 5 phases (33-37), 13 plans
+- 21/21 requirements shipped (audit passed)
+- Git tag: v2.0.7
+
+---
+
 ## v2.0.6 iTerm2 Hotfix (Shipped: 2026-03-16)
 
 **Delivered:** Batch of post-v2.0.5 bug fixes making iTerm2 integration production-ready and fixing package naming
