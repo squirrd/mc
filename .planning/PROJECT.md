@@ -197,6 +197,13 @@ Shipped in v2.0.5 (2026-03-12):
 - ✓ Non-interactive (piped) runs do not write suppression timestamp — v2.0.5
 
 
+Shipped in v2.0.8 (2026-03-23):
+
+**Update Banner & Test Fixes:**
+- ✓ Update banner failure throttle — `last_failed_fetch` stored in config; 1-hour skip after failed GitHub API calls — v2.0.8
+- ✓ Stale integration test `image=` arg removed; aligned with `ContainerManager.create()` signature — v2.0.8
+- ✓ `detect_macos_proxy()` mocked in proxy integration test for correct isolation on machines with corporate proxy — v2.0.8
+
 Shipped in v2.0.7 (2026-03-21):
 
 **OCM Integration & Container Tooling:**
@@ -238,9 +245,9 @@ Shipped in v2.0.7 (2026-03-21):
 
 ## Context
 
-**Current State (v2.0.6 shipped 2026-03-16):**
+**Current State (v2.0.8 shipped 2026-03-23):**
 - Python 3.11+ CLI tool and container orchestrator for Red Hat support case management
-- 9,921 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
+- ~10,000 lines of production Python code + 972 lines container infrastructure (Bash/YAML)
 - Layered architecture: CLI → Commands → Container Manager/Integrations → Utilities
 - External dependencies: Red Hat API, Podman, SQLite, GitHub API, iTerm2 Python API (optional, macOS)
 - Tech stack: pytest, requests, rich, podman-py, tomli/tomllib, packaging, wmctrl/xdotool (Linux X11), skopeo, yq, iterm2 (optional macOS)
@@ -331,4 +338,4 @@ Shipped in v2.0.7 (2026-03-21):
 | VersionChecker removed from main.py | Banner replaces background check; cleaner single notification path | ✓ Good - no duplicate notification logic |
 
 ---
-*Last updated: 2026-03-23 after v2.0.7 milestone completion*
+*Last updated: 2026-03-25 after v2.0.8 milestone completion*

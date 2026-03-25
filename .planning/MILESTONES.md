@@ -1,5 +1,28 @@
 # Project Milestones: MC CLI Hardening Project
 
+## v2.0.8 Update Banner & Test Fixes (Shipped: 2026-03-23)
+
+**Delivered:** Unplanned patch fixing update banner resilience and stale integration test APIs post-v2.0.7
+
+**Phases completed:** unplanned (3 fixes)
+
+**Key accomplishments:**
+
+- **Update banner failure throttle** — when GitHub releases API call fails, failure timestamp stored and check skipped for 1 hour; previously a failed fetch caused a fresh API call on every `mc` invocation indefinitely; adds `last_failed_fetch` field to config
+- **Stale integration test API fixed** — `test_container_delete_clears_window_registry_regression` removed stale `image=` argument; aligned with `ContainerManager.create()` which no longer accepts it
+- **macOS proxy mock** — `test_container_ocm_env_setup_https_proxy_absent_when_unset_regression` now mocks `detect_macos_proxy()` so the test correctly isolates the no-proxy path on machines with a corporate proxy
+
+**Stats:**
+
+- 3 bug fixes (unplanned patch)
+- Git tag: v2.0.8 (2026-03-23)
+
+**Git range:** `ca4d786` (chore: bump version to 2.0.8) → `9ebee59` (docs: close 2 stale todos)
+
+**What's next:** UAT (Steps 6-7 in BACKLOG.md), then bug fix cycle
+
+---
+
 ## v2.0.7 OCM Integration & Container Tooling (Shipped: 2026-03-21)
 
 **Delivered:** Host-side OCM token monitoring, shared config mount in containers, Salesforce-driven backplane auto-login, and Claude Code integration

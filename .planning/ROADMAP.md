@@ -11,6 +11,7 @@
 - ✅ **v2.0.5 Auto-Update & Terminal** - Phases 29-32 (shipped 2026-03-12)
 - ✅ **v2.0.6 iTerm2 Hotfix** - unplanned fixes (shipped 2026-03-16)
 - ✅ **v2.0.7 OCM Integration & Container Tooling** - Phases 33-37 (shipped 2026-03-21)
+- ✅ **v2.0.8 Update Banner & Test Fixes** - unplanned fixes (shipped 2026-03-23)
 
 ## Phases
 
@@ -72,10 +73,17 @@ Phases 33-37 delivered: OCM token monitor, case data store (sfdc-case.json/case.
 
 </details>
 
+<details>
+<summary>✅ v2.0.8 Update Banner & Test Fixes (unplanned) — SHIPPED 2026-03-23</summary>
+
+Unplanned patch: update banner failure throttle (1-hour skip after failed GitHub API calls), stale integration test API fixes (removed image= arg), macOS proxy mock in integration tests. See MILESTONES.md for details.
+
+</details>
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 33 → 34 → 35 → 36
+Phases execute in numeric order: 33 → 34 → 35 → 36 → 37 → 38
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -94,3 +102,4 @@ Phases execute in numeric order: 33 → 34 → 35 → 36
 | 35. Backplane Auto-Login | v2.0.7 | 3/3 | Complete | 2026-03-20 |
 | 36. OCM Token Monitor | v2.0.7 | 2/2 | Complete | 2026-03-20 |
 | 37. Pre-Release Fixes | v2.0.7 | 3/3 | Complete | 2026-03-21 |
+| 38. Update Banner & Test Fixes | v2.0.8 | 3/3 | Complete | 2026-03-23 |

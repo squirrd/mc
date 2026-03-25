@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Make the codebase testable and maintainable so new features can be added confidently without breaking existing functionality
-**Current focus:** Planning next milestone (v2.0.8 or v2.0.9)
+**Current focus:** UAT and bug fix cycle (Steps 6-8 in BACKLOG.md)
 
 ## Current Position
 
 Phase: — (no active phase)
 Plan: —
-Status: v2.0.7 milestone complete and archived. v2.0.8 shipped. Ready for next milestone.
-Last activity: 2026-03-23 — v2.0.7 milestone archived; v2.0.8 shipped
+Status: v2.0.8 milestone complete and archived. Ready for UAT and bug fix cycle.
+Last activity: 2026-03-25 — v2.0.8 milestone archived
 
 Progress: [—] Awaiting next milestone definition
 
@@ -119,7 +119,4 @@ Resume file: None
 
 ---
 *State initialized: 2026-03-19 for v2.0.7 OCM Integration & Container Tooling milestone*
-*Last updated: 2026-03-20 (37-02 complete — banner agent-mode guard tests added to test_main.py)*
-*Last updated: 2026-03-20 (37-03 complete — should_check_for_updates wired, check_for_updates deleted)*
-*Last updated: 2026-03-20 (37-01 complete — BPL-04 fixed: StateDatabase explicit path in _get_state_db)*
-*Last updated: 2026-03-20 (Phase 36 complete — OCM token monitor end-to-end)*
+*Last updated: 2026-03-25 (v2.0.8 milestone archived — UAT and bug fix cycle next)*
