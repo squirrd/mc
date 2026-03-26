@@ -292,14 +292,26 @@ def attach_terminal(
             # Non-fatal: cleanup failures shouldn't block terminal launch
             logger.warning("Window registry cleanup failed: %s", e)
 
-        # Look up window ID with lazy validation
-        window_id = registry.lookup(case_number, launcher._window_exists_by_id)
+        # Look up window ID with lazy validation.
+        # Build a validator using the terminal type stored in the registry so we check
+        # the correct application. When iTerm2 Python API falls back to Terminal.app,
+        # the window is registered as "Terminal.app" but the default launcher has
+        # terminal=="iTerm2" — using the wrong validator would falsely remove the entry.
+        stored_type = registry.get_terminal_type(case_number)
+        if stored_type in ("iTerm2", "Terminal.app") and isinstance(launcher, MacOSLauncher):
+            typed_launcher: MacOSLauncher = MacOSLauncher(terminal=stored_type)  # type: ignore[arg-type]
+            lookup_validator = typed_launcher._window_exists_by_id
+        else:
+            typed_launcher = launcher  # type: ignore[assignment]
+            lookup_validator = launcher._window_exists_by_id
+
+        window_id = registry.lookup(case_number, lookup_validator)
 
         if window_id:
             # Window exists in registry and validation passed - focus it
             logger.info("Found existing window for case %s (ID: %s), attempting focus", case_number, window_id)
 
-            success = launcher.focus_window_by_id(window_id)
+            success = typed_launcher.focus_window_by_id(window_id)
             if success:
                 # Successfully focused existing window
                 print(f"Focused existing terminal for case {case_number}")
@@ -350,9 +362,14 @@ def attach_terminal(
                 # Capture window ID
                 window_id = launcher._capture_window_id()
                 if window_id:
+                    # Use the actual app that created the window, not launcher.terminal.
+                    # When iTerm2 Python API is unavailable, launch() falls back to Terminal.app
+                    # but launcher.terminal remains "iTerm2". _last_captured_app records which
+                    # app was really used so the registry stores the correct terminal_type.
+                    actual_terminal_type = getattr(launcher, "_last_captured_app", None) or launcher.terminal
                     # Register in WindowRegistry
                     registry = WindowRegistry()
-                    registered = registry.register(case_number, window_id, launcher.terminal)
+                    registered = registry.register(case_number, window_id, actual_terminal_type)
                     if registered:
                         logger.info("Registered window ID %s for case %s", window_id, case_number)
                     else:

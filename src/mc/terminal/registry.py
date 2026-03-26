@@ -222,7 +222,26 @@ class WindowRegistry:
                 (int(time.time()), case_number),
             )
 
-            return window_id
+            return str(window_id)
+
+    def get_terminal_type(self, case_number: str) -> str | None:
+        """Return the stored terminal_type for a registered case, or None if not found.
+
+        Args:
+            case_number: Salesforce case number
+
+        Returns:
+            Terminal type string (e.g. "iTerm2", "Terminal.app") or None
+        """
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT terminal_type FROM window_registry WHERE case_number = ?",
+                (case_number,),
+            ).fetchone()
+            if row is None:
+                return None
+            val = row["terminal_type"]
+            return str(val) if val is not None else None
 
     def remove(self, case_number: str) -> None:
         """Remove a window ID registration.
@@ -277,11 +296,30 @@ class WindowRegistry:
         Returns:
             True if window exists, False if stale or validation fails
         """
-        from mc.terminal.launcher import get_launcher
-
         try:
-            launcher = get_launcher()
-            # Use existing _window_exists_by_id from Phase 16
+            import platform
+
+            if platform.system() == "Darwin":
+                # On macOS, create a launcher with the stored terminal_type so
+                # we check the correct application. Without this, a window registered
+                # as Terminal.app would be validated against iTerm2 (or vice versa)
+                # and falsely removed as stale.
+                from mc.terminal.macos import MacOSLauncher
+                from typing import Literal
+
+                # Normalise terminal_type to one of the two known macOS values.
+                # Unknown types fall back to auto-detection (safe default).
+                if terminal_type in ("iTerm2", "Terminal.app"):
+                    launcher = MacOSLauncher(
+                        terminal=terminal_type  # type: ignore[arg-type]
+                    )
+                else:
+                    launcher = MacOSLauncher()
+            else:
+                from mc.terminal.launcher import get_launcher
+
+                return get_launcher()._window_exists_by_id(window_id)  # type: ignore[attr-defined, no-any-return]
+
             return launcher._window_exists_by_id(window_id)
         except Exception:
             # Aggressive cleanup: treat validation errors as stale

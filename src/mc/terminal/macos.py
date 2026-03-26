@@ -55,6 +55,7 @@ class MacOSLauncher:
         self.terminal = terminal or self._detect_terminal()
         self._last_api_window_id: str | None = None
         self._last_launched_app: str | None = None  # tracks actual app used by last launch()
+        self._last_captured_app: str | None = None  # tracks actual app used by last _capture_window_id()
 
     def _detect_terminal(self) -> Literal["iTerm2", "Terminal.app"]:
         """Detect available terminal application.
@@ -258,6 +259,7 @@ end tell
         api_id = self._last_api_window_id
         if api_id is not None:
             self._last_api_window_id = None  # consume it
+            self._last_captured_app = "iTerm2"
             return api_id
 
         if not shutil.which("osascript"):
@@ -268,6 +270,7 @@ end tell
         # to Terminal.app — _last_launched_app records which app was really used.
         launched_app = self._last_launched_app or self.terminal
         self._last_launched_app = None  # consume it
+        self._last_captured_app = launched_app  # record for caller to use
 
         if launched_app == "iTerm2":
             script = '''
