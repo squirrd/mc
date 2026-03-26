@@ -191,6 +191,9 @@ def test_case_terminal_end_to_end(mocker):
             if container:
                 try:
                     container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass  # Ignore cleanup errors
+                try:
                     container.remove()  # type: ignore[no-untyped-call]
                 except Exception:
                     pass  # Ignore cleanup errors
@@ -198,7 +201,10 @@ def test_case_terminal_end_to_end(mocker):
             # Try cleanup by name if container object not available
             try:
                 cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
-                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                try:
+                    cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
                 cleanup_container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass  # Container already cleaned up
@@ -382,6 +388,9 @@ def test_fresh_install_missing_config_base_directory_regression(mocker, tmp_path
             try:
                 print(f"Cleaning up container {container_name}...")
                 container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+            try:
                 container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
@@ -389,7 +398,10 @@ def test_fresh_install_missing_config_base_directory_regression(mocker, tmp_path
         # Cleanup by name if container object not available
         try:
             cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
-            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            try:
+                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
@@ -552,7 +564,10 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
         try:
             existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
             print(f"Removing pre-existing container {container_name}...")
-            existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            try:
+                existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
             existing_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass  # No pre-existing container
@@ -617,6 +632,9 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
                 try:
                     print(f"Cleaning up container {container_name}...")
                     container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+                try:
                     container.remove()  # type: ignore[no-untyped-call]
                 except Exception:
                     pass
@@ -624,7 +642,10 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
             # Cleanup by name if container object not available
             try:
                 cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
-                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                try:
+                    cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
                 cleanup_container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
@@ -758,7 +779,10 @@ def test_terminal_title_format_regression(mocker, tmp_path):
     try:
         existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         print(f"Removing pre-existing container {container_name}...")
-        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        try:
+            existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        except Exception:
+            pass
         existing_container.remove()  # type: ignore[no-untyped-call]
     except Exception:
         pass
@@ -847,6 +871,9 @@ def test_terminal_title_format_regression(mocker, tmp_path):
             try:
                 print(f"Cleaning up container {container_name}...")
                 container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+            try:
                 container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
@@ -854,7 +881,10 @@ def test_terminal_title_format_regression(mocker, tmp_path):
         # Cleanup by name if container object not available
         try:
             cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
-            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            try:
+                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass
@@ -995,7 +1025,10 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
     try:
         existing_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
         print(f"Removing pre-existing container {container_name}...")
-        existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        try:
+            existing_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+        except Exception:
+            pass
         existing_container.remove()  # type: ignore[no-untyped-call]
     except Exception:
         pass
@@ -1175,6 +1208,9 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
             try:
                 print(f"\nCleaning up container {container_name}...")
                 container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
+            try:
                 container.remove()  # type: ignore[no-untyped-call]
             except Exception:
                 pass
@@ -1182,7 +1218,10 @@ def test_duplicate_terminal_prevention_regression(mocker, tmp_path):
         # Cleanup by name if container object not available
         try:
             cleanup_container = podman_client.client.containers.get(container_name)  # type: ignore[union-attr]
-            cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            try:
+                cleanup_container.stop(timeout=2)  # type: ignore[no-untyped-call]
+            except Exception:
+                pass
             cleanup_container.remove()  # type: ignore[no-untyped-call]
         except Exception:
             pass

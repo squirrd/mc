@@ -359,3 +359,80 @@ class TestWindowRegistry:
 
         window_id = db.lookup("12345678", always_valid)
         assert window_id == "window-123", "Entry should still exist after rollback"
+
+    # --- Tests for terminal-type-aware validation (fix: cleanup-finally-split) ---
+
+    def test_get_terminal_type_returns_stored_type(self):
+        """get_terminal_type() returns the terminal_type stored at registration."""
+        db = WindowRegistry(":memory:")
+        db.register("12345678", "window-123", "Terminal.app")
+        assert db.get_terminal_type("12345678") == "Terminal.app"
+
+    def test_get_terminal_type_returns_iterm2_type(self):
+        """get_terminal_type() returns iTerm2 when registered with that type."""
+        db = WindowRegistry(":memory:")
+        db.register("12345678", "window-123", "iTerm2")
+        assert db.get_terminal_type("12345678") == "iTerm2"
+
+    def test_get_terminal_type_returns_none_for_unknown_case(self):
+        """get_terminal_type() returns None if case_number not in registry."""
+        db = WindowRegistry(":memory:")
+        assert db.get_terminal_type("99999999") is None
+
+    def test_get_terminal_type_survives_remove(self):
+        """get_terminal_type() returns None after entry is removed."""
+        db = WindowRegistry(":memory:")
+        db.register("12345678", "window-123", "Terminal.app")
+        db.remove("12345678")
+        assert db.get_terminal_type("12345678") is None
+
+    def test_validate_window_exists_creates_iterm2_launcher(self, mocker):
+        """_validate_window_exists creates a MacOSLauncher with terminal=iTerm2 on Darwin."""
+        db = WindowRegistry(":memory:")
+
+        # Mock MacOSLauncher so we can inspect which terminal type was used
+        mock_launcher_instance = mocker.MagicMock()
+        mock_launcher_instance._window_exists_by_id.return_value = True
+        mock_launcher_cls = mocker.patch("mc.terminal.macos.MacOSLauncher", return_value=mock_launcher_instance)
+        mocker.patch("platform.system", return_value="Darwin")
+
+        db._validate_window_exists("window-123", "iTerm2")
+
+        # MacOSLauncher must be constructed with terminal="iTerm2"
+        mock_launcher_cls.assert_called_once_with(terminal="iTerm2")
+        mock_launcher_instance._window_exists_by_id.assert_called_once_with("window-123")
+
+    def test_validate_window_exists_creates_terminal_app_launcher(self, mocker):
+        """_validate_window_exists creates a MacOSLauncher with terminal=Terminal.app on Darwin."""
+        db = WindowRegistry(":memory:")
+
+        mock_launcher_instance = mocker.MagicMock()
+        mock_launcher_instance._window_exists_by_id.return_value = False
+        mock_launcher_cls = mocker.patch("mc.terminal.macos.MacOSLauncher", return_value=mock_launcher_instance)
+        mocker.patch("platform.system", return_value="Darwin")
+
+        result = db._validate_window_exists("window-456", "Terminal.app")
+
+        # MacOSLauncher must be constructed with terminal="Terminal.app"
+        mock_launcher_cls.assert_called_once_with(terminal="Terminal.app")
+        assert result is False
+
+    def test_cleanup_stale_entries_uses_correct_terminal_type(self, mocker):
+        """cleanup_stale_entries passes stored terminal_type to _validate_window_exists."""
+        db = WindowRegistry(":memory:")
+        db.register("12345678", "window-123", "Terminal.app")
+        db.register("87654321", "window-456", "iTerm2")
+
+        validate_calls: list[tuple[str, str]] = []
+
+        def mock_validate(window_id: str, terminal_type: str) -> bool:
+            validate_calls.append((window_id, terminal_type))
+            return True  # keep all entries
+
+        mocker.patch.object(db, "_validate_window_exists", side_effect=mock_validate)
+
+        db.cleanup_stale_entries(sample_size=20)
+
+        # Both entries should have been validated with their correct terminal types
+        assert ("window-123", "Terminal.app") in validate_calls
+        assert ("window-456", "iTerm2") in validate_calls
