@@ -374,6 +374,121 @@ base_directory = "/workspace"
     not os.environ.get("MC_TEST_INTEGRATION"),
     reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)"
 )
+def test_claude_cli_in_container_regression(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Regression test for stale local image used without registry digest check.
+
+    Bug discovered: 2026-03-26
+    Platform: macOS (reproduced), likely all platforms
+    Severity: major
+    Source: ad-hoc
+
+    Problem:
+    ContainerManager._ensure_image() checks whether mc-rhel10:latest exists locally.
+    If found, it returns immediately WITHOUT comparing the local image digest against
+    the registry (quay.io/rhn_support_dsquirre/mc-container:latest). When a user has
+    a stale locally-built image that predates the claude-downloader stage, their
+    containers will be created from the stale image and the claude binary will be absent.
+
+    Steps to reproduce:
+    1. Have a stale local mc-rhel10:latest image (predates claude-downloader stage)
+    2. Run: mc case 04409164
+    3. ContainerManager._ensure_image() finds mc-rhel10:latest locally and returns
+    4. Container is created from stale local image (no claude binary)
+    5. Run: claude --version inside container
+    6. Error: bash: claude: command not found
+
+    Expected: claude --version inside a ContainerManager-created container returns
+              exit code 0 and outputs a version string (registry image has claude v2.1.80+)
+    Actual:   exit code 127, stderr: bash: claude: command not found, because
+              _ensure_image() found mc-rhel10:latest locally (stale, pre-claude) and
+              returned without pulling the current registry image.
+
+    This test ensures the bug does not regress.
+    """
+    import subprocess
+
+    STALE_IMAGE_ID = "8e0ddd6b1c6c09dd87d41dd2fececf7bd41fa0498ada32a5c17693cb599f951d"
+    LOCAL_IMAGE = "mc-rhel10:latest"
+    REGISTRY_IMAGE = "quay.io/rhn_support_dsquirre/mc-container:latest"
+    CASE_NUMBER = "99988877"
+
+    # Check that the stale image is still available for test setup
+    try:
+        podman_client.client.images.get(STALE_IMAGE_ID)
+    except Exception:
+        pytest.skip(
+            f"Stale image {STALE_IMAGE_ID[:12]} not found locally — "
+            "cannot simulate the bug scenario. Run `podman images -a` to verify."
+        )
+
+    # Capture current mc-rhel10:latest image ID (to restore after test)
+    original_image_id = None
+    try:
+        current_local = podman_client.client.images.get(LOCAL_IMAGE)
+        original_image_id = current_local.id  # type: ignore[attr-defined]
+    except Exception:
+        pass  # No local image yet — that's fine
+
+    # Tag the stale image as mc-rhel10:latest to simulate a user whose local
+    # image predates the claude-downloader stage
+    try:
+        stale_image = podman_client.client.images.get(STALE_IMAGE_ID)
+        stale_image.tag("mc-rhel10", "latest")  # type: ignore[no-untyped-call]
+    except Exception as e:
+        pytest.skip(f"Could not tag stale image as mc-rhel10:latest: {e}")
+
+    container_id = None
+    try:
+        # Create container via ContainerManager — this calls _ensure_image, which
+        # MUST detect that the local mc-rhel10:latest is stale (digest differs from
+        # registry) and pull the fresh registry image before creating the container.
+        container = container_manager.create(
+            case_number=CASE_NUMBER,
+            workspace_path=temp_workspace,
+            customer_name="Bug Repro Test",
+        )
+        container_id = container.id  # type: ignore[attr-defined]
+        cleanup_containers(container_id)
+
+        # Verify claude --version succeeds inside the container (requires current image)
+        result = subprocess.run(
+            ["podman", "exec", f"mc-{CASE_NUMBER}", "bash", "-c", "claude --version"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"claude --version failed with exit code {result.returncode}\n"
+            f"stdout: {result.stdout!r}\n"
+            f"stderr: {result.stderr!r}\n"
+            f"\nBug: ContainerManager._ensure_image() found mc-rhel10:latest locally "
+            f"(stale, pre-claude, image {STALE_IMAGE_ID[:12]}) and used it without "
+            f"checking the registry for a newer version.\n"
+            f"Fix: _ensure_image() should compare the local image digest against the "
+            f"registry digest and pull the registry image when stale."
+        )
+
+    finally:
+        # Restore mc-rhel10:latest to the current (good) image if we changed it
+        if original_image_id and original_image_id != STALE_IMAGE_ID:
+            try:
+                good_image = podman_client.client.images.get(original_image_id)
+                good_image.tag("mc-rhel10", "latest")  # type: ignore[no-untyped-call]
+            except Exception:
+                # Fall back to pulling from registry
+                try:
+                    podman_client.client.images.pull(REGISTRY_IMAGE)
+                except Exception:
+                    pass
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)"
+)
 class TestImagePullAndTag:
     """Test automatic image pull from registry and tagging."""
 

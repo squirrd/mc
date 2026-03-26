@@ -31,6 +31,9 @@ After installation, restart your shell or run `source ~/.bashrc` (or `~/.zshrc`)
 git clone <repository_url>
 cd mc
 
+# Install core + dev dependencies (pytest, black, mypy, etc.)
+uv sync --extra dev
+
 # uv auto-creates .venv and syncs from uv.lock on first run
 uv run mc --help
 ```
@@ -68,6 +71,9 @@ uv run mc --version
 Run tests on the branch:
 
 ```bash
+# Install dev extras first (pytest is in [project.optional-dependencies.dev])
+uv sync --extra dev
+
 uv run pytest                        # All tests
 uv run pytest tests/unit/            # Unit tests only
 uv run pytest -m "not integration"   # Skip integration tests (fast)
@@ -79,8 +85,8 @@ uv run pytest -m "not integration"   # Skip integration tests (fast)
 # Add a new dependency
 uv add requests
 
-# Add a dev dependency
-uv add --dev pytest-mock
+# Add a dev dependency (dev is in [project.optional-dependencies], not [tool.uv.dev-dependencies])
+uv add --optional dev pytest-mock
 
 # Upgrade a specific package
 uv lock --upgrade-package rich
@@ -112,7 +118,7 @@ Editable mode means the `mc` command reflects your local source without reinstal
 ### Uninstall
 
 ```bash
-uv tool uninstall mc-cli
+uv tool uninstall mc
 ```
 
 ## Production
@@ -142,7 +148,7 @@ uv tool install --force git+https://github.com/squirrd/mc.git
 ### Uninstall
 
 ```bash
-uv tool uninstall mc-cli
+uv tool uninstall mc
 ```
 
 ## Troubleshooting
@@ -197,10 +203,31 @@ MC CLI pulls the container image automatically on first use. If that fails:
 # Pull manually
 podman pull quay.io/rhn_support_dsquirre/mc-container:latest
 
-# Or build locally (for development)
+# Or build locally (for development iteration only — not for testing)
 podman build -t mc-rhel10:latest -f container/Containerfile .
 ./container/build.sh
 ```
+
+> **All testing must use the image from quay.io**, not a locally built image. A locally built image is only for iterating on Containerfile changes. Once changes are ready, push to quay.io before running any UAT or integration tests.
+
+### Releasing a New Container Image (Developers)
+
+After any change to `container/Containerfile`:
+
+```bash
+# 1. Build locally and verify
+./container/build.sh
+podman run --rm mc-rhel10:latest mc --version
+
+# 2. Push to quay.io
+podman push mc-rhel10:latest quay.io/rhn_support_dsquirre/mc-container:latest
+
+# 3. Verify the published image
+podman pull quay.io/rhn_support_dsquirre/mc-container:latest
+podman run --rm quay.io/rhn_support_dsquirre/mc-container:latest mc --version
+```
+
+All UAT tests must be run against the published quay.io image, not the local build.
 
 ### API Token Configuration
 
