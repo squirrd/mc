@@ -289,6 +289,58 @@ rh_api_offline_token = "test_token_integration"
                 pass
 
 
+@pytest.mark.integration
+def test_config_path_env_isolation_regression(monkeypatch):
+    """Regression test for config-path-env-isolation
+
+    Bug discovered: 2026-03-27
+    Platform: Both
+    Severity: major
+    Source: ad-hoc
+
+    Problem:
+    ConfigManager.get_config_path() always resolves to ~/mc/config/config.toml and
+    _get_manager() always uses ~/mc/state/ regardless of MC_ENV. This means UAT runs
+    share the same config and state files as production, making it impossible to test
+    safely without polluting or clobbering production state.
+
+    Steps to reproduce:
+    1. Set MC_ENV=uat in the environment.
+    2. Call ConfigManager().get_config_path() — observe it resolves to the production
+       path ~/mc/config/config.toml instead of an env-specific path.
+    3. Call _get_manager() — observe state_dir is ~/mc/state/ regardless of MC_ENV.
+
+    Expected: When MC_ENV=uat, paths resolve to ~/mc-uat/config/config.toml and
+              ~/mc-uat/state/ (or similar env-specific isolation).
+    Actual:   Paths always resolve to ~/mc/config/config.toml and ~/mc/state/
+              regardless of MC_ENV value.
+
+    This test ensures the bug does not regress.
+    """
+    import importlib
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Use a clean HOME so we control all path resolution
+        monkeypatch.setenv("HOME", tmpdir)
+        monkeypatch.setenv("MC_ENV", "uat")
+
+        # Force re-import so Path.home() picks up the new HOME
+        import mc.config.manager as manager_mod
+        importlib.reload(manager_mod)
+        ConfigManager = manager_mod.ConfigManager
+
+        config_mgr = ConfigManager()
+        config_path = config_mgr.get_config_path()
+
+        # The config path must NOT resolve to the production path.
+        # When MC_ENV=uat, it must be isolated from ~/mc/config/config.toml.
+        production_path = str(Path(tmpdir) / "mc" / "config" / "config.toml")
+        assert str(config_path) != production_path, (
+            f"Config path resolves to production path {production_path} even when "
+            f"MC_ENV=uat — no environment-based path switching exists in ConfigManager."
+        )
+
+
 @pytest.mark.skipif(
     not is_podman_available(),
     reason="Requires Podman installed"
