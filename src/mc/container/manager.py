@@ -221,7 +221,12 @@ class ContainerManager:
         return container
 
     def _ensure_image(self, image_name: str, registry_image: str) -> None:
-        """Ensure container image is available (pull from registry or use local).
+        """Ensure container image is available and current (pull from registry when stale).
+
+        Compares the local image digest against the registry manifest. If the local
+        image predates the registry image (stale), pulls the fresh registry image and
+        re-tags it. This prevents containers being created from locally-built images
+        that are missing tools added in later registry builds (e.g. claude binary).
 
         Args:
             image_name: Local image name (e.g., "mc-rhel10:latest")
@@ -233,11 +238,10 @@ class ContainerManager:
         import logging
         logger = logging.getLogger(__name__)
 
-        # 1. Check if image exists locally first (fast path)
+        # 1. Check if image exists locally first
+        local_image = None
         try:
-            self.podman.client.images.get(image_name)
-            logger.debug(f"Using local image: {image_name}")
-            return
+            local_image = self.podman.client.images.get(image_name)
         except Exception as e:
             # Check if this is a connection error
             error_str = str(e).lower()
@@ -247,10 +251,31 @@ class ContainerManager:
                     f"Unable to verify image {image_name} exists. "
                     f"Check that Podman is running and accessible."
                 ) from e
-            # Image not found locally - try pulling from registry
-            logger.debug(f"Image {image_name} not found locally, attempting pull from {registry_image}")
+            # Image not found locally - will pull from registry below
+            logger.debug(f"Image {image_name} not found locally, will pull from {registry_image}")
 
-        # 2. Try pulling from registry
+        # 2. If local image exists, check if it matches the registry (staleness check)
+        if local_image is not None:
+            try:
+                reg_data = self.podman.client.images.get_registry_data(registry_image)
+                if local_image.id == reg_data.id:  # type: ignore[attr-defined]
+                    logger.debug(f"Local image {image_name} is current (digest matches registry)")
+                    return
+                logger.info(
+                    f"Local image {image_name} is stale "
+                    f"(local={local_image.id[:12]}, registry={reg_data.id[:12]}), "  # type: ignore[attr-defined]
+                    f"pulling fresh image from {registry_image}"
+                )
+                print(f"Container image is outdated — pulling latest from registry...")
+            except Exception as check_error:
+                # Registry check failed (offline, auth issue, etc.) — use local image
+                logger.debug(
+                    f"Could not check registry for {image_name} staleness: {check_error}. "
+                    f"Using existing local image."
+                )
+                return
+
+        # 3. Pull from registry (either local missing or local is stale)
         try:
             print(f"Pulling container image from {registry_image}...")
             self.podman.client.images.pull(registry_image)
@@ -265,9 +290,16 @@ class ContainerManager:
             print(f"Successfully pulled image from registry")
             return
         except Exception as pull_error:
-            # Pull failed - provide helpful error with local build instructions
-            logger.debug(f"Failed to pull from registry: {pull_error}")
+            # Pull failed - if we have a local image (stale), fall back to it
+            if local_image is not None:
+                logger.warning(
+                    f"Failed to pull fresh image from {registry_image}: {pull_error}. "
+                    f"Falling back to existing local image {image_name}."
+                )
+                return
 
+            # No local image and pull failed - raise with helpful instructions
+            logger.debug(f"Failed to pull from registry: {pull_error}")
             raise RuntimeError(
                 f"Container image {image_name} not available.\n"
                 f"Attempted to pull from {registry_image} but failed: {pull_error}\n\n"
