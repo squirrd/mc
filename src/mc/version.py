@@ -1,28 +1,50 @@
 """Version information for mc CLI."""
 
 from importlib.metadata import version, PackageNotFoundError
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
 
 
 def get_version() -> str:
-    """Get package version from metadata or pyproject.toml.
+    """Get the installed mc-cli version.
 
-    Returns version from installed package metadata when available.
-    Falls back to parsing pyproject.toml in development mode.
+    Resolution order:
+    1. importlib.metadata for 'mc-cli' (works when mc-cli is installed in the active venv)
+    2. `uv tool list` output (works when mc-cli is installed as a uv tool but not in the venv)
+    3. pyproject.toml (development mode fallback)
     """
     try:
-        # Works for installed package
+        # Works when mc-cli package metadata is available in the active venv
         return version("mc-cli")
     except PackageNotFoundError:
-        # Development mode: parse pyproject.toml
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            import tomli as tomllib
+        pass
 
-        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
-        with open(pyproject_path, "rb") as f:
-            pyproject = tomllib.load(f)
-        return cast(str, pyproject["project"]["version"])
+    # mc-cli is installed as a uv tool (separate isolated env) — query the tool list
+    try:
+        result = subprocess.run(
+            ["uv", "tool", "list"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("mc-cli "):
+                parts = stripped.split()
+                if len(parts) >= 2:
+                    return parts[1].lstrip("v")
+    except FileNotFoundError:
+        pass
+
+    # Development mode: parse pyproject.toml
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        pyproject = tomllib.load(f)
+    return cast(str, pyproject["project"]["version"])

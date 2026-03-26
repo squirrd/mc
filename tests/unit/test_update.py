@@ -53,11 +53,11 @@ class TestRunUpgrade:
         """Test that _run_upgrade invokes subprocess with list form and never shell=True.
 
         Security requirement: subprocess must never use shell=True to prevent shell injection.
-        The exact command list must be ['uv', 'tool', 'upgrade', 'mc'].
+        The exact command list must be ['uv', 'tool', 'upgrade', 'mc-cli'].
         """
         with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
             _run_upgrade()
-        assert mock_run.call_args[0][0] == ["uv", "tool", "upgrade", "mc"]
+        assert mock_run.call_args[0][0] == ["uv", "tool", "upgrade", "mc-cli"]
         assert mock_run.call_args.kwargs.get("shell", False) is False
 
 
