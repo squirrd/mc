@@ -8,20 +8,20 @@ from typing import cast
 
 
 def get_version() -> str:
-    """Get the installed mc-cli version.
+    """Get the installed mc version.
 
     Resolution order:
-    1. importlib.metadata for 'mc-cli' (works when mc-cli is installed in the active venv)
-    2. `uv tool list` output (works when mc-cli is installed as a uv tool but not in the venv)
+    1. importlib.metadata for 'mc' (works when mc is installed in the active venv)
+    2. `uv tool list` output (works when mc is installed as a uv tool but not in the venv)
     3. pyproject.toml (development mode fallback)
     """
     try:
-        # Works when mc-cli package metadata is available in the active venv
-        return version("mc-cli")
+        # Works when mc package metadata is available in the active venv
+        return version("mc")
     except PackageNotFoundError:
         pass
 
-    # mc-cli is installed as a uv tool (separate isolated env) — query the tool list
+    # mc is installed as a uv tool (separate isolated env) — query the tool list
     try:
         result = subprocess.run(
             ["uv", "tool", "list"],
@@ -31,7 +31,7 @@ def get_version() -> str:
         )
         for line in result.stdout.splitlines():
             stripped = line.strip()
-            if stripped.startswith("mc-cli "):
+            if stripped.startswith("mc "):
                 parts = stripped.split()
                 if len(parts) >= 2:
                     return parts[1].lstrip("v")

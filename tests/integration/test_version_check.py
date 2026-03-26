@@ -217,28 +217,23 @@ def test_update_checks_wrong_package_regression() -> None:
     Source: ad-hoc
 
     Problem:
-    mc-update check/upgrade targets the dev-repo `mc` uv tool instead of the prod
-    `mc-cli` uv tool. Two root causes:
+    mc-update check/upgrade must target the 'mc' uv tool (package name in pyproject.toml).
+    Two root causes were identified and fixed:
 
-      1. get_version() calls importlib.metadata.version("mc") which resolves to the
-         editable dev-install (v2.0.9) when both mc (dev) and mc-cli (prod) are present,
-         instead of the prod package mc-cli (v2.0.4).
+      1. get_version() must resolve importlib.metadata.version("mc"), matching the
+         package name declared in pyproject.toml.
 
-      2. _run_upgrade() hardcodes ["uv", "tool", "upgrade", "mc"] which upgrades the
-         dev-repo uv tool, not the prod mc-cli uv tool.
+      2. _run_upgrade() must issue ["uv", "tool", "upgrade", "mc"] — the correct
+         uv tool name — not "mc-cli" (the old pre-rename package name).
 
-    Steps to reproduce:
-    1. Have both mc (dev editable) and mc-cli (prod uv tool) installed.
+    Steps to reproduce (original bug):
+    1. Have both mc (dev editable) and mc-cli (old prod uv tool) installed.
     2. Run mc-update check — reports "up to date" using dev version (2.0.9).
-    3. Run mc-update upgrade — upgrades mc dev tool, leaves mc-cli at 2.0.4.
+    3. Run mc-update upgrade — targets wrong tool, leaves prod un-upgraded.
 
     Expected:
-      - get_version() returns the mc-cli package version (the prod tool).
-      - _run_upgrade() issues "uv tool upgrade mc-cli".
-
-    Actual (before fix):
-      - get_version() returns "2.0.9" (dev-repo mc), not "2.0.4" (prod mc-cli).
-      - _run_upgrade() runs "uv tool upgrade mc" (dev-repo), leaving mc-cli un-upgraded.
+      - get_version() resolves the 'mc' package version.
+      - _run_upgrade() issues "uv tool upgrade mc".
 
     This test ensures the bug does not regress.
     """
@@ -254,25 +249,24 @@ def test_update_checks_wrong_package_regression() -> None:
         text=True,
         check=True,
     )
-    mc_cli_version: str | None = None
+    mc_version: str | None = None
     for line in result.stdout.splitlines():
         stripped = line.strip()
-        if stripped.startswith("mc-cli "):
-            mc_cli_version = stripped.split()[1].lstrip("v")
+        if stripped.startswith("mc "):
+            mc_version = stripped.split()[1].lstrip("v")
             break
 
-    # Only assert on Part 1 when mc-cli is installed as a prod uv tool.
-    # If mc-cli is absent (CI running only the dev checkout), skip the metadata check
+    # Only assert on Part 1 when mc is installed as a uv tool.
+    # If absent (CI running only the dev checkout), skip the metadata check
     # but still verify Part 2 (the command string).
-    if mc_cli_version is not None:
+    if mc_version is not None:
         installed = get_version()
-        assert installed == mc_cli_version, (
-            f"get_version() returned '{installed}' (dev-repo mc) "
-            f"but the prod mc-cli version is '{mc_cli_version}'. "
+        assert installed == mc_version, (
+            f"get_version() returned '{installed}' but uv tool list reports mc at '{mc_version}'. "
             f"mc-update check/upgrade will report wrong installed version."
         )
 
-    # --- Part 2: _run_upgrade() must target mc-cli, not mc ---
+    # --- Part 2: _run_upgrade() must target mc, not mc-cli ---
     captured_cmd: list[list[str]] = []
 
     def fake_run(cmd: list[str], **kwargs: object) -> mock.MagicMock:
@@ -286,10 +280,10 @@ def test_update_checks_wrong_package_regression() -> None:
 
     assert len(captured_cmd) == 1, "Expected exactly one subprocess.run call in _run_upgrade()"
     cmd = captured_cmd[0]
-    assert cmd == ["uv", "tool", "upgrade", "mc-cli"], (
+    assert cmd == ["uv", "tool", "upgrade", "mc"], (
         f"_run_upgrade() ran: {cmd!r}\n"
-        f"Expected: ['uv', 'tool', 'upgrade', 'mc-cli']\n"
-        f"Bug: 'uv tool upgrade mc' upgrades the dev-repo tool, not the prod mc-cli."
+        f"Expected: ['uv', 'tool', 'upgrade', 'mc']\n"
+        f"Bug: must target the 'mc' uv tool (the package name in pyproject.toml)."
     )
 
 

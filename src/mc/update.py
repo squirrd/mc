@@ -6,7 +6,7 @@ partial package upgrade — even if mc's CLI machinery is temporarily broken dur
 package replacement, mc-update can still run and complete the upgrade.
 
 Usage:
-    mc-update upgrade    # Upgrade MC CLI via uv tool upgrade mc-cli
+    mc-update upgrade    # Upgrade MC CLI via uv tool upgrade mc
 """
 
 import argparse
@@ -30,12 +30,12 @@ def _run_upgrade() -> int:
     to the terminal, giving the user real-time feedback during the upgrade.
 
     Returns:
-        Exit code from uv tool upgrade mc-cli (0 on success, non-zero on failure,
+        Exit code from uv tool upgrade mc (0 on success, non-zero on failure,
         or 1 if uv is not found on PATH).
     """
     try:
         result = subprocess.run(
-            ["uv", "tool", "upgrade", "mc-cli"],
+            ["uv", "tool", "upgrade", "mc"],
             capture_output=False,
             text=True,
             check=False,
@@ -311,7 +311,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(prog="mc-update", description="MC CLI updater")
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("upgrade", help="Upgrade MC CLI via uv tool upgrade mc-cli")
+    subparsers.add_parser("upgrade", help="Upgrade MC CLI via uv tool upgrade mc")
     pin_parser = subparsers.add_parser("pin", help="Pin MC CLI to a specific version")
     pin_parser.add_argument("version", help="Version to pin to (e.g. 2.0.3 or v2.0.3)")
     subparsers.add_parser("unpin", help="Remove version pin")
