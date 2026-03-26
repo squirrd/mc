@@ -41,6 +41,15 @@ def get_claude_config_path() -> Path:
     return Path.home() / ".claude"
 
 
+def get_gcloud_adc_path() -> Path:
+    """Return the host GCP Application Default Credentials file path.
+
+    Returns:
+        Path to application_default_credentials.json on this host (may or may not exist).
+    """
+    return Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+
+
 class ContainerManager:
     """Orchestrate container lifecycle operations with state tracking.
 
@@ -161,6 +170,35 @@ class ContainerManager:
         if claude_dir.exists():
             volumes[str(claude_dir)] = {"bind": "/home/mcuser/.claude", "mode": "rw"}
 
+        # Mount GCP ADC credentials file if present (enables claude Vertex auth inside container)
+        adc_path = get_gcloud_adc_path()
+        if adc_path.exists():
+            volumes[str(adc_path)] = {"bind": "/gcp/creds.json", "mode": "ro"}
+
+        # 6b. Build environment dict — base vars plus optional host env var forwarding
+        environment: dict[str, str] = {
+            "CASE_NUMBER": str(case_number),
+            "CUSTOMER_NAME": customer_name,
+            "WORKSPACE_PATH": "/case",
+            "MC_RUNTIME_MODE": "agent",
+        }
+
+        # Forward GCP Vertex / Claude auth env vars from host when set
+        for env_var in (
+            "CLAUDE_CODE_USE_VERTEX",
+            "CLOUD_ML_REGION",
+            "ANTHROPIC_VERTEX_PROJECT_ID",
+            "ANTHROPIC_API_KEY",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+        ):
+            value = os.environ.get(env_var)
+            if value is not None:
+                environment[env_var] = value
+
+        # Set GOOGLE_APPLICATION_CREDENTIALS inside container when ADC file is mounted
+        if adc_path.exists():
+            environment["GOOGLE_APPLICATION_CREDENTIALS"] = "/gcp/creds.json"
+
         # 7. Create new container via Podman API
         try:
             container = self.podman.client.containers.create(
@@ -173,12 +211,7 @@ class ContainerManager:
                     "mc.case_number": case_number,
                     "mc.customer": customer_name,
                 },
-                environment={
-                    "CASE_NUMBER": str(case_number),
-                    "CUSTOMER_NAME": customer_name,
-                    "WORKSPACE_PATH": "/case",
-                    "MC_RUNTIME_MODE": "agent",
-                },
+                environment=environment,
                 volumes=volumes,
                 userns_mode="keep-id",  # Critical for rootless volume permissions
                 tty=True,

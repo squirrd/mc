@@ -122,6 +122,110 @@ def test_create_container_e2e():
 
 @pytest.mark.integration
 @pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_claude_vertex_creds_in_container_regression():
+    """Regression test for GCP Vertex AI credentials not forwarded into container.
+
+    Bug discovered: 2026-03-26
+    Platform: Both
+    Severity: major
+    Source: ad-hoc
+
+    Problem:
+    ContainerManager.create() did not forward GCP Vertex AI authentication env vars
+    (CLAUDE_CODE_USE_VERTEX, CLOUD_ML_REGION, ANTHROPIC_VERTEX_PROJECT_ID) from the
+    host environment into the container. The ADC credentials file was also not mounted.
+    As a result, `claude` inside the container triggered the setup/auth routine instead
+    of running, because it had no credentials or Vertex configuration available.
+
+    Steps to reproduce:
+    1. Set CLAUDE_CODE_USE_VERTEX=1, CLOUD_ML_REGION=us-east5,
+       ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project on the host.
+    2. Run `mc case 12345678` to start a container.
+    3. Inside the container, run `claude` — it prompts for auth setup.
+
+    Expected: CLAUDE_CODE_USE_VERTEX, CLOUD_ML_REGION, and ANTHROPIC_VERTEX_PROJECT_ID
+              are present in the container environment; `claude` starts without auth prompts.
+    Actual:   Env vars are absent inside the container; `claude` prompts for auth setup.
+
+    This test ensures the bug does not regress.
+    """
+    # Use a dedicated case number unlikely to conflict with other tests
+    case_number = "55551111"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP: Remove any stale container from previous runs
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    # Simulate host environment with Vertex credentials set
+    test_env_vars = {
+        "CLAUDE_CODE_USE_VERTEX": "1",
+        "CLOUD_ML_REGION": "us-east5",
+        "ANTHROPIC_VERTEX_PROJECT_ID": "my-gcp-project",
+    }
+    for key, value in test_env_vars.items():
+        os.environ[key] = value
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "VertexTest")
+
+            # Verify env vars are set INSIDE the container via podman exec.
+            # This is the correct assertion depth for a host→container boundary bug:
+            # checking the Python object that was supposed to produce the artifact
+            # is not enough — we must verify the end state inside a real container.
+            result = subprocess.run(
+                [
+                    "podman",
+                    "exec",
+                    container_name,
+                    "bash",
+                    "-c",
+                    "echo CLAUDE_CODE_USE_VERTEX=$CLAUDE_CODE_USE_VERTEX; "
+                    "echo CLOUD_ML_REGION=$CLOUD_ML_REGION; "
+                    "echo ANTHROPIC_VERTEX_PROJECT_ID=$ANTHROPIC_VERTEX_PROJECT_ID",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0, f"podman exec failed: {result.stderr}"
+
+            assert "CLAUDE_CODE_USE_VERTEX=1" in result.stdout, (
+                f"CLAUDE_CODE_USE_VERTEX not forwarded into container. "
+                f"Container env output:\n{result.stdout}"
+            )
+            assert "CLOUD_ML_REGION=us-east5" in result.stdout, (
+                f"CLOUD_ML_REGION not forwarded into container. "
+                f"Container env output:\n{result.stdout}"
+            )
+            assert "ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project" in result.stdout, (
+                f"ANTHROPIC_VERTEX_PROJECT_ID not forwarded into container. "
+                f"Container env output:\n{result.stdout}"
+            )
+
+        finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+            for key in test_env_vars:
+                os.environ.pop(key, None)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
 def test_reconciliation_with_real_podman():
     """Test reconciliation detects externally deleted containers.
 
