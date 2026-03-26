@@ -14,7 +14,7 @@ def get_version() -> str:
     """
     try:
         # Works for installed package
-        return version("mc")
+        return version("mc-cli")
     except PackageNotFoundError:
         # Development mode: parse pyproject.toml
         if sys.version_info >= (3, 11):
