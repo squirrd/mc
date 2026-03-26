@@ -33,12 +33,16 @@ class ConfigManager:
         Uses consolidated ~/mc/config/ location. Auto-migrates from old
         platformdirs location on first access if needed.
 
+        When MC_ENV is set, uses ~/mc-{MC_ENV}/config/ instead to isolate
+        UAT and other environments from production state.
+
         Returns:
             Path to config file
         """
         if self._config_path is None:
-            # New consolidated location: ~/mc/config/config.toml
-            config_dir = Path.home() / self.app_name / "config"
+            mc_env = os.environ.get("MC_ENV")
+            dir_name = f"{self.app_name}-{mc_env}" if mc_env else self.app_name
+            config_dir = Path.home() / dir_name / "config"
             self._config_path = config_dir / "config.toml"
 
             # Auto-migration: Move from old platformdirs location if needed

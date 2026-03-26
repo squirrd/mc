@@ -1,5 +1,6 @@
 """Tests for configuration system."""
 
+import os
 import pytest
 import sys
 import time
@@ -414,3 +415,56 @@ class TestVersionConfig:
         loaded_config = manager.load()
         assert loaded_config == new_config
         assert 'initial' not in loaded_config
+
+
+class TestConfigManagerEnvIsolation:
+    """Tests for MC_ENV-based path isolation in ConfigManager."""
+
+    @pytest.mark.backwards_compatibility
+    def test_get_config_path_mc_env_set_returns_env_specific_path(self, tmp_path, monkeypatch):
+        """When MC_ENV is set, get_config_path() must NOT return the production path.
+
+        Bug: ConfigManager.get_config_path() always resolved to ~/mc/config/config.toml
+        regardless of MC_ENV, causing UAT and production runs to share the same config.
+
+        Expected: MC_ENV=uat → ~/mc-uat/config/config.toml (not ~/mc/config/config.toml)
+        """
+        monkeypatch.setenv("MC_ENV", "uat")
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        config_path = manager.get_config_path()
+
+        production_path = tmp_path / "mc" / "config" / "config.toml"
+        assert str(config_path) != str(production_path), (
+            f"Config path still resolves to production path {production_path} even when "
+            f"MC_ENV=uat — environment-based path isolation is not implemented."
+        )
+
+    @pytest.mark.backwards_compatibility
+    def test_get_config_path_mc_env_uat_uses_suffixed_dir(self, tmp_path, monkeypatch):
+        """When MC_ENV=uat, get_config_path() must resolve to ~/mc-uat/config/config.toml."""
+        monkeypatch.setenv("MC_ENV", "uat")
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        config_path = manager.get_config_path()
+
+        expected_path = tmp_path / "mc-uat" / "config" / "config.toml"
+        assert str(config_path) == str(expected_path), (
+            f"Expected env-specific path {expected_path}, got {config_path}"
+        )
+
+    @pytest.mark.backwards_compatibility
+    def test_get_config_path_no_mc_env_uses_production_path(self, tmp_path, monkeypatch):
+        """When MC_ENV is not set, get_config_path() must still use ~/mc/config/config.toml."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        config_path = manager.get_config_path()
+
+        expected_path = tmp_path / "mc" / "config" / "config.toml"
+        assert str(config_path) == str(expected_path), (
+            f"Expected production path {expected_path}, got {config_path}"
+        )
