@@ -174,12 +174,13 @@ class TestClaudeDirMount:
 class TestAllMountsTogether:
     """Tests for workspace + mc/config + OCM + claude combined mount scenarios."""
 
+    @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
     def test_all_mounts_present_when_all_paths_exist(
-        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
     ):
         """Workspace, mc/config, OCM, and claude all mounted when all host paths exist."""
         mc_config = MagicMock()
@@ -197,6 +198,11 @@ class TestAllMountsTogether:
         claude_dir.__str__ = lambda self: "/home/user/.claude"
         mock_claude_path.return_value = claude_dir
 
+        # ADC absent — tested separately in TestVertexEnvForwarding
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
         manager, podman = _make_manager()
         manager.create("12345678", "/workspace", "Customer")
 
@@ -209,3 +215,197 @@ class TestAllMountsTogether:
         assert "/home/user/.claude" in volumes
         assert mc_state_path in volumes
         assert len(volumes) == 5
+
+
+class TestVertexEnvForwarding:
+    """Tests for GCP Vertex / Claude auth env var forwarding into container (backwards_compat)."""
+
+    def _make_manager_with_paths(self, mc_config_path: str = "/home/user/mc/config"):
+        """Return a ContainerManager with all path helpers patched."""
+        podman_client = Mock(spec=PodmanClient)
+        state_db = Mock(spec=StateDatabase)
+        podman_client.client.containers.list.return_value = []
+        state_db.get_container.return_value = None
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+        mock_container = MagicMock()
+        mock_container.id = "abc123"
+        mock_container.status = "running"
+        podman_client.client.containers.create.return_value = mock_container
+        return ContainerManager(podman_client, state_db), podman_client
+
+    def _patch_paths(self, mc_exists=True, ocm_exists=False, claude_exists=False, adc_exists=False):
+        """Return a dict of patches for all path helpers."""
+        mc_config = MagicMock()
+        mc_config.exists.return_value = mc_exists
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = ocm_exists
+        ocm_config.__str__ = lambda self: "/home/user/.config/ocm/ocm.json"
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = claude_exists
+        claude_dir.__str__ = lambda self: "/home/user/.claude"
+
+        adc_path = MagicMock()
+        adc_path.exists.return_value = adc_exists
+        adc_path.__str__ = lambda self: "/home/user/.config/gcloud/application_default_credentials.json"
+
+        return {
+            'mc': mc_config,
+            'ocm': ocm_config,
+            'claude': claude_dir,
+            'adc': adc_path,
+        }
+
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    @patch.dict('os.environ', {
+        'CLAUDE_CODE_USE_VERTEX': '1',
+        'CLOUD_ML_REGION': 'us-east5',
+        'ANTHROPIC_VERTEX_PROJECT_ID': 'my-gcp-project',
+    })
+    def test_vertex_env_vars_forwarded_when_set_in_host_env(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
+    ):
+        """CLAUDE_CODE_USE_VERTEX, CLOUD_ML_REGION, ANTHROPIC_VERTEX_PROJECT_ID are forwarded
+        into the container environment when they are set on the host.
+
+        This is a backwards-compatibility regression guard: ContainerManager.create() must
+        forward these env vars so that claude inside the container uses Vertex auth instead
+        of prompting for setup.
+        """
+        paths = self._patch_paths(mc_exists=True, adc_exists=False)
+        mock_mc_path.return_value = paths['mc']
+        mock_ocm_path.return_value = paths['ocm']
+        mock_claude_path.return_value = paths['claude']
+        mock_adc_path.return_value = paths['adc']
+
+        manager, podman = self._make_manager_with_paths()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        env = call_kwargs["environment"]
+
+        assert env.get("CLAUDE_CODE_USE_VERTEX") == "1", (
+            f"CLAUDE_CODE_USE_VERTEX not forwarded into container env. Got: {env}"
+        )
+        assert env.get("CLOUD_ML_REGION") == "us-east5", (
+            f"CLOUD_ML_REGION not forwarded into container env. Got: {env}"
+        )
+        assert env.get("ANTHROPIC_VERTEX_PROJECT_ID") == "my-gcp-project", (
+            f"ANTHROPIC_VERTEX_PROJECT_ID not forwarded into container env. Got: {env}"
+        )
+
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    @patch.dict('os.environ', {}, clear=False)
+    def test_vertex_env_vars_absent_from_env_when_not_set_on_host(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
+    ):
+        """Vertex env vars are NOT injected when absent from host environment.
+
+        Ensures that when the host has no Vertex config (e.g. users without GCP setup),
+        the container environment dict does not contain unset keys.
+        """
+        import os as _os
+        # Ensure vars are not set for this test
+        for key in ('CLAUDE_CODE_USE_VERTEX', 'CLOUD_ML_REGION', 'ANTHROPIC_VERTEX_PROJECT_ID'):
+            _os.environ.pop(key, None)
+
+        paths = self._patch_paths(mc_exists=True, adc_exists=False)
+        mock_mc_path.return_value = paths['mc']
+        mock_ocm_path.return_value = paths['ocm']
+        mock_claude_path.return_value = paths['claude']
+        mock_adc_path.return_value = paths['adc']
+
+        manager, podman = self._make_manager_with_paths()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        env = call_kwargs["environment"]
+
+        assert "CLAUDE_CODE_USE_VERTEX" not in env or env.get("CLAUDE_CODE_USE_VERTEX") == "", (
+            f"CLAUDE_CODE_USE_VERTEX should not be set when absent from host env. Got: {env}"
+        )
+
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    @patch.dict('os.environ', {
+        'CLAUDE_CODE_USE_VERTEX': '1',
+        'CLOUD_ML_REGION': 'us-east5',
+        'ANTHROPIC_VERTEX_PROJECT_ID': 'my-gcp-project',
+    })
+    def test_adc_file_mounted_readonly_when_present(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
+    ):
+        """ADC credentials file is mounted ro at /gcp/creds.json when it exists on host.
+
+        Also verifies GOOGLE_APPLICATION_CREDENTIALS is set to /gcp/creds.json in container env.
+        """
+        paths = self._patch_paths(mc_exists=True, adc_exists=True)
+        mock_mc_path.return_value = paths['mc']
+        mock_ocm_path.return_value = paths['ocm']
+        mock_claude_path.return_value = paths['claude']
+        mock_adc_path.return_value = paths['adc']
+
+        manager, podman = self._make_manager_with_paths()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        env = call_kwargs["environment"]
+
+        adc_host_path = "/home/user/.config/gcloud/application_default_credentials.json"
+        assert adc_host_path in volumes, (
+            f"ADC credentials file not mounted. Volumes: {volumes}"
+        )
+        assert volumes[adc_host_path]["bind"] == "/gcp/creds.json"
+        assert volumes[adc_host_path]["mode"] == "ro"
+        assert env.get("GOOGLE_APPLICATION_CREDENTIALS") == "/gcp/creds.json", (
+            f"GOOGLE_APPLICATION_CREDENTIALS not set in container env. Got: {env}"
+        )
+
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_adc_file_not_mounted_when_absent(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
+    ):
+        """ADC credentials file is not in volumes when it does not exist on host."""
+        paths = self._patch_paths(mc_exists=True, adc_exists=False)
+        mock_mc_path.return_value = paths['mc']
+        mock_ocm_path.return_value = paths['ocm']
+        mock_claude_path.return_value = paths['claude']
+        mock_adc_path.return_value = paths['adc']
+
+        manager, podman = self._make_manager_with_paths()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        env = call_kwargs["environment"]
+
+        adc_host_path = "/home/user/.config/gcloud/application_default_credentials.json"
+        assert adc_host_path not in volumes, (
+            f"ADC file should not be mounted when absent. Volumes: {volumes}"
+        )
+        assert "GOOGLE_APPLICATION_CREDENTIALS" not in env, (
+            f"GOOGLE_APPLICATION_CREDENTIALS should not be set when ADC absent. Got: {env}"
+        )
