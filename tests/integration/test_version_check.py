@@ -208,6 +208,92 @@ class TestGitHubAPIIntegration:
 
 
 @pytest.mark.integration
+def test_update_checks_wrong_package_regression() -> None:
+    """Regression test for update-checks-wrong-package bug.
+
+    Bug discovered: 2026-03-26
+    Platform: macOS / Linux (host mode only)
+    Severity: major
+    Source: ad-hoc
+
+    Problem:
+    mc-update check/upgrade targets the dev-repo `mc` uv tool instead of the prod
+    `mc-cli` uv tool. Two root causes:
+
+      1. get_version() calls importlib.metadata.version("mc") which resolves to the
+         editable dev-install (v2.0.9) when both mc (dev) and mc-cli (prod) are present,
+         instead of the prod package mc-cli (v2.0.4).
+
+      2. _run_upgrade() hardcodes ["uv", "tool", "upgrade", "mc"] which upgrades the
+         dev-repo uv tool, not the prod mc-cli uv tool.
+
+    Steps to reproduce:
+    1. Have both mc (dev editable) and mc-cli (prod uv tool) installed.
+    2. Run mc-update check — reports "up to date" using dev version (2.0.9).
+    3. Run mc-update upgrade — upgrades mc dev tool, leaves mc-cli at 2.0.4.
+
+    Expected:
+      - get_version() returns the mc-cli package version (the prod tool).
+      - _run_upgrade() issues "uv tool upgrade mc-cli".
+
+    Actual (before fix):
+      - get_version() returns "2.0.9" (dev-repo mc), not "2.0.4" (prod mc-cli).
+      - _run_upgrade() runs "uv tool upgrade mc" (dev-repo), leaving mc-cli un-upgraded.
+
+    This test ensures the bug does not regress.
+    """
+    import subprocess
+    import unittest.mock as mock
+    from mc.version import get_version
+    from mc import update
+
+    # --- Part 1: get_version() must resolve mc-cli, not mc dev-repo ---
+    result = subprocess.run(
+        ["uv", "tool", "list"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    mc_cli_version: str | None = None
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("mc-cli "):
+            mc_cli_version = stripped.split()[1].lstrip("v")
+            break
+
+    # Only assert on Part 1 when mc-cli is installed as a prod uv tool.
+    # If mc-cli is absent (CI running only the dev checkout), skip the metadata check
+    # but still verify Part 2 (the command string).
+    if mc_cli_version is not None:
+        installed = get_version()
+        assert installed == mc_cli_version, (
+            f"get_version() returned '{installed}' (dev-repo mc) "
+            f"but the prod mc-cli version is '{mc_cli_version}'. "
+            f"mc-update check/upgrade will report wrong installed version."
+        )
+
+    # --- Part 2: _run_upgrade() must target mc-cli, not mc ---
+    captured_cmd: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> mock.MagicMock:
+        captured_cmd.append(cmd)
+        m = mock.MagicMock()
+        m.returncode = 0
+        return m
+
+    with mock.patch("mc.update.subprocess.run", side_effect=fake_run):
+        update._run_upgrade()
+
+    assert len(captured_cmd) == 1, "Expected exactly one subprocess.run call in _run_upgrade()"
+    cmd = captured_cmd[0]
+    assert cmd == ["uv", "tool", "upgrade", "mc-cli"], (
+        f"_run_upgrade() ran: {cmd!r}\n"
+        f"Expected: ['uv', 'tool', 'upgrade', 'mc-cli']\n"
+        f"Bug: 'uv tool upgrade mc' upgrades the dev-repo tool, not the prod mc-cli."
+    )
+
+
+@pytest.mark.integration
 class TestVersionCheckEndToEnd:
     """End-to-end integration tests for complete version check workflow."""
 
