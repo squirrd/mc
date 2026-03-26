@@ -77,10 +77,18 @@ If `{backwards_compat}` = `true`:
 > - Avoid: `assert result == {full_expected_dict}` — breaks on machines where optional paths exist
 > - Alternative: mock the path-resolution function (e.g. `get_ocm_config_path`) to return a stable test path
 
-Run the test and assert FAIL (RED):
+Run the test and assert FAIL (RED). Use `-v` here to clearly see the failure:
 ```bash
-cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src uv run pytest tests/unit/test_<module>.py::<test_name> -v -s -p no:cov --override-ini="addopts="
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="{repo_root}/.tdd/issues/fix/<shortFixName>/test-unit-red-${TIMESTAMP}.log"
+cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && \
+  PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src \
+  uv run pytest tests/unit/test_<module>.py::<test_name> -v --tb=short -p no:cov --override-ini="addopts=" 2>&1 | tee "$LOG_FILE"
+echo "--- RED summary (full output: $LOG_FILE) ---"
+grep -E "^(FAILED|ERROR|E |AssertionError|====)" "$LOG_FILE" | head -25 || true
 ```
+
+> If you need more detail, `Read "$LOG_FILE"` rather than re-running with -s.
 
 IF test passes immediately:
 - The test does not target the broken behaviour — revise it
@@ -109,7 +117,13 @@ Rules:
 
 Run the unit test:
 ```bash
-cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src uv run pytest tests/unit/test_<module>.py::<test_name> -v -s -p no:cov --override-ini="addopts="
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="{repo_root}/.tdd/issues/fix/<shortFixName>/test-unit-green-${TIMESTAMP}.log"
+cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && \
+  PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src \
+  uv run pytest tests/unit/test_<module>.py::<test_name> -q --tb=short -p no:cov --override-ini="addopts=" 2>&1 | tee "$LOG_FILE"
+echo "--- GREEN summary (full output: $LOG_FILE) ---"
+grep -E "^(FAILED|ERROR|E |AssertionError|====)" "$LOG_FILE" | head -25 || true
 ```
 
 IF RED:
@@ -131,12 +145,23 @@ Clean up the implementation if needed:
 
 Run the unit test to confirm still GREEN:
 ```bash
-cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src uv run pytest tests/unit/test_<module>.py::<test_name> -v -p no:cov --override-ini="addopts="
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="{repo_root}/.tdd/issues/fix/<shortFixName>/test-unit-refactor-${TIMESTAMP}.log"
+cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && \
+  PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src \
+  uv run pytest tests/unit/test_<module>.py::<test_name> -q --tb=short -p no:cov --override-ini="addopts=" 2>&1 | tee "$LOG_FILE"
+grep -E "^(FAILED|ERROR|E |AssertionError|====)" "$LOG_FILE" | head -25 || true
 ```
 
 Run the full unit suite to check for regressions:
 ```bash
-cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src uv run pytest tests/unit/ -v -p no:cov --override-ini="addopts=" -q
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+LOG_FILE="{repo_root}/.tdd/issues/fix/<shortFixName>/test-unit-suite-${TIMESTAMP}.log"
+cd {repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name> && \
+  PYTHONPATH={repo_root}/.tdd/worktrees/fix/<shortFixName>/<unit_test_name>/src \
+  uv run pytest tests/unit/ -q --tb=short -p no:cov --override-ini="addopts=" 2>&1 | tee "$LOG_FILE"
+echo "--- Suite summary (full output: $LOG_FILE) ---"
+grep -E "^(FAILED|ERROR|E |AssertionError|====)" "$LOG_FILE" | head -25 || true
 ```
 
 If any regressions: fix them before proceeding.

@@ -15,11 +15,9 @@
 
 ## Current Cycle: UAT & Bug Fixes
 
-### Step 5b — Check pending todos
+### Step 5b — Check pending todos ✅ DONE
 
-Run `/gsd:check-todos` to review pending todos before UAT.
-
-**Status:** Next action
+Ran `/gsd:check-todos` — 0 pending todos.
 
 ---
 
@@ -29,16 +27,28 @@ Run `/gsd:check-todos` to review pending todos before UAT.
 /gsd:verify-work
 ```
 
-This runs the verifier agent conversationally against the v2.0.7 feature set. Have a container running and a real case number ready.
+**Verifying: v2.0.7 features first (oldest unverified), then v2.0.8 fixes**
+
+#### v2.0.7 — OCM Integration & Container Tooling (Phases 33-37)
+Features to verify:
+- OCM token monitor (daemon, expiry warning, auto re-login)
+- Case data store (`sfdc-case.json` + `case.env` in `/case/`)
+- Backplane auto-login (cluster_id from sfdc → StateDB → prompt fallback)
+- Container config mount (`~/mc/config` read-only in container)
+- Claude Code in container (`claude` binary + `~/.claude` mount)
+
+#### v2.0.8 — Update Banner & Test Fixes
+Fixes to spot-check:
+- `mc` invocation after a failed GitHub API call does NOT spam the API every time (1h throttle)
 
 **Pre-conditions for a useful UAT session:**
-- `mc` installed from the v2.0.8 tag (not dev source)
+- `mc` installed from the v2.0.8 tag (not dev source): `uv tool install --force "git+https://github.com/squirrd/mc@v2.0.8"`
 - Valid `~/mc/config/config.toml` with API token
 - Podman running
 - Valid `ocm.json` at the OCM config path (for OCM monitor testing)
 - A real case number with a known cluster ID in Salesforce
 
-**Status:** Pending (after Step 5b)
+**Status:** Active — run `/gsd:verify-work` to begin
 
 ---
 
