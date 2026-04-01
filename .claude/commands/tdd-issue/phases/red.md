@@ -233,23 +233,26 @@ On approval, next actions:
   4. Verify all tests GREEN
   5. Clean up worktree (branch stays on fix/<shortFixName> for review)
 ═══════════════════════════════════════════════════════════
-Proceed? [yes / no / revise]
+[Plan Approved] — proceed with the fix plan above
+[Discuss] — ask a question or raise a concern
 ```
 
 **Response handling:**
 
-- `yes` → delete `tests/temp_repro.py`, proceed to STEP 5
-- `no`  → delete `tests/temp_repro.py`, clean up worktree, close issue as CANCELLED:
-  ```bash
-  cd /Users/dsquirre/Repos/mc
-  bash .claude/commands/tdd-issue/scripts/cleanup-worktree.sh "fix/<shortFixName>"
-  bash .claude/commands/tdd-issue/scripts/update-tracking.sh \
-    --action close-issue --issue "fix/<shortFixName>"
-  ```
-  Return `status=CANCELLED`
-- `revise <correction>` → incorporate the correction, re-present (loop until `yes` or `no`)
+- `Plan Approved` → delete `tests/temp_repro.py`, proceed to STEP 5
+- `Discuss` → address the user's question or concern, update the brief if needed, re-present
+  for approval (loop until `Plan Approved`)
+  - If the user indicates they want to cancel during discussion, delete `tests/temp_repro.py`,
+    clean up worktree, and close the issue as CANCELLED:
+    ```bash
+    cd /Users/dsquirre/Repos/mc
+    bash .claude/commands/tdd-issue/scripts/cleanup-worktree.sh "fix/<shortFixName>"
+    bash .claude/commands/tdd-issue/scripts/update-tracking.sh \
+      --action close-issue --issue "fix/<shortFixName>"
+    ```
+    Return `status=CANCELLED`
 
-Do NOT proceed to STEP 5 until the user explicitly types `yes`.
+Do NOT proceed to STEP 5 until the user explicitly selects `Plan Approved`.
 
 ---
 
