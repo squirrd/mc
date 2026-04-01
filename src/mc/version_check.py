@@ -288,7 +288,7 @@ class VersionChecker:
                 return
 
             # Display single-line message to stderr
-            message = f"mc v{latest} available. Update: uv tool install --reinstall git+https://github.com/squirrd/mc\n"
+            message = f"mc v{latest} available. Run: mc-update upgrade\n"
             sys.stderr.write(message)
             sys.stderr.flush()
 

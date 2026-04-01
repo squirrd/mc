@@ -23,19 +23,24 @@ logger = logging.getLogger(__name__)
 ExitCode = Literal[0, 1]
 
 
-def _run_upgrade() -> int:
-    """Run 'uv tool upgrade mc' and return the exit code.
+_MC_GIT_URL = "git+https://github.com/squirrd/mc"
 
+
+def _run_upgrade() -> int:
+    """Run 'uv tool install --reinstall git+https://github.com/squirrd/mc@latest' and return exit code.
+
+    Uses the git URL with @latest tag so that uv installs the latest tagged release
+    rather than silently doing nothing (as 'uv tool upgrade mc' does for git-pinned installs).
     Uses capture_output=False so uv's live progress output streams directly
     to the terminal, giving the user real-time feedback during the upgrade.
 
     Returns:
-        Exit code from uv tool upgrade mc (0 on success, non-zero on failure,
+        Exit code from uv tool install (0 on success, non-zero on failure,
         or 1 if uv is not found on PATH).
     """
     try:
         result = subprocess.run(
-            ["uv", "tool", "upgrade", "mc"],
+            ["uv", "tool", "install", "--reinstall", f"{_MC_GIT_URL}@latest"],
             capture_output=False,
             text=True,
             check=False,
@@ -74,7 +79,7 @@ def _print_recovery_instructions() -> None:
     """Print actionable recovery instructions to stderr when upgrade fails."""
     print("", file=sys.stderr)
     print("Upgrade failed. To recover, run:", file=sys.stderr)
-    print("  uv tool install --force mc", file=sys.stderr)
+    print(f"  uv tool install --force {_MC_GIT_URL}", file=sys.stderr)
 
 
 _GITHUB_HEADERS = {
@@ -177,6 +182,25 @@ def pin(version: str) -> ExitCode:
     from mc.config.manager import ConfigManager
 
     ConfigManager().update_version_config(pinned_mc=version)
+
+    try:
+        result = subprocess.run(
+            ["uv", "tool", "install", "--reinstall", f"{_MC_GIT_URL}@v{version}"],
+            capture_output=False,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            print(
+                f"Warning: config pinned to {version} but uv install failed. "
+                f"To retry: uv tool install --force {_MC_GIT_URL}@v{version}",
+                file=sys.stderr,
+            )
+            return 1
+    except FileNotFoundError:
+        print("Error: uv not found. Install from https://docs.astral.sh/uv/", file=sys.stderr)
+        return 1
+
     print(f"Pinned to {version}. Run mc-update unpin to remove.")
     return 0
 
