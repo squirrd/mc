@@ -436,3 +436,88 @@ class TestWindowRegistry:
         # Both entries should have been validated with their correct terminal types
         assert ("window-123", "Terminal.app") in validate_calls
         assert ("window-456", "iTerm2") in validate_calls
+
+    def test_window_registry_stale_cleanup_preserves_iterm2_api_window_id_regression(
+        self, mocker
+    ):
+        """Regression test for fix/window-registry-stale-cleanup — UAT 5.2 Duplicate Launch Detection.
+
+        Bug discovered: 2026-04-01
+        Platform: macOS with iTerm2 Python API
+        Severity: major
+        Source: UAT 5.2 Duplicate Launch Detection
+
+        Problem:
+        cleanup_stale_entries() calls _validate_window_exists() which creates a MacOSLauncher
+        and calls _window_exists_by_id(window_id). When the iTerm2 window was created via the
+        Python API, the stored window ID is a UUID string like "w0t0p0". When the iterm2 Python
+        library is unavailable at validation time, _window_exists_by_id falls back to AppleScript,
+        which compares (id of theWindow as text) to the stored UUID. iTerm2's AppleScript 'id'
+        property returns a numeric integer — it never equals a UUID string — so the comparison
+        always returns False and the entry is incorrectly deleted as stale.
+
+        On the second `mc case <number>` call:
+        1. cleanup_stale_entries() runs before registry.lookup()
+        2. The entry with UUID window ID is validated via AppleScript (because API is unavailable)
+        3. AppleScript returns False (numeric ID != UUID string)
+        4. The entry is deleted as stale
+        5. registry.lookup() finds nothing — second call opens a new terminal instead of focusing
+
+        Steps to reproduce:
+        1. Register a window ID with UUID format ("w0t0p0") and terminal_type "iTerm2"
+        2. Call cleanup_stale_entries() with iterm2 Python API unavailable (API returns None/False)
+           and AppleScript validator returning False (it always does for UUID-format IDs)
+        3. Check registry — entry is incorrectly deleted
+
+        Expected: cleanup_stale_entries() preserves entries with UUID-format window IDs when
+                  the window genuinely exists (UUID IDs must not be validated via AppleScript
+                  numeric-ID comparison)
+        Actual:   cleanup_stale_entries() deletes the entry because AppleScript validator returns
+                  False for any UUID-format window ID, treating valid windows as stale
+
+        This test ensures the bug does not regress.
+        """
+        registry = WindowRegistry(db_path=":memory:")
+
+        # Register a window with a UUID-format ID (iTerm2 Python API style)
+        uuid_window_id = "w0t0p0"
+        case_number = "12345678"
+        terminal_type = "iTerm2"
+
+        registered = registry.register(case_number, uuid_window_id, terminal_type)
+        assert registered, "Pre-condition: entry must be registered"
+
+        # Simulate the bug scenario:
+        #   - macOS (Darwin) system
+        #   - iterm2 Python API unavailable → falls back to AppleScript
+        #   - AppleScript _window_exists_by_id returns False for UUID IDs
+        #     (AppleScript 'id' is numeric integer, UUID string never matches)
+        mocker.patch("platform.system", return_value="Darwin")
+        mocker.patch("mc.terminal.macos._ITERM2_LIB_AVAILABLE", False)
+        mocker.patch(
+            "mc.terminal.macos.MacOSLauncher._window_exists_by_id",
+            return_value=False,  # AppleScript always returns False for UUID IDs
+        )
+
+        removed = registry.cleanup_stale_entries(sample_size=20)
+
+        # The entry must NOT be removed — UUID window IDs cannot be validated via
+        # AppleScript numeric-ID comparison; they must use the Python API or be skipped.
+        assert removed == 0, (
+            f"BUG REGRESSED: cleanup_stale_entries() removed {removed} entries for a "
+            f"UUID-format iTerm2 window ID that should survive AppleScript validation. "
+            f"UUID window IDs ('{uuid_window_id}') cannot be validated via AppleScript "
+            f"numeric-ID comparison — they must use the Python API or be preserved."
+        )
+
+        # Confirm entry still in database
+        with registry._connection() as conn:
+            row = conn.execute(
+                "SELECT window_id FROM window_registry WHERE case_number = ?",
+                (case_number,),
+            ).fetchone()
+        assert row is not None, (
+            "BUG REGRESSED: entry was deleted from DB by cleanup_stale_entries() even "
+            "though window ID is UUID-format (iTerm2 Python API) and cannot be validated "
+            "by AppleScript numeric-ID comparison"
+        )

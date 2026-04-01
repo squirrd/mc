@@ -286,6 +286,26 @@ class WindowRegistry:
                 for row in rows
             ]
 
+    @staticmethod
+    def _is_iterm2_api_window_id(window_id: str) -> bool:
+        """Return True if window_id looks like an iTerm2 Python API UUID.
+
+        The iTerm2 Python API assigns alphanumeric window IDs such as "w0t0p0",
+        while AppleScript reports plain integer IDs (e.g. "123456"). AppleScript
+        cannot match UUID-format IDs — the comparison always fails, causing valid
+        windows to be falsely classified as stale.
+
+        A window ID is considered a UUID-format (API) ID when it is not purely
+        numeric digits (i.e. it contains at least one letter or non-digit character).
+
+        Args:
+            window_id: Window ID string to inspect
+
+        Returns:
+            True if the ID uses the iTerm2 Python API alphanumeric format
+        """
+        return not window_id.isdigit()
+
     def _validate_window_exists(self, window_id: str, terminal_type: str) -> bool:
         """Validate window exists via platform-specific launcher.
 
@@ -304,8 +324,19 @@ class WindowRegistry:
                 # we check the correct application. Without this, a window registered
                 # as Terminal.app would be validated against iTerm2 (or vice versa)
                 # and falsely removed as stale.
-                from mc.terminal.macos import MacOSLauncher
-                from typing import Literal
+                from mc.terminal.macos import MacOSLauncher, _ITERM2_LIB_AVAILABLE
+
+                # UUID-format window IDs (e.g. "w0t0p0") are assigned by the iTerm2
+                # Python API. AppleScript can only compare integer window IDs, so it
+                # always returns False for UUID-format IDs, causing valid windows to
+                # be incorrectly treated as stale. When the Python API is unavailable
+                # to re-validate these IDs, preserve the entry rather than deleting it.
+                if (
+                    terminal_type == "iTerm2"
+                    and self._is_iterm2_api_window_id(window_id)
+                    and not _ITERM2_LIB_AVAILABLE
+                ):
+                    return True
 
                 # Normalise terminal_type to one of the two known macOS values.
                 # Unknown types fall back to auto-detection (safe default).
