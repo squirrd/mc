@@ -280,10 +280,63 @@ def test_update_checks_wrong_package_regression() -> None:
 
     assert len(captured_cmd) == 1, "Expected exactly one subprocess.run call in _run_upgrade()"
     cmd = captured_cmd[0]
-    assert cmd == ["uv", "tool", "upgrade", "mc"], (
+    assert cmd == ["uv", "tool", "install", "--reinstall", "git+https://github.com/squirrd/mc@latest"], (
         f"_run_upgrade() ran: {cmd!r}\n"
-        f"Expected: ['uv', 'tool', 'upgrade', 'mc']\n"
-        f"Bug: must target the 'mc' uv tool (the package name in pyproject.toml)."
+        f"Expected: ['uv', 'tool', 'install', '--reinstall', 'git+https://github.com/squirrd/mc@latest']\n"
+        f"Bug: must use git+https URL with @latest tag so uv installs from the git repo, "
+        f"not PyPI (mc is not on PyPI)."
+    )
+
+
+@pytest.mark.integration
+def test_run_upgrade_uses_git_latest_tag() -> None:
+    """Regression test: _run_upgrade() must use git+https URL with @latest tag.
+
+    Bug: _run_upgrade() previously used ['uv', 'tool', 'upgrade', 'mc'] which silently
+    does nothing for git-pinned installs (uv tool upgrade only works for PyPI packages).
+    mc is NOT published to PyPI — it is installed from git — so the correct command is:
+      uv tool install --reinstall git+https://github.com/squirrd/mc@latest
+
+    This test verifies the fix is present and does not regress.
+    """
+    import unittest.mock as mock
+    from mc import update
+
+    captured_cmd: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> mock.MagicMock:
+        captured_cmd.append(cmd)
+        m = mock.MagicMock()
+        m.returncode = 0
+        return m
+
+    with mock.patch("mc.update.subprocess.run", side_effect=fake_run):
+        update._run_upgrade()
+
+    assert len(captured_cmd) == 1, "Expected exactly one subprocess.run call in _run_upgrade()"
+    cmd = captured_cmd[0]
+
+    assert cmd[0] == "uv", f"Expected 'uv' as first element, got: {cmd[0]!r}"
+    assert cmd[1:3] == ["tool", "install"], (
+        f"Expected 'uv tool install', got: {cmd[:3]!r}\n"
+        f"'uv tool upgrade mc' silently does nothing for git-pinned installs."
+    )
+    assert "--reinstall" in cmd, (
+        f"Expected --reinstall flag in command: {cmd!r}"
+    )
+    git_url_arg = next((arg for arg in cmd if "git+https" in arg), None)
+    assert git_url_arg is not None, (
+        f"Expected a git+https URL in command: {cmd!r}\n"
+        f"mc is not on PyPI — must install from git."
+    )
+    assert "@latest" in git_url_arg or "@v" in git_url_arg, (
+        f"Expected version tag (@latest or @v<version>) in git URL: {git_url_arg!r}\n"
+        f"Without a tag, uv installs main branch HEAD, not the latest tagged release."
+    )
+    assert cmd == ["uv", "tool", "install", "--reinstall", "git+https://github.com/squirrd/mc@latest"], (
+        f"_run_upgrade() ran: {cmd!r}\n"
+        f"Expected: ['uv', 'tool', 'install', '--reinstall', 'git+https://github.com/squirrd/mc@latest']\n"
+        f"Bug: must use git+https URL with @latest tag."
     )
 
 

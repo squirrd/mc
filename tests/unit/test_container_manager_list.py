@@ -1,6 +1,6 @@
 """Unit tests for ContainerManager list operation."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
@@ -202,7 +202,7 @@ class TestListRunningContainers:
     ) -> None:
         """Uptime over 1 day shows days and hours."""
         now = datetime.now(timezone.utc)
-        started = now.replace(day=now.day - 5 if now.day > 5 else 1)
+        started = now - timedelta(days=5)
         started_iso = started.isoformat().replace('+00:00', 'Z')
 
         uptime = container_manager._calculate_uptime(started_iso)

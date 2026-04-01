@@ -53,11 +53,18 @@ class TestRunUpgrade:
         """Test that _run_upgrade invokes subprocess with list form and never shell=True.
 
         Security requirement: subprocess must never use shell=True to prevent shell injection.
-        The exact command list must be ['uv', 'tool', 'upgrade', 'mc'].
+        The exact command list must use the git+https URL with @latest tag so that uv
+        actually installs from the git repo at the latest tagged release.
         """
         with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
             _run_upgrade()
-        assert mock_run.call_args[0][0] == ["uv", "tool", "upgrade", "mc"]
+        assert mock_run.call_args[0][0] == [
+            "uv",
+            "tool",
+            "install",
+            "--reinstall",
+            "git+https://github.com/squirrd/mc@latest",
+        ]
         assert mock_run.call_args.kwargs.get("shell", False) is False
 
 
@@ -139,7 +146,7 @@ class TestUpgrade:
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force mc" in captured.err
+        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
 
     def test_upgrade_verify_fails_shows_recovery(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -148,13 +155,13 @@ class TestUpgrade:
         monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
         with patch("mc.update.subprocess.run") as mock_run:
             mock_run.side_effect = [
-                MagicMock(returncode=0),  # uv tool upgrade mc succeeds
+                MagicMock(returncode=0),  # uv tool install --reinstall succeeds
                 MagicMock(returncode=1, stdout=""),  # mc --version fails
             ]
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force mc" in captured.err
+        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
 
     def test_upgrade_verify_step_fails_after_success(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -174,7 +181,7 @@ class TestUpgrade:
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force mc" in captured.err
+        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
         assert "Upgrade complete" not in captured.out
 
     def test_upgrade_agent_mode_does_not_call_uv(
@@ -221,12 +228,13 @@ class TestPrintRecoveryInstructions:
     def test_recovery_instructions_content(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that recovery instructions contain the exact actionable command.
 
-        UPDATE-03 requirement: failure output must include 'uv tool install --force mc'
-        so the user has a clear, copy-pasteable recovery path.
+        The failure output must include the git+https URL (not bare 'mc') so the
+        user has a clear, copy-pasteable recovery path that actually works (mc is
+        not on PyPI, so 'uv tool install --force mc' would fail).
         """
         _print_recovery_instructions()
         captured = capsys.readouterr()
-        assert "uv tool install --force mc" in captured.err
+        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
         assert "To recover" in captured.err
 
 
@@ -311,7 +319,8 @@ class TestPin:
         mock_config_instance.update_version_config = MagicMock()
         with patch("mc.update._validate_version_exists", return_value=True):
             with patch("mc.config.manager.ConfigManager", return_value=mock_config_instance):
-                result = pin("v2.0.3")
+                with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)):
+                    result = pin("v2.0.3")
         assert result == 0
         mock_config_instance.update_version_config.assert_called_once_with(pinned_mc="2.0.3")
         captured = capsys.readouterr()
@@ -345,13 +354,14 @@ class TestPin:
     def test_pin_success_writes_config(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that pin() writes pinned_mc to config and prints confirmation on success."""
+        """Test that pin() writes pinned_mc to config, runs uv install, and prints confirmation."""
         monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
         mock_config_instance = MagicMock()
         mock_config_instance.update_version_config = MagicMock()
         with patch("mc.update._validate_version_exists", return_value=True):
             with patch("mc.config.manager.ConfigManager", return_value=mock_config_instance):
-                result = pin("2.0.3")
+                with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)):
+                    result = pin("2.0.3")
         assert result == 0
         mock_config_instance.update_version_config.assert_called_once_with(pinned_mc="2.0.3")
         captured = capsys.readouterr()
