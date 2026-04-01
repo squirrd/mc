@@ -61,8 +61,14 @@ echo "Log      : $LOG_FILE"
 echo "---"
 
 # Run pytest with -q --tb=short defaults; save full output to log file
+# Use the worktree's own .venv if present to prevent cross-worktree contamination.
+# Without this, uv run walks up the directory tree and may pick up the main repo's .venv.
 cd "$WORKTREE_PATH"
-PYTHONPATH="$SRC_PATH" uv run pytest -q --tb=short -p no:cov --override-ini="addopts=" "$@" 2>&1 | tee "$LOG_FILE"
+WORKTREE_VENV_ARGS=()
+if [[ -d "$WORKTREE_PATH/.venv" ]]; then
+    WORKTREE_VENV_ARGS=(env VIRTUAL_ENV="$WORKTREE_PATH/.venv")
+fi
+PYTHONPATH="$SRC_PATH" "${WORKTREE_VENV_ARGS[@]}" uv run pytest -q --tb=short -p no:cov --override-ini="addopts=" "$@" 2>&1 | tee "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
 
 # Print intelligent context summary

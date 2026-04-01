@@ -75,9 +75,19 @@ echo "  Parent  : $PARENT_BRANCH"
 
 # Pre-seed the virtual environment with all dev dependencies so agents don't
 # hit ModuleNotFoundError when collecting tests with optional extras.
+#
+# IMPORTANT: create an isolated .venv inside the worktree FIRST. Without this,
+# `uv pip install` walks up the directory tree and finds the main repo's .venv,
+# overwriting its editable .pth to point at the worktree's src/ — corrupting
+# the main repo's editable install. Each worktree must own its own .venv.
 if command -v uv &>/dev/null && [[ -f "$WORKTREE_PATH/pyproject.toml" ]]; then
+    echo "Creating isolated .venv in worktree..."
+    uv venv "$WORKTREE_PATH/.venv" --quiet \
+        && echo "  venv    : created at $WORKTREE_PATH/.venv" \
+        || { echo "WARNING: uv venv failed — run manually if tests fail to collect." >&2; }
+
     echo "Syncing dev dependencies in worktree..."
-    (cd "$WORKTREE_PATH" && uv pip install -e ".[dev]" --quiet) \
+    (cd "$WORKTREE_PATH" && VIRTUAL_ENV="$WORKTREE_PATH/.venv" uv pip install -e ".[dev]" --quiet) \
         && echo "  venv    : dev dependencies installed" \
         || echo "WARNING: uv pip install -e '[dev]' failed — run manually if tests fail to collect." >&2
 fi
