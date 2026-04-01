@@ -144,7 +144,7 @@ def test_rename_package_to_mc_regression() -> None:
             "and the package reinstalled."
         )
 
-    # --- Assert 2: update notification uses GitHub install URL ---
+    # --- Assert 2: update notification directs user to mc-update upgrade ---
     checker = VersionChecker()
     mock_cfg = MagicMock()
     mock_cfg.get.return_value = None
@@ -157,7 +157,7 @@ def test_rename_package_to_mc_regression() -> None:
         checker._display_notification("2.0.4", "2.0.5")
 
     output = captured.getvalue()
-    assert "git+https://github.com/squirrd/mc" in output, (
-        f"Update notification must reference GitHub install URL, got: {output!r}\n"
-        "Expected: 'uv tool install --reinstall git+https://github.com/squirrd/mc'"
+    assert "mc-update upgrade" in output, (
+        f"Update notification must direct user to 'mc-update upgrade', got: {output!r}\n"
+        "Expected: 'mc v2.0.5 available. Run: mc-update upgrade'"
     )
