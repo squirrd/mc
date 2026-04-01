@@ -46,13 +46,35 @@ If `pull --ff-only` fails (diverged), STOP and tell the user to resolve the dive
 
 Check `$ARGUMENTS` for the words `minor-bump` or `major-bump`. Default is `patch`.
 
+### 0c: Check for orphaned version tags
+
+Before suggesting a version, check if the latest semver tag has a published GitHub release:
+
+```bash
+LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+gh release view "$LATEST_TAG" --json tagName 2>/dev/null || echo "NO_RELEASE"
+```
+
+If the output is `NO_RELEASE` (tag exists but no GitHub release), a previous release was abandoned mid-run.
+
+**Cleanup procedure:**
+1. Print: `⚠️  Found orphaned tag {LATEST_TAG} with no GitHub release — cleaning up artifacts from the failed run.`
+2. Delete the orphaned local tag: `git tag -d {LATEST_TAG}`
+3. Delete the orphaned remote tag (ignore errors if it was never pushed): `git push origin --delete {LATEST_TAG} 2>/dev/null || true`
+4. Check for an orphaned local version branch and delete it if found: `git branch -D {LATEST_TAG} 2>/dev/null || true`
+5. After cleanup, re-run `suggest_version.py` — it will now suggest the reclaimed version number.
+
+If the latest tag has a valid GitHub release, proceed normally.
+
+### 0d: Suggest version
+
 ```bash
 python3 scripts/release/suggest_version.py [patch|minor|major]
 ```
 
 Store the result as VERSION (e.g. `2.0.9`). The version branch will be named `v{VERSION}`.
 
-### 0c: Confirm version with user
+### 0e: Confirm version with user
 
 Use **AskUserQuestion** with one question:
 
@@ -74,17 +96,17 @@ If the user selects Custom, use the value they typed in Other as VERSION (strip 
 python3 scripts/release/list_branches.py --exclude v{VERSION}
 ```
 
-This fetches from remote (`git fetch --prune`) and prints a numbered list of all branches
+This fetches from remote (`git fetch --prune`) and returns a numbered list of all branches
 sorted oldest → newest by last commit date, excluding `main`, `HEAD`, version branches, and the new version branch.
 
-Print the full numbered list as output so the user can see it clearly.
+Capture the branch list output into a variable. **Do NOT print it as separate text output before calling AskUserQuestion** — the dialog will slide up and cover it.
 
 ### 1b: Ask user which branches to include
 
-Call **AskUserQuestion** with one question:
+Embed the numbered branch list directly inside the question text of the AskUserQuestion call, so it is always visible within the dialog:
 
-- Header: "Branch selection"
-- Question: "Which branches should be included in v{VERSION}? (branches will be merged oldest-first)"
+- Header: "Branches"
+- Question: `"Available branches (oldest → newest):\n\n{numbered branch list here}\n\nWhich should be included in v{VERSION}?"`
 - Options:
   - `All branches` — Include every branch listed above
   - `Select specific` — Type the branch numbers (e.g. `1,3,4`) in the text field
