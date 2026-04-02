@@ -1,6 +1,7 @@
 """Update notification banner for MC CLI startup."""
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -106,6 +107,7 @@ def _render_banner(current: str, latest: str, pinned: Optional[str]) -> None:
 def show_update_banner() -> None:
     """Show update banner on stderr if a newer version is available.
 
+    - Prints MC_ENV environment label to stderr first if MC_ENV is set
     - Skips entirely if not a TTY (piped run)
     - Skips if today's date matches last_banner_shown date in config
     - Skips if last fetch failed < _FAILURE_THROTTLE_SECONDS ago (1 hour)
@@ -114,6 +116,12 @@ def show_update_banner() -> None:
     - On network failure: returns None from _fetch_with_timeout (treated as timeout)
     - Skips if mc --version invocation
     """
+    mc_env = os.environ.get("MC_ENV")
+    if mc_env:
+        from rich.console import Console as _Console
+
+        _Console(stderr=True).print(f"[dim]mc environment: {mc_env}[/dim]")
+
     if _is_version_invocation():
         return
 

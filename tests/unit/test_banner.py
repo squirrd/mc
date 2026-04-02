@@ -449,3 +449,70 @@ class TestVersionCheckFailureThrottle:
         call_kwargs = mock_config.update_version_config.call_args[1]
         assert "last_failed_fetch" in call_kwargs
         assert isinstance(call_kwargs["last_failed_fetch"], float)
+
+
+class TestMCEnvDisplay:
+    """Tests for MC_ENV environment label display in show_update_banner().
+
+    When MC_ENV is set, show_update_banner() must print a dim environment label
+    to stderr before any other checks (TTY, version invocation, etc.).
+
+    The implementation uses Rich's Console(stderr=True).print(), so we patch
+    rich.console.Console at the source to capture calls.
+
+    Feature added: 2026-04-02
+    """
+
+    def test_prints_env_label_when_mc_env_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """show_update_banner() calls Console.print with env label when MC_ENV=dev."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        mock_console = MagicMock()
+        # Make stdout non-TTY so the rest of the banner exits early,
+        # isolating just the env-label behavior.
+        with patch("sys.stdout") as mock_stdout, patch("rich.console.Console", return_value=mock_console):
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        # The env label must have been printed to the console
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0][0]
+        assert "mc environment: dev" in call_args
+
+    def test_prints_env_label_reflects_mc_env_value(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """show_update_banner() env label uses the actual MC_ENV value (e.g. staging)."""
+        monkeypatch.setenv("MC_ENV", "staging")
+        mock_console = MagicMock()
+        with patch("sys.stdout") as mock_stdout, patch("rich.console.Console", return_value=mock_console):
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0][0]
+        assert "mc environment: staging" in call_args
+
+    def test_no_env_label_when_mc_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """show_update_banner() does NOT instantiate env Console when MC_ENV is not set."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        mock_console = MagicMock()
+        with patch("sys.stdout") as mock_stdout, patch("rich.console.Console", return_value=mock_console):
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        # Console.print must not be called for env label
+        mock_console.print.assert_not_called()
+
+    def test_env_label_shown_even_when_not_tty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """show_update_banner() prints env label even when stdout is not a TTY (piped run)."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        mock_console = MagicMock()
+        with patch("sys.stdout") as mock_stdout, patch("rich.console.Console", return_value=mock_console):
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        mock_console.print.assert_called_once()
+        call_args = mock_console.print.call_args[0][0]
+        assert "mc environment: dev" in call_args
