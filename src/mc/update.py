@@ -280,6 +280,7 @@ def check() -> ExitCode:
     lines = [
         "Version status:",
         f"  Installed : {installed}",
+        f"  Environment : {_current_env_label()}",
     ]
 
     if latest is not None:
