@@ -605,3 +605,41 @@ class TestCheck:
         captured = capsys.readouterr()
         assert "unavailable (network error)" in captured.out
         assert "Update" not in captured.out
+
+    def test_check_shows_environment_dev(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that check() shows 'Environment : dev' when MC_ENV=dev."""
+        monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
+        monkeypatch.setenv("MC_ENV", "dev")
+        mock_config_instance = MagicMock()
+        mock_config_instance.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_check": None,
+        }
+        with patch("mc.update._fetch_latest_version", return_value="2.0.5"):
+            with patch("mc.config.manager.ConfigManager", return_value=mock_config_instance):
+                with patch("mc.version.get_version", return_value="2.0.5"):
+                    result = check()
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Environment : dev" in captured.out
+
+    def test_check_shows_environment_prod_when_mc_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that check() shows 'Environment : prod' when MC_ENV is unset."""
+        monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
+        monkeypatch.delenv("MC_ENV", raising=False)
+        mock_config_instance = MagicMock()
+        mock_config_instance.get_version_config.return_value = {
+            "pinned_mc": "latest",
+            "last_check": None,
+        }
+        with patch("mc.update._fetch_latest_version", return_value="2.0.5"):
+            with patch("mc.config.manager.ConfigManager", return_value=mock_config_instance):
+                with patch("mc.version.get_version", return_value="2.0.5"):
+                    result = check()
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Environment : prod" in captured.out
