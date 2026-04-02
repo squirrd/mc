@@ -11,12 +11,15 @@ Tests cover:
 """
 
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
 from mc.update import (
+    _current_env_label,
+    _get_uv_env,
     _print_recovery_instructions,
     _run_upgrade,
     _verify_mc_version,
@@ -26,6 +29,53 @@ from mc.update import (
     unpin,
     upgrade,
 )
+
+
+class TestGetUvEnv:
+    """Tests for _get_uv_env()."""
+
+    def test_prod_env_no_mc_env_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When MC_ENV is unset, UV_TOOL_DIR and UV_TOOL_BIN_DIR must not be injected."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        env = _get_uv_env()
+        assert "UV_TOOL_DIR" not in env
+        assert "UV_TOOL_BIN_DIR" not in env
+
+    def test_non_prod_env_sets_tool_dir_and_bin_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When MC_ENV=dev, UV_TOOL_DIR and UV_TOOL_BIN_DIR must point to ~/mc-dev/."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        env = _get_uv_env()
+        expected_base = Path.home() / "mc-dev"
+        assert env["UV_TOOL_DIR"] == str(expected_base / "tools")
+        assert env["UV_TOOL_BIN_DIR"] == str(expected_base / "bin")
+
+    def test_env_includes_existing_os_environ(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_uv_env() must include existing env vars, not replace them."""
+        monkeypatch.setenv("MC_ENV", "uat")
+        monkeypatch.setenv("SOME_EXISTING_VAR", "preserved")
+        env = _get_uv_env()
+        assert env["SOME_EXISTING_VAR"] == "preserved"
+
+    def test_env_label_in_path_matches_mc_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """UV_TOOL_BIN_DIR must contain the exact MC_ENV label (e.g. 'uat', not 'dev')."""
+        monkeypatch.setenv("MC_ENV", "uat")
+        env = _get_uv_env()
+        assert "mc-uat" in env["UV_TOOL_BIN_DIR"]
+        assert "mc-uat" in env["UV_TOOL_DIR"]
+
+
+class TestCurrentEnvLabel:
+    """Tests for _current_env_label()."""
+
+    def test_returns_prod_when_mc_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When MC_ENV is unset, label must be 'prod'."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        assert _current_env_label() == "prod"
+
+    def test_returns_mc_env_value_when_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When MC_ENV=dev, label must be 'dev'."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        assert _current_env_label() == "dev"
 
 
 class TestRunUpgrade:
@@ -49,13 +99,14 @@ class TestRunUpgrade:
         captured = capsys.readouterr()
         assert "uv not found" in captured.err
 
-    def test_run_upgrade_uses_list_form_not_shell(self) -> None:
+    def test_run_upgrade_uses_list_form_not_shell(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that _run_upgrade invokes subprocess with list form and never shell=True.
 
         Security requirement: subprocess must never use shell=True to prevent shell injection.
         The exact command list must use the git+https URL with @latest tag so that uv
         actually installs from the git repo at the latest tagged release.
         """
+        monkeypatch.delenv("MC_ENV", raising=False)
         with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
             _run_upgrade()
         assert mock_run.call_args[0][0] == [
@@ -66,6 +117,29 @@ class TestRunUpgrade:
             "git+https://github.com/squirrd/mc@latest",
         ]
         assert mock_run.call_args.kwargs.get("shell", False) is False
+        assert "env" in mock_run.call_args.kwargs
+
+    def test_run_upgrade_passes_uv_env_when_mc_env_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When MC_ENV=dev, _run_upgrade must pass UV_TOOL_BIN_DIR in env to subprocess."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
+            _run_upgrade()
+        passed_env = mock_run.call_args.kwargs["env"]
+        assert "UV_TOOL_BIN_DIR" in passed_env
+        assert "mc-dev" in passed_env["UV_TOOL_BIN_DIR"]
+
+    def test_run_upgrade_no_uv_env_override_in_prod(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When MC_ENV is unset (prod), subprocess env must not contain UV_TOOL_DIR override."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        with patch("mc.update.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
+            _run_upgrade()
+        passed_env = mock_run.call_args.kwargs["env"]
+        assert "UV_TOOL_DIR" not in passed_env
+        assert "UV_TOOL_BIN_DIR" not in passed_env
 
 
 class TestVerifyMcVersion:
@@ -367,6 +441,22 @@ class TestPin:
         captured = capsys.readouterr()
         assert "Pinned to 2.0.3" in captured.out
         assert "mc-update unpin" in captured.out
+
+    def test_pin_passes_uv_env_to_subprocess(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that pin() passes UV_TOOL_BIN_DIR in subprocess env when MC_ENV=dev."""
+        monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
+        monkeypatch.setenv("MC_ENV", "dev")
+        mock_config_instance = MagicMock()
+        mock_config_instance.update_version_config = MagicMock()
+        with patch("mc.update._validate_version_exists", return_value=True):
+            with patch("mc.config.manager.ConfigManager", return_value=mock_config_instance):
+                with patch(
+                    "mc.update.subprocess.run", return_value=MagicMock(returncode=0)
+                ) as mock_run:
+                    pin("2.0.3")
+        passed_env = mock_run.call_args.kwargs["env"]
+        assert "UV_TOOL_BIN_DIR" in passed_env
+        assert "mc-dev" in passed_env["UV_TOOL_BIN_DIR"]
 
 
 class TestUnpin:

@@ -11,9 +11,11 @@ Usage:
 
 import argparse
 import logging
+import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 from typing import Literal
 
 import requests
@@ -24,6 +26,27 @@ ExitCode = Literal[0, 1]
 
 
 _MC_GIT_URL = "git+https://github.com/squirrd/mc"
+
+
+def _get_uv_env() -> dict[str, str]:
+    """Returns subprocess env with UV_TOOL_DIR/UV_TOOL_BIN_DIR for env isolation.
+
+    When MC_ENV is set, uv operations are directed to ~/mc-{env}/tools and ~/mc-{env}/bin
+    so that non-prod installs never overwrite the prod binary at ~/.local/bin/mc.
+    When MC_ENV is unset (prod), uv uses its default paths unchanged.
+    """
+    env = dict(os.environ)
+    mc_env = os.environ.get("MC_ENV")
+    if mc_env:
+        env_base = Path.home() / f"mc-{mc_env}"
+        env["UV_TOOL_DIR"] = str(env_base / "tools")
+        env["UV_TOOL_BIN_DIR"] = str(env_base / "bin")
+    return env
+
+
+def _current_env_label() -> str:
+    """Returns the current MC_ENV value, or 'prod' when unset."""
+    return os.environ.get("MC_ENV", "prod")
 
 
 def _run_upgrade() -> int:
@@ -44,6 +67,7 @@ def _run_upgrade() -> int:
             capture_output=False,
             text=True,
             check=False,
+            env=_get_uv_env(),
         )
         return result.returncode
     except FileNotFoundError:
@@ -189,6 +213,7 @@ def pin(version: str) -> ExitCode:
             capture_output=False,
             text=True,
             check=False,
+            env=_get_uv_env(),
         )
         if result.returncode != 0:
             print(
