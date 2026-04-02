@@ -229,7 +229,7 @@ Output should show: `mc {VERSION}`
 ### 4c: Commit
 
 ```bash
-git add pyproject.toml
+git add pyproject.toml uv.lock
 git commit -m "chore: bump version to {VERSION}"
 ```
 
@@ -309,12 +309,22 @@ NOTES
 
 ### 6e: Verify install
 
+Install into an isolated `MC_ENV=release` sandbox using `mc-update` — this keeps the prod binary untouched:
+
 ```bash
-uv tool install --force "git+https://github.com/squirrd/mc@v{VERSION}"
-mc --version
+MC_ENV=release mc-update upgrade
+MC_ENV=release mc --version
 ```
 
 Confirm output is `mc {VERSION}`. If not, STOP and report the discrepancy.
+
+Then report the current prod version for the user's information (do not modify it):
+
+```bash
+mc --version
+```
+
+Print: `Prod is currently at: mc {prod_version}. Run mc-update upgrade when ready to promote.`
 
 ---
 
