@@ -1,6 +1,7 @@
 """Version information for mc CLI."""
 
 from importlib.metadata import version, PackageNotFoundError
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,11 +24,16 @@ def get_version() -> str:
 
     # mc is installed as a uv tool (separate isolated env) — query the tool list
     try:
+        mc_env = os.environ.get("MC_ENV")
+        uv_env = dict(os.environ)
+        if mc_env:
+            uv_env["UV_TOOL_DIR"] = str(Path.home() / f"mc-{mc_env}" / "tools")
         result = subprocess.run(
             ["uv", "tool", "list"],
             capture_output=True,
             text=True,
             check=False,
+            env=uv_env,
         )
         for line in result.stdout.splitlines():
             stripped = line.strip()
