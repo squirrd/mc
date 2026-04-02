@@ -42,25 +42,31 @@ class TestV1Commands:
     """Test all v1.0 commands for backwards compatibility."""
 
     def test_attach_command_exists(self):
-        """mc attach <case_number> command should still work."""
-        result = run_cli_command(["attach", "--help"])
+        """mc attachments <case_number> command should work (also via att alias)."""
+        result = run_cli_command(["attachments", "--help"])
+        assert result.returncode == 0
+        assert "Download attachments" in result.stdout
+
+    def test_attach_alias_exists(self):
+        """mc att alias should work identically to attachments."""
+        result = run_cli_command(["att", "--help"])
         assert result.returncode == 0
         assert "Download attachments" in result.stdout
 
     def test_attach_requires_case_number(self):
-        """mc attach should require case_number argument."""
-        result = run_cli_command(["attach"])
+        """mc attachments should require case_number argument."""
+        result = run_cli_command(["attachments"])
         assert result.returncode != 0
 
     def test_attach_serial_flag_exists(self):
-        """mc attach --serial flag should exist."""
-        result = run_cli_command(["attach", "--help"])
+        """mc attachments --serial flag should exist."""
+        result = run_cli_command(["attachments", "--help"])
         assert result.returncode == 0
         assert "--serial" in result.stdout
 
     def test_attach_quiet_flag_exists(self):
-        """mc attach --quiet flag should exist."""
-        result = run_cli_command(["attach", "--help"])
+        """mc attachments --quiet flag should exist."""
+        result = run_cli_command(["attachments", "--help"])
         assert result.returncode == 0
         assert "--quiet" in result.stdout
 
@@ -101,48 +107,63 @@ class TestV1Commands:
         assert "--download" in result.stdout or "-d" in result.stdout
 
     def test_case_comments_command_exists(self):
-        """mc case-comments <case_number> command should still work."""
-        result = run_cli_command(["case-comments", "--help"])
+        """mc comments <case_number> command should work (also via cmt alias)."""
+        result = run_cli_command(["comments", "--help"])
+        assert result.returncode == 0
+
+    def test_case_comments_alias_exists(self):
+        """mc cmt alias should work identically to comments."""
+        result = run_cli_command(["cmt", "--help"])
         assert result.returncode == 0
 
     def test_case_comments_requires_case_number(self):
-        """mc case-comments should require case_number argument."""
-        result = run_cli_command(["case-comments"])
+        """mc comments should require case_number argument."""
+        result = run_cli_command(["comments"])
         assert result.returncode != 0
 
     def test_ls_command_exists(self):
-        """mc ls <uid> command should still work."""
-        result = run_cli_command(["ls", "--help"])
+        """mc ldap <uid> command should work (also via who alias)."""
+        result = run_cli_command(["ldap", "--help"])
         assert result.returncode == 0
         # Verify LDAP search functionality mentioned
         assert "LDAP" in result.stdout
 
+    def test_ls_alias_exists(self):
+        """mc who alias should work identically to ldap."""
+        result = run_cli_command(["who", "--help"])
+        assert result.returncode == 0
+
     def test_ls_requires_uid(self):
-        """mc ls should require uid argument."""
-        result = run_cli_command(["ls"])
+        """mc ldap should require uid argument."""
+        result = run_cli_command(["ldap"])
         assert result.returncode != 0
 
     def test_ls_all_flag_exists(self):
-        """mc ls --all flag should exist."""
-        result = run_cli_command(["ls", "--help"])
+        """mc ldap --all flag should exist."""
+        result = run_cli_command(["ldap", "--help"])
         assert result.returncode == 0
         assert "--all" in result.stdout or "-A" in result.stdout
 
     def test_go_command_exists(self):
-        """mc go <case_number> command should still work."""
-        result = run_cli_command(["go", "--help"])
+        """mc launch <case_number> command should work (also via url alias)."""
+        result = run_cli_command(["launch", "--help"])
+        assert result.returncode == 0
+
+    def test_go_alias_exists(self):
+        """mc url alias should work identically to launch."""
+        result = run_cli_command(["url", "--help"])
         assert result.returncode == 0
 
     def test_go_requires_case_number(self):
-        """mc go should require case_number argument."""
-        result = run_cli_command(["go"])
+        """mc launch should require case_number argument."""
+        result = run_cli_command(["launch"])
         assert result.returncode != 0
 
     def test_go_launch_flag_exists(self):
-        """mc go --launch flag should exist."""
-        result = run_cli_command(["go", "--help"])
+        """mc launch -l flag should exist."""
+        result = run_cli_command(["launch", "--help"])
         assert result.returncode == 0
-        assert "--launch" in result.stdout or "-l" in result.stdout
+        assert "--link" in result.stdout or "-l" in result.stdout
 
     def test_version_flag(self):
         """mc --version should output version string."""
@@ -178,13 +199,13 @@ class TestV1Commands:
         result = run_cli_command(["--help"])
         assert result.returncode == 0
 
-        # Verify all v1.0 commands appear in help
-        assert "attach" in result.stdout
+        # Verify all commands appear in help
+        assert "attachments" in result.stdout
         assert "check" in result.stdout
         assert "create" in result.stdout
-        assert "case-comments" in result.stdout
-        assert "ls" in result.stdout
-        assert "go" in result.stdout
+        assert "comments" in result.stdout
+        assert "ldap" in result.stdout
+        assert "launch" in result.stdout
 
 
 @pytest.mark.integration
@@ -246,8 +267,8 @@ class TestV2Commands:
         assert "container" in result.stdout
         assert "case" in result.stdout
 
-        # Verify v1.0 commands still appear (coexistence)
-        assert "attach" in result.stdout
+        # Verify commands still appear (coexistence)
+        assert "attachments" in result.stdout
         assert "create" in result.stdout
 
 

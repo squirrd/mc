@@ -8,17 +8,18 @@ from unittest.mock import patch, MagicMock
 
 
 # ---------------------------------------------------------------------------
-# Helpers: build the 'go' subparser in isolation (avoids full main() setup)
+# Helpers: build the 'launch' subparser in isolation (avoids full main() setup)
 # ---------------------------------------------------------------------------
 
-def build_go_parser() -> argparse.ArgumentParser:
-    """Reproduce the 'go' subparser logic from main.py for isolated testing."""
+def build_launch_parser() -> argparse.ArgumentParser:
+    """Reproduce the 'launch' subparser logic from main.py for isolated testing."""
     parser = argparse.ArgumentParser(prog='mc')
     subparsers = parser.add_subparsers(dest='command')
-    parser_go = subparsers.add_parser('go')
-    parser_go.add_argument('case_number', type=str)
-    parser_go.add_argument('-l', '--link', action='store_true',
-                           help='Print URL instead of launching browser')
+    parser_launch = subparsers.add_parser('launch', aliases=['url'])
+    parser_launch.set_defaults(command='launch')
+    parser_launch.add_argument('case_number', type=str)
+    parser_launch.add_argument('-l', '--link', action='store_true',
+                               help='Print URL instead of launching browser')
     return parser
 
 
@@ -26,25 +27,37 @@ def build_go_parser() -> argparse.ArgumentParser:
 # Argparse wiring tests
 # ---------------------------------------------------------------------------
 
-class TestGoArgparseFlagWiring:
+class TestLaunchArgparseFlagWiring:
     """Verify that -l sets args.link=True and absence leaves args.link=False."""
 
-    def test_go_no_flag_link_is_false(self) -> None:
+    def test_launch_no_flag_link_is_false(self) -> None:
         """Without -l, args.link should be False (browser should launch)."""
-        parser = build_go_parser()
-        args = parser.parse_args(['go', '12345678'])
+        parser = build_launch_parser()
+        args = parser.parse_args(['launch', '12345678'])
         assert args.link is False
 
-    def test_go_with_l_flag_link_is_true(self) -> None:
+    def test_launch_with_l_flag_link_is_true(self) -> None:
         """With -l, args.link should be True (URL printed, no browser)."""
-        parser = build_go_parser()
-        args = parser.parse_args(['go', '12345678', '-l'])
+        parser = build_launch_parser()
+        args = parser.parse_args(['launch', '12345678', '-l'])
         assert args.link is True
 
-    def test_go_with_link_long_flag_link_is_true(self) -> None:
+    def test_launch_with_link_long_flag_link_is_true(self) -> None:
         """With --link, args.link should be True."""
-        parser = build_go_parser()
-        args = parser.parse_args(['go', '12345678', '--link'])
+        parser = build_launch_parser()
+        args = parser.parse_args(['launch', '12345678', '--link'])
+        assert args.link is True
+
+    def test_url_alias_no_flag_link_is_false(self) -> None:
+        """Via 'url' alias, args.link should be False without -l."""
+        parser = build_launch_parser()
+        args = parser.parse_args(['url', '12345678'])
+        assert args.link is False
+
+    def test_url_alias_with_l_flag_link_is_true(self) -> None:
+        """Via 'url' alias, -l should set args.link=True."""
+        parser = build_launch_parser()
+        args = parser.parse_args(['url', '12345678', '-l'])
         assert args.link is True
 
 
@@ -52,7 +65,7 @@ class TestGoArgparseFlagWiring:
 # Integration tests: verify the call to other.go with correct launch value
 # ---------------------------------------------------------------------------
 
-def _run_main_go(argv: list[str]) -> None:
+def _run_main_launch(argv: list[str]) -> None:
     """
     Drive main() with a controlled argv and mocked dependencies so we can
     assert on the call to other.go.
@@ -75,30 +88,26 @@ def _run_main_go(argv: list[str]) -> None:
         main_module.main()
 
 
-class TestGoCommandCallsOtherGo:
-    """Verify that main() routes 'go' to other.go with the correct launch value."""
+class TestLaunchCommandCallsOtherGo:
+    """Verify that main() routes 'launch' to other.go with the correct launch value."""
 
-    def test_go_no_flag_calls_other_go_with_launch_true(self) -> None:
-        """
-        Without -l, main() must call other.go(..., launch=True).
-
-        This is the bug case: currently the flag is wired as --launch
-        (store_true) and passed directly, so no flag means launch=False.
-        After the fix, no flag means args.link=False → launch=not False=True.
-        """
+    def test_launch_no_flag_calls_other_go_with_launch_true(self) -> None:
+        """Without -l, main() must call other.go(..., launch=True)."""
         with patch('mc.cli.commands.other.go') as mock_go:
-            _run_main_go(['mc', 'go', '12345678'])
+            _run_main_launch(['mc', 'launch', '12345678'])
             mock_go.assert_called_once_with('12345678', launch=True)
 
-    def test_go_with_l_flag_calls_other_go_with_launch_false(self) -> None:
-        """
-        With -l, main() must call other.go(..., launch=False).
-
-        After the fix, -l sets args.link=True → launch=not True=False.
-        """
+    def test_launch_with_l_flag_calls_other_go_with_launch_false(self) -> None:
+        """With -l, main() must call other.go(..., launch=False)."""
         with patch('mc.cli.commands.other.go') as mock_go:
-            _run_main_go(['mc', 'go', '12345678', '-l'])
+            _run_main_launch(['mc', 'launch', '12345678', '-l'])
             mock_go.assert_called_once_with('12345678', launch=False)
+
+    def test_url_alias_calls_other_go_with_launch_true(self) -> None:
+        """Via 'url' alias, main() must call other.go(..., launch=True)."""
+        with patch('mc.cli.commands.other.go') as mock_go:
+            _run_main_launch(['mc', 'url', '12345678'])
+            mock_go.assert_called_once_with('12345678', launch=True)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +123,7 @@ class TestBannerAgentModeGuard:
 
         is_agent = runtime_mode == 'agent'
         mock_banner = MagicMock()
-        with patch.object(sys, 'argv', ['mc', 'ls', 'someuid']), \
+        with patch.object(sys, 'argv', ['mc', 'ldap', 'someuid']), \
              patch('mc.cli.main.ConfigManager') as MockCfgMgr, \
              patch('mc.cli.main.does_path_exist', return_value=True), \
              patch('mc.cli.main.get_runtime_mode', return_value=runtime_mode), \

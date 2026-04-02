@@ -41,8 +41,10 @@ def main() -> ExitCode:
                             help='Write debug logs to file')
         subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
-        # Attach subcommand
-        parser_attach = subparsers.add_parser('attach', help='Download attachments for a case')
+        # Attachments subcommand
+        parser_attach = subparsers.add_parser('attachments', aliases=['att'],
+                                              help='Download attachments for a case')
+        parser_attach.set_defaults(command='attachments')
         parser_attach.add_argument('case_number', type=str, help='Case number')
         parser_attach.add_argument('--serial', action='store_true',
                                     help='Download attachments one at a time (for debugging)')
@@ -50,32 +52,45 @@ def main() -> ExitCode:
                                     help='Suppress progress output (errors only)')
 
         # Check subcommand
-        parser_check = subparsers.add_parser('check', help='Check the state of a workspace for a case')
+        parser_check = subparsers.add_parser('check', aliases=['chk'],
+                                             help='Check the state of a workspace for a case')
+        parser_check.set_defaults(command='check')
         parser_check.add_argument('case_number', type=str, help='Case number')
         parser_check.add_argument('-f', '--fix', action='store_true')
 
         # Create subcommand
-        parser_create = subparsers.add_parser('create', help='Create a workspace for a case')
+        parser_create = subparsers.add_parser('create', aliases=['new'],
+                                              help='Create a workspace for a case')
+        parser_create.set_defaults(command='create')
         parser_create.add_argument('case_number', type=str, help='Case number')
         parser_create.add_argument('-d', '--download', action='store_true')
 
-        # Case Comments subcommand (renamed from login)
-        parser_comments = subparsers.add_parser('case-comments', help='Display case comments')
+        # Comments subcommand
+        parser_comments = subparsers.add_parser('comments', aliases=['cmt'],
+                                                help='Display case comments')
+        parser_comments.set_defaults(command='comments')
         parser_comments.add_argument('case_number', type=str, help='Case number')
 
-        # Case Terminal subcommand (Phase 12 - terminal attachment)
-        parser_case = subparsers.add_parser('case', help='Attach terminal to case container')
+        # Case Terminal subcommand
+        parser_case = subparsers.add_parser('case', aliases=['cs'],
+                                            help='Attach terminal to case container')
+        parser_case.set_defaults(command='case')
         parser_case.add_argument('case_number', type=str, help='Case number')
 
         # LDAP Search subcommand
-        parser_ls = subparsers.add_parser('ls', help='Search for a user in LDAP')
-        parser_ls.add_argument('uid', type=str, help='The UID to search for in LDAP')
-        parser_ls.add_argument('-A', '--all', action='store_true')
+        parser_ldap = subparsers.add_parser('ldap', aliases=['who'],
+                                            help='Search for a user in LDAP')
+        parser_ldap.set_defaults(command='ldap')
+        parser_ldap.add_argument('uid', type=str, help='The UID to search for in LDAP')
+        parser_ldap.add_argument('-A', '--all', action='store_true')
 
-        # Go subcommand
-        parser_go = subparsers.add_parser('go', help='Print or launch Salesforce case URL')
-        parser_go.add_argument('case_number', type=str, help='Case number')
-        parser_go.add_argument('-l', '--link', action='store_true', help='Print URL instead of launching browser')
+        # Launch subcommand
+        parser_launch = subparsers.add_parser('launch', aliases=['url'],
+                                              help='Print or launch Salesforce case URL')
+        parser_launch.set_defaults(command='launch')
+        parser_launch.add_argument('case_number', type=str, help='Case number')
+        parser_launch.add_argument('-l', '--link', action='store_true',
+                                   help='Print URL instead of launching browser')
 
         # Container subcommand
         container_parser = subparsers.add_parser('container', help='Container lifecycle operations')
@@ -97,7 +112,7 @@ def main() -> ExitCode:
         exec_parser.add_argument('command', nargs='+', help='Command to execute')
 
         # Reconcile window registry
-        reconcile_parser = container_subparsers.add_parser(
+        container_subparsers.add_parser(
             'reconcile',
             help='Reconcile window registry with actual terminal windows'
         )
@@ -107,12 +122,16 @@ def main() -> ExitCode:
         quick_parser.add_argument('case_number', type=str, help='Case number')
 
         # Version subcommand
-        version_parser = subparsers.add_parser('version', help='Show version and check for updates')
+        version_parser = subparsers.add_parser('version', aliases=['ver'],
+                                               help='Show version and check for updates')
+        version_parser.set_defaults(command='version')
         version_parser.add_argument('--update', action='store_true',
                                     help='Force immediate version check (bypasses hourly throttle)')
 
         # Agent subcommand (runs inside container in agent mode)
-        agent_parser = subparsers.add_parser('agent', help='Agent-mode commands (container-internal)')
+        agent_parser = subparsers.add_parser('agent', aliases=['agt'],
+                                             help='Agent-mode commands (container-internal)')
+        agent_parser.set_defaults(command='agent')
         agent_subparsers = agent_parser.add_subparsers(dest='agent_command')
         agent_subparsers.add_parser('init-case', help='Initialize case data files in container workspace')
         agent_subparsers.add_parser(
@@ -172,22 +191,22 @@ def main() -> ExitCode:
                 logger.debug("OCM monitor failed: %s", e)
 
         # Route to appropriate command
-        if args.command == 'attach':
+        if args.command == 'attachments':
             case.attach(args.case_number, base_dir, offline_token,
                        serial=args.serial, quiet=args.quiet)
         elif args.command == 'check':
             case.check(args.case_number, base_dir, offline_token, fix=args.fix)
         elif args.command == 'create':
             case.create(args.case_number, base_dir, offline_token, download=args.download)
-        elif args.command == 'case-comments':
+        elif args.command == 'comments':
             case.case_comments(args.case_number, offline_token)
         elif args.command == 'case':
             # Import here to avoid circular dependency
             from mc.cli.commands.container import case_terminal
             case_terminal(args)
-        elif args.command == 'ls':
+        elif args.command == 'ldap':
             other.ls(args.uid, show_all=args.all)
-        elif args.command == 'go':
+        elif args.command == 'launch':
             other.go(args.case_number, launch=not args.link)
         elif args.command == 'container':
             if args.container_command == 'list':
