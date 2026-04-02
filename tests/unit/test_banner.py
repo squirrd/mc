@@ -449,3 +449,59 @@ class TestVersionCheckFailureThrottle:
         call_kwargs = mock_config.update_version_config.call_args[1]
         assert "last_failed_fetch" in call_kwargs
         assert isinstance(call_kwargs["last_failed_fetch"], float)
+
+
+class TestMCEnvDisplay:
+    """Tests for MC_ENV environment label display in show_update_banner().
+
+    When MC_ENV is set, show_update_banner() must print a dim environment label
+    to stderr before any other checks (TTY, version invocation, etc.).
+
+    Feature added: 2026-04-02
+    """
+
+    def test_prints_env_label_when_mc_env_set(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """show_update_banner() prints 'mc environment: dev' to stderr when MC_ENV=dev."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        # Make stdout non-TTY so the rest of the banner exits early,
+        # isolating just the env-label behavior.
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        captured = capsys.readouterr()
+        assert "mc environment: dev" in captured.err
+
+    def test_prints_env_label_reflects_mc_env_value(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """show_update_banner() env label uses the actual MC_ENV value (e.g. staging)."""
+        monkeypatch.setenv("MC_ENV", "staging")
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        captured = capsys.readouterr()
+        assert "mc environment: staging" in captured.err
+
+    def test_no_env_label_when_mc_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """show_update_banner() does NOT print an env label when MC_ENV is not set."""
+        monkeypatch.delenv("MC_ENV", raising=False)
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        captured = capsys.readouterr()
+        assert "mc environment:" not in captured.err
+
+    def test_env_label_shown_even_when_not_tty(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """show_update_banner() prints env label even when stdout is not a TTY (piped run)."""
+        monkeypatch.setenv("MC_ENV", "dev")
+        with patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = False
+            show_update_banner()
+        captured = capsys.readouterr()
+        assert "mc environment: dev" in captured.err
