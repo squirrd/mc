@@ -35,6 +35,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# Claude tooling (externally managed — install from org-squirrd/tdd or global skill repos)
+.claude/
+
 # Claude-Related
 .claude-skills/
 .claude_sessions/
