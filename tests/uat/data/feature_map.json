@@ -1,0 +1,161 @@
+{
+  "mc": {
+    "att": {
+      "name": "attachments",
+      "aliases": ["att", "attachments"],
+      "command": "mc attachments / mc att",
+      "modes": ["host", "agent"],
+      "mode_notes": {
+        "host": "Downloads case attachments to ~/mc/<case>/attachments/ on the local filesystem",
+        "agent": "Downloads case attachments inside the case container to the in-container workspace"
+      },
+      "prefixes": ["ATT"],
+      "source_paths": [
+        "src/mc/cli/commands/case.py",
+        "src/mc/utils/downloads.py",
+        "src/mc/integrations/redhat.py"
+      ]
+    },
+    "chk": {
+      "name": "check",
+      "aliases": ["chk", "check"],
+      "command": "mc check / mc chk",
+      "modes": ["host", "agent"],
+      "mode_notes": {
+        "host": "Checks case status and metadata from the Red Hat Customer Portal API",
+        "agent": "Checks case status from within the case container — same API, but output may be surfaced differently"
+      },
+      "prefixes": ["CHK"],
+      "source_paths": [
+        "src/mc/cli/commands/case.py",
+        "src/mc/integrations/redhat.py"
+      ]
+    },
+    "new": {
+      "name": "create",
+      "aliases": ["new", "create"],
+      "command": "mc create / mc new",
+      "modes": ["host"],
+      "mode_notes": {
+        "host": "Creates and starts a new Podman container workspace for the given case number"
+      },
+      "prefixes": ["NEW"],
+      "source_paths": [
+        "src/mc/cli/commands/container.py",
+        "src/mc/cli/commands/case.py",
+        "src/mc/container/manager.py",
+        "src/mc/integrations/podman.py"
+      ]
+    },
+    "cmt": {
+      "name": "comments",
+      "aliases": ["cmt", "comments"],
+      "command": "mc comments / mc cmt",
+      "modes": ["host", "agent"],
+      "mode_notes": {
+        "host": "Fetches and displays Salesforce case comments on the local terminal",
+        "agent": "Fetches and displays Salesforce case comments from within the case container"
+      },
+      "prefixes": ["CMT"],
+      "source_paths": [
+        "src/mc/cli/commands/case.py",
+        "src/mc/integrations/salesforce.py"
+      ]
+    },
+    "cs": {
+      "name": "case",
+      "aliases": ["cs", "case"],
+      "command": "mc case / mc cs",
+      "modes": ["host"],
+      "mode_notes": {
+        "host": "Opens or attaches to the case container terminal window; manages container lifecycle"
+      },
+      "prefixes": ["CS"],
+      "source_paths": [
+        "src/mc/cli/commands/case.py",
+        "src/mc/terminal/launcher.py",
+        "src/mc/terminal/attach.py"
+      ]
+    },
+    "who": {
+      "name": "ldap",
+      "aliases": ["who", "ldap"],
+      "command": "mc ldap / mc who",
+      "modes": ["host", "agent"],
+      "mode_notes": {
+        "host": "Queries LDAP directory for user info from the local machine",
+        "agent": "Queries LDAP directory for user info from within the case container"
+      },
+      "prefixes": ["WHO"],
+      "source_paths": [
+        "src/mc/cli/commands/other.py",
+        "src/mc/integrations/ldap.py"
+      ]
+    },
+    "url": {
+      "name": "launch",
+      "aliases": ["url", "launch"],
+      "command": "mc launch / mc url",
+      "modes": ["host"],
+      "mode_notes": {
+        "host": "Opens the case URL in the default browser on the local machine — requires a display"
+      },
+      "prefixes": ["URL"],
+      "source_paths": [
+        "src/mc/cli/commands/other.py"
+      ]
+    },
+    "ver": {
+      "name": "version",
+      "aliases": ["ver", "version"],
+      "command": "mc version / mc ver",
+      "modes": ["host", "agent"],
+      "mode_notes": {
+        "host": "Displays current mc version and checks for available updates against the remote registry",
+        "agent": "Displays current mc version inside the case container — update checks and auto-update are disabled in agent mode"
+      },
+      "prefixes": ["VER"],
+      "source_paths": [
+        "src/mc/version_check.py",
+        "src/mc/banner.py",
+        "src/mc/cli/commands/other.py"
+      ]
+    },
+    "agt": {
+      "name": "agent",
+      "aliases": ["agt", "agent"],
+      "command": "mc agent / mc agt",
+      "modes": ["host"],
+      "mode_notes": {
+        "host": "Manages agent containers and runtime lifecycle — spawning, stopping, inspecting agent-mode containers"
+      },
+      "prefixes": ["AGT"],
+      "source_paths": [
+        "src/mc/cli/commands/agent.py",
+        "src/mc/runtime.py"
+      ]
+    }
+  },
+  "mc-update": {
+    "upd": {
+      "name": "mc-update (all subcommands)",
+      "aliases": ["upd", "mc-update", "update"],
+      "command": "mc-update",
+      "modes": ["host"],
+      "mode_notes": {
+        "host": "mc-update is a separate binary (not 'mc update') — manages mc installation: check, upgrade, pin, unpin. Must be run on the host; the command does not exist inside agent containers."
+      },
+      "prefixes": ["UCHK", "UUPG", "UPIN", "UUPN"],
+      "subcommand_prefixes": {
+        "check": "UCHK",
+        "upgrade": "UUPG",
+        "pin": "UPIN",
+        "unpin": "UUPN"
+      },
+      "source_paths": [
+        "src/mc/update.py",
+        "src/mc/version_check.py"
+      ]
+    }
+  }
+}
