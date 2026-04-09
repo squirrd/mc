@@ -67,10 +67,10 @@ def test_remove_legacy_env_check_regression() -> None:
     env = os.environ.copy()
     env["RH_API_OFFLINE_TOKEN"] = "some_legacy_token"
 
-    # Use `mc version` — a subcommand that passes argument parsing and reaches
-    # the check_legacy_env_vars() call site (unlike --help which exits earlier).
+    # Use `mc ldap --help` — a subcommand that passes argument parsing without
+    # requiring external services. (mc version was removed as a subcommand.)
     result = subprocess.run(
-        [sys.executable, "-m", "mc.cli.main", "version"],
+        [sys.executable, "-m", "mc.cli.main", "ldap", "--help"],
         env=env,
         capture_output=True,
         text=True,
@@ -160,4 +160,95 @@ def test_rename_package_to_mc_regression() -> None:
     assert "mc-update upgrade" in output, (
         f"Update notification must direct user to 'mc-update upgrade', got: {output!r}\n"
         "Expected: 'mc v2.0.5 available. Run: mc-update upgrade'"
+    )
+
+
+@pytest.mark.integration
+def test_remove_update_feature_regression() -> None:
+    """Regression test for MC-5 — mc version subcommand must be removed.
+
+    Bug discovered: 2026-04-09
+    Platform: Both
+    Severity: minor
+    Source: MC-5
+
+    Problem:
+    The CLI registers a 'version' (alias: 'ver') subcommand with an '--update' flag
+    that duplicates functionality already available via 'mc --version'. This creates
+    two ways to check the version, with the subcommand additionally triggering a
+    manual update check. The subcommand should be removed entirely; 'mc --version'
+    is the only supported way to display the version string.
+
+    Steps to reproduce:
+    1. Run: mc version
+    2. Observe: exits 0 and prints "mc version <N.N.N>"
+    3. Run: mc version --update
+    4. Observe: exits 0 and triggers a manual version check
+    5. Run: mc --help
+    6. Observe: 'version (ver)' appears in the subcommand list
+
+    Expected:
+    - 'mc version' exits with a non-zero code (unknown subcommand)
+    - 'mc --version' still works and prints a semver string (e.g. "mc 2.0.18")
+    - 'mc --help' does not list 'version' or 'ver' in the subcommand list
+
+    Actual (before fix):
+    - 'mc version' exits 0 and prints "mc version 2.0.18"
+    - 'mc version --update' exits 0 and checks for updates
+    - 'mc --help' lists 'version (ver)' as a valid subcommand
+
+    This test ensures the bug does not regress.
+    """
+    import re
+
+    # --- Assert 1: 'mc version' must NOT be a valid subcommand ---
+    result_version = subprocess.run(
+        [sys.executable, "-m", "mc.cli.main", "version"],
+        capture_output=True,
+        text=True,
+    )
+    assert result_version.returncode != 0, (
+        f"'mc version' should not be a valid subcommand (expected non-zero exit), "
+        f"but exited {result_version.returncode}.\n"
+        f"stdout: {result_version.stdout!r}\n"
+        f"stderr: {result_version.stderr!r}\n"
+        "The 'version' subcommand must be removed from cli/main.py."
+    )
+
+    # --- Assert 2: 'mc --version' must still work and print a semver string ---
+    result_flag = subprocess.run(
+        [sys.executable, "-m", "mc.cli.main", "--version"],
+        capture_output=True,
+        text=True,
+    )
+    assert result_flag.returncode == 0, (
+        f"'mc --version' must still work, but exited {result_flag.returncode}.\n"
+        f"stdout: {result_flag.stdout!r}\n"
+        f"stderr: {result_flag.stderr!r}"
+    )
+    combined = result_flag.stdout + result_flag.stderr
+    assert re.search(r"\d+\.\d+\.\d+", combined), (
+        f"'mc --version' must print a semver version string, got: {combined!r}"
+    )
+
+    # --- Assert 3: 'mc --help' must not list 'version' as a subcommand ---
+    result_help = subprocess.run(
+        [sys.executable, "-m", "mc.cli.main", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result_help.returncode == 0, (
+        f"'mc --help' must exit 0, but exited {result_help.returncode}."
+    )
+    # The subcommand list is on the line starting with the positional args block.
+    # Match the pattern where 'version' or 'ver' appears as a subcommand token.
+    subcommand_line = ""
+    for line in result_help.stdout.splitlines():
+        if "{" in line and "}" in line and "attachments" in line:
+            subcommand_line = line
+            break
+    assert "version" not in subcommand_line and "ver" not in subcommand_line, (
+        f"'mc --help' still lists 'version'/'ver' in the subcommand list.\n"
+        f"Subcommand line: {subcommand_line!r}\n"
+        "The 'version' subparser registration must be removed from cli/main.py."
     )
