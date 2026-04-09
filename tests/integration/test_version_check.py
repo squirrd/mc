@@ -387,3 +387,115 @@ class TestVersionCheckEndToEnd:
             if checker._worker_thread:
                 assert not checker._worker_thread.is_alive(), \
                     "Background thread should stop cleanly"
+
+
+@pytest.mark.integration
+def test_update_env_isolation_regression() -> None:
+    """Regression test for update-env-isolation bug.
+
+    Bug discovered: 2026-04-02
+    Platform: macOS / Linux (host mode only)
+    Severity: major
+    Source: UAT (2026-04-02)
+
+    Problem:
+    mc-update pin and mc-update upgrade call subprocess.run(["uv", "tool", "install", ...])
+    without passing UV_TOOL_DIR or UV_TOOL_BIN_DIR env vars. As a result, uv always installs
+    to its default path (~/.local/bin/mc) regardless of MC_ENV. When a developer runs
+    MC_ENV=dev mc-update pin 2.0.15, the prod binary at ~/.local/bin/mc is silently
+    overwritten with the dev-pinned version, corrupting the production installation.
+
+    Steps to reproduce:
+    1. Set MC_ENV=dev in environment.
+    2. Run mc-update pin 2.0.15 (or mc-update upgrade).
+    3. uv tool install runs without UV_TOOL_BIN_DIR — installs to ~/.local/bin/mc.
+    4. The prod mc binary is now pinned to 2.0.15, even though the intent was dev-env only.
+
+    Expected:
+    When MC_ENV=dev, _run_upgrade() and pin() pass UV_TOOL_BIN_DIR=~/mc-dev/bin and
+    UV_TOOL_DIR=~/mc-dev/tools to the uv subprocess so that uv installs into the isolated
+    env directory and never touches the prod binary at ~/.local/bin/mc.
+
+    Actual (before fix):
+    Neither _run_upgrade() nor pin() passed an env= kwarg to subprocess.run, so uv used
+    its default install paths unconditionally, overwriting ~/.local/bin/mc.
+
+    This test ensures the bug does not regress.
+    """
+    import os
+    import unittest.mock as mock
+    from pathlib import Path
+
+    from mc import update
+
+    # --- Part 1: _run_upgrade() must pass env isolation vars when MC_ENV is set ---
+    captured_run_upgrade_env: dict[str, str] | None = None
+
+    def fake_run_upgrade(cmd: list[str], **kwargs: object) -> mock.MagicMock:
+        nonlocal captured_run_upgrade_env
+        captured_run_upgrade_env = kwargs.get("env")  # type: ignore[assignment]
+        m = mock.MagicMock()
+        m.returncode = 0
+        return m
+
+    old_env = os.environ.copy()
+    try:
+        os.environ["MC_ENV"] = "dev"
+        with mock.patch("mc.update.subprocess.run", side_effect=fake_run_upgrade):
+            update._run_upgrade()
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+
+    assert captured_run_upgrade_env is not None, (
+        "_run_upgrade() did not pass env= to subprocess.run. "
+        "Bug: uv uses default paths and overwrites ~/.local/bin/mc even when MC_ENV=dev."
+    )
+    expected_bin_dir = str(Path.home() / "mc-dev" / "bin")
+    assert captured_run_upgrade_env.get("UV_TOOL_BIN_DIR") == expected_bin_dir, (
+        f"UV_TOOL_BIN_DIR={captured_run_upgrade_env.get('UV_TOOL_BIN_DIR')!r}, "
+        f"expected {expected_bin_dir!r}. "
+        f"Bug: MC_ENV=dev mc-update upgrade overwrites the prod binary."
+    )
+    expected_tool_dir = str(Path.home() / "mc-dev" / "tools")
+    assert captured_run_upgrade_env.get("UV_TOOL_DIR") == expected_tool_dir, (
+        f"UV_TOOL_DIR={captured_run_upgrade_env.get('UV_TOOL_DIR')!r}, "
+        f"expected {expected_tool_dir!r}."
+    )
+
+    # --- Part 2: pin() must pass env isolation vars when MC_ENV is set ---
+    captured_pin_env: dict[str, str] | None = None
+
+    def fake_run_pin(cmd: list[str], **kwargs: object) -> mock.MagicMock:
+        nonlocal captured_pin_env
+        captured_pin_env = kwargs.get("env")  # type: ignore[assignment]
+        m = mock.MagicMock()
+        m.returncode = 0
+        return m
+
+    old_env = os.environ.copy()
+    try:
+        os.environ["MC_ENV"] = "dev"
+        os.environ.pop("MC_RUNTIME_MODE", None)
+        with mock.patch("mc.update._validate_version_exists", return_value=True):
+            with mock.patch("mc.config.manager.ConfigManager") as mock_cm:
+                mock_cm.return_value.update_version_config = mock.MagicMock()
+                with mock.patch("mc.update.subprocess.run", side_effect=fake_run_pin):
+                    update.pin("2.0.15")
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+
+    assert captured_pin_env is not None, (
+        "pin() did not pass env= to subprocess.run. "
+        "Bug: MC_ENV=dev mc-update pin 2.0.15 overwrites ~/.local/bin/mc (the prod binary)."
+    )
+    assert captured_pin_env.get("UV_TOOL_BIN_DIR") == expected_bin_dir, (
+        f"UV_TOOL_BIN_DIR={captured_pin_env.get('UV_TOOL_BIN_DIR')!r}, "
+        f"expected {expected_bin_dir!r}. "
+        f"Bug: MC_ENV=dev mc-update pin installs to prod binary path."
+    )
+    assert captured_pin_env.get("UV_TOOL_DIR") == expected_tool_dir, (
+        f"UV_TOOL_DIR={captured_pin_env.get('UV_TOOL_DIR')!r}, "
+        f"expected {expected_tool_dir!r}."
+    )
