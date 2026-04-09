@@ -18,7 +18,7 @@ worktree's src/ instead of the main repo's src/. This means:
 
 Steps to reproduce:
 1. Ensure main repo .venv exists with editable install pointing at main/src.
-2. Run: bash .claude/commands/tdd-issue/scripts/create-worktree.sh fix/_temp-test
+2. Run: bash scripts/create-worktree.sh fix/_temp-test
 3. Read main .venv __editable__.mc-*.pth — it now points at the worktree's src/.
 
 Expected: After create-worktree.sh completes, the main repo's .venv editable
@@ -58,7 +58,7 @@ _MAIN_VENV = _MAIN_REPO / ".venv"
 # Use the script from the current worktree so the test exercises the version under
 # development. When run from the main branch, _WORKTREE_ROOT == _MAIN_REPO, so this
 # continues to test the canonical script after merging.
-_CREATE_WORKTREE_SCRIPT = _WORKTREE_ROOT / ".claude/commands/tdd-issue/scripts/create-worktree.sh"
+_CREATE_WORKTREE_SCRIPT = _WORKTREE_ROOT / "scripts/create-worktree.sh"
 _TEMP_BRANCH = "fix/_temp-worktree-isolation-regression"
 _TEMP_WORKTREE = _MAIN_REPO / ".tdd/worktrees/fix/_temp-worktree-isolation-regression"
 
