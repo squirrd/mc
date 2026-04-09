@@ -39,6 +39,10 @@ Thumbs.db
 .claude/
 
 # Claude-Related
+claude.md
+Claude.md
+!CLAUDE.md
+claude_backup.md
 .claude-skills/
 .claude_sessions/
 claude_sessions/
@@ -46,16 +50,10 @@ Claude-*.log
 Claude-*.tmp
 Claude-*.cache
 Claude-*.bak
-claude.md
-Claude.md
-!CLAUDE.md
-claude_backup.md
 *.local.md
 
 # Skill run reports (runtime artifacts)
 .fix-integration-tests/
-
-
 
 # Environment variables
 .env
@@ -84,3 +82,6 @@ tmp/
 
 # TDD worktrees and issue tracking (local only)
 .tdd/
+
+# GSD planning artifacts (local only)
+.planning/
