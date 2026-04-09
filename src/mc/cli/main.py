@@ -121,13 +121,6 @@ def main() -> ExitCode:
         quick_parser = subparsers.add_parser('quick_access', help=argparse.SUPPRESS)
         quick_parser.add_argument('case_number', type=str, help='Case number')
 
-        # Version subcommand
-        version_parser = subparsers.add_parser('version', aliases=['ver'],
-                                               help='Show version and check for updates')
-        version_parser.set_defaults(command='version')
-        version_parser.add_argument('--update', action='store_true',
-                                    help='Force immediate version check (bypasses hourly throttle)')
-
         # Agent subcommand (runs inside container in agent mode)
         agent_parser = subparsers.add_parser('agent', aliases=['agt'],
                                              help='Agent-mode commands (container-internal)')
@@ -225,8 +218,6 @@ def main() -> ExitCode:
                 container_parser.print_help()
         elif args.command == 'quick_access':
             container.quick_access(args)
-        elif args.command == 'version':
-            other.version(update=args.update)
         elif args.command == 'agent':
             if args.agent_command == 'init-case':
                 from mc.cli.commands.agent import init_case
