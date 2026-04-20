@@ -203,3 +203,83 @@ def test_pin_install_failure_no_uv_commands() -> None:
         f"pin() must not expose uv commands to users on install failure.\n"
         f"Got: {output!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression: source-level scan for uv commands in user-facing messages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_mc_update_no_uv_cmds_regression() -> None:
+    """Regression test for mc-update-no-uv-cmds: no raw uv commands in user messages.
+
+    Bug discovered: 2026-04-20
+    Platform: Both
+    Severity: minor
+    Source: ad-hoc
+
+    Problem:
+    update.py exposed raw ``uv`` CLI commands (e.g. ``uv tool install --force``,
+    ``uv not found``, ``uv tool list``) in user-facing error and recovery messages
+    printed to stderr/stdout via ``print()``. Users should only see ``mc-update``
+    commands, never internal ``uv`` plumbing.
+
+    Steps to reproduce:
+    1. Call _run_upgrade() when uv is not on PATH -> prints "uv not found"
+    2. Call _print_recovery_instructions() -> prints "uv tool install --force ..."
+    3. Call _verify_mc_version() when mc is not on PATH -> prints "uv tool list"
+    4. Call pin() when uv install fails -> prints "uv tool install --force ..."
+
+    Expected: all user-facing print() calls reference mc-update commands only
+    Actual:   (before fix) print() calls contain raw "uv tool install", "uv not found",
+              "uv tool list" strings
+
+    This test ensures the bug does not regress.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    import mc.update as update_module
+
+    source = inspect.getsource(update_module)
+    tree = ast.parse(source)
+
+    # Patterns that must NOT appear in user-facing string literals inside print() calls.
+    # These are the exact uv command fragments that were in the old messages.
+    banned_fragments = [
+        "uv tool install",
+        "uv tool upgrade",
+        "uv tool list",
+        "uv not found",
+    ]
+
+    violations: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        # Match print(...) calls
+        func = node.func
+        is_print = (isinstance(func, ast.Name) and func.id == "print") or (
+            isinstance(func, ast.Attribute) and func.attr == "print"
+        )
+        if not is_print:
+            continue
+
+        # Extract all string constants from the print() arguments
+        for arg in node.args:
+            for child in ast.walk(arg):
+                if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                    for fragment in banned_fragments:
+                        if fragment in child.value:
+                            violations.append(
+                                f"Line ~{child.lineno}: print() contains "
+                                f"banned fragment {fragment!r} in: {child.value!r}"
+                            )
+
+    assert not violations, (
+        "update.py must not expose raw uv commands in user-facing print() calls.\n"
+        "Violations found:\n" + textwrap.indent("\n".join(violations), "  ")
+    )
