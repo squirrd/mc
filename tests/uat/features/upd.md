@@ -38,7 +38,7 @@ Version status:
 - `Environment` shows `prod` (not `dev` or `uat`)
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -66,7 +66,7 @@ Version status:
 - Does not hang longer than ~10 seconds
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -98,7 +98,7 @@ Version status:
 - Exits 0
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -129,7 +129,7 @@ Version status:
 - Config has `pinned_mc = "2.0.15"` under `[version]`
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -154,7 +154,7 @@ Version status:
 - No installation attempted
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -179,7 +179,7 @@ Version status:
 - Config untouched
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -203,7 +203,7 @@ Version status:
 - Config untouched
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -232,7 +232,7 @@ Version status:
 - `upgrade`: Runs cleanly, exits 0
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 
@@ -259,7 +259,7 @@ Version status:
 - Config unchanged
 
 **Result:**
-- [ ] PASS
+- [x] PASS
 - [ ] FAIL
 - [ ] BLOCKED
 

@@ -52,6 +52,9 @@ Claude-*.cache
 Claude-*.bak
 *.local.md
 
+# Obsidian vault metadata
+.obsidian/
+
 # Skill run reports (runtime artifacts)
 .fix-integration-tests/
 
