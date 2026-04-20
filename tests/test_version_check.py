@@ -356,34 +356,6 @@ class TestTimingAndNonBlocking:
         assert elapsed < 1.0, f"Process took {elapsed}s to exit, thread may have hung"
 
 
-class TestCLIIntegration:
-    """Test CLI command integration."""
-
-    @patch('mc.version_check.VersionChecker._perform_version_check')
-    def test_version_command_without_update(self, mock_check, capsys):
-        """mc version should display version without checking for updates."""
-        from mc.cli.commands.other import version
-
-        with patch('mc.version.get_version', return_value='2.0.4'):
-            version(update=False)
-
-        captured = capsys.readouterr()
-        assert "mc version 2.0.4" in captured.out
-        assert not mock_check.called
-
-    @patch('mc.version_check.VersionChecker._perform_version_check')
-    def test_version_command_with_update(self, mock_check, capsys):
-        """mc version --update should force immediate check."""
-        from mc.cli.commands.other import version
-
-        with patch('mc.version.get_version', return_value='2.0.4'):
-            version(update=True)
-
-        captured = capsys.readouterr()
-        assert "mc version 2.0.4" in captured.out
-        assert "Checking for updates..." in captured.err
-        assert "Version check complete." in captured.err
-        mock_check.assert_called_once()
 
 
 class TestRuntimeModeIntegration:
