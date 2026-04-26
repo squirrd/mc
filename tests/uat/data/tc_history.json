@@ -1,5 +1,159 @@
 {
   "_schema": "1.0",
-  "_comment": "Managed by scripts/uat/process_sprint.py — do not edit manually",
-  "tcs": {}
+  "_comment": "Managed by scripts/uat/process_sprint.py \u2014 do not edit manually",
+  "tcs": {
+    "TC-UCHK-01": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UCHK-02": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UUPG-01": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UPIN-01": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UPIN-02": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UPIN-03": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UPIN-04": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UUPN-01": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    },
+    "TC-UUPN-02": {
+      "run_count": 2,
+      "history": [
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        },
+        {
+          "date": "2026-04-21",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-04-21",
+      "last_result": "PASS"
+    }
+  }
 }

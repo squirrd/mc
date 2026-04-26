@@ -1,5 +1,38 @@
 {
   "_schema": "1.0",
   "_comment": "Managed by uat-review skill — tracks last codebase review per feature",
-  "features": {}
+  "features": {
+    "att": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "chk": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "new": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "cmt": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "cs": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "who": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "url": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    },
+    "agt": {
+      "last_review": "2026-04-26",
+      "last_review_commit": "422f46a33c02a634356fa8a32f4223f227963721"
+    }
+  }
 }

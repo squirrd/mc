@@ -3,21 +3,24 @@
 Process a completed UAT sprint file.
 
 1. Parse pass/fail/blocked results from checkboxes
-2. Update tests/uat/data/tc_history.json
-3. Update tests/uat/STATUS.md
-4. Print failed TCs in Jira-format (to stdout)
+2. Create Jira Bug tickets for FAIL/BLOCKED TCs (via jira CLI + Keychain token)
+3. Update tests/uat/data/tc_history.json
+4. Update tests/uat/STATUS.md
 5. Move sprint file from runs/pending/ to runs/completed/
 
 Usage:
     python scripts/uat/process_sprint.py [--sprint YYYY-MM-DD] [--dry-run]
 
-If --sprint is not given, uses the most recent pending sprint.
+If --sprint is not given and only one pending sprint exists, uses it.
+If multiple pending sprints exist, lists them and exits with code 2.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -48,6 +51,11 @@ def find_pending_sprint(sprint_date: str | None) -> Path:
     if not pending:
         print("Error: No pending sprint files found.", file=sys.stderr)
         sys.exit(1)
+    if len(pending) > 1:
+        print("Multiple pending sprints found. Specify one with --sprint:", file=sys.stderr)
+        for p in pending:
+            print(f"  {p.stem}", file=sys.stderr)
+        sys.exit(2)
     return pending[0]
 
 
@@ -73,8 +81,7 @@ def parse_sprint_file(path: Path) -> tuple[str, list[dict[str, Any]]]:
         notes = ""
         if notes_match:
             raw = notes_match.group(1).strip()
-            # Strip HTML comment placeholder
-            if not raw.startswith("<!--") and raw:
+            if not raw.startswith("<!--") and raw and not re.fullmatch(r"-{3,}", raw):
                 notes = raw
 
         results.append(
@@ -112,40 +119,148 @@ def update_history(sprint_date: str, results: list[dict[str, Any]]) -> None:
     HISTORY_FILE.write_text(json.dumps(data, indent=2))
 
 
-def build_jira_output(sprint_date: str, results: list[dict[str, Any]]) -> str:
+JIRA_CLI = "/opt/homebrew/bin/jira"
+JIRA_CONFIG = os.path.expanduser("~/.config/jira/p/config.yml")
+JIRA_PROJECT = "MC"
+JIRA_KEYCHAIN_SERVICE = "jira_p_api_token"
+
+
+def _get_jira_token() -> str | None:
+    """Retrieve Jira API token from macOS Keychain."""
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-a", os.environ["USER"],
+             "-s", JIRA_KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _build_jira_description(r: dict[str, Any]) -> str:
+    """Build a Jira issue description from a TC result."""
+    lines = [
+        f"h3. UAT Failure: {r['id']}",
+        "",
+        f"*TC:* {r['id']}: {r['title']}",
+        f"*Result:* {r['result']}",
+        f"*Sprint:* {r['date']}",
+        "",
+    ]
+    if r["notes"]:
+        lines += ["h4. Tester Notes", "", r["notes"], ""]
+    lines += [
+        "h4. Reproduction",
+        "",
+        f"See test steps in: tests/uat/features/ (search for {r['id']})",
+    ]
+    return "\n".join(lines)
+
+
+def create_jira_tickets(
+    sprint_date: str, results: list[dict[str, Any]], dry_run: bool = False
+) -> str:
+    """Create Jira Bug tickets for FAIL/BLOCKED TCs. Returns summary text."""
     failures = [r for r in results if r["result"] in ("FAIL", "BLOCKED")]
     if not failures:
-        return f"Sprint {sprint_date}: All tests passed. No Jira issues to file.\n"
+        return f"Sprint {sprint_date}: All tests passed. No Jira tickets to create.\n"
+
+    token = _get_jira_token()
+    if not token:
+        print(
+            "Warning: Could not retrieve Jira API token from Keychain. "
+            "Falling back to text summary.", file=sys.stderr,
+        )
+        return _build_fallback_summary(sprint_date, failures)
+
+    if not Path(JIRA_CLI).exists():
+        print(
+            f"Warning: Jira CLI not found at {JIRA_CLI}. "
+            "Falling back to text summary.", file=sys.stderr,
+        )
+        return _build_fallback_summary(sprint_date, failures)
 
     lines = [
-        f"FAILED / BLOCKED TESTS — Sprint {sprint_date}",
+        f"Jira Tickets — Sprint {sprint_date}",
         "=" * 50,
         "",
     ]
 
+    created: list[str] = []
     for r in failures:
-        tc_id = r["id"]
-        # Derive feature prefix from TC ID: TC-UPIN-01 → UPIN
-        prefix = tc_id.rsplit("-", 1)[0].lstrip("TC-")
+        summary = f"[UAT] {r['id']}: {r['title']}"
+        description = _build_jira_description(r)
+
+        if dry_run:
+            lines.append(f"[dry-run] Would create: {summary}")
+            continue
+
+        env = os.environ.copy()
+        env["JIRA_API_TOKEN"] = token
+
+        cmd = [
+            JIRA_CLI,
+            "-c", JIRA_CONFIG,
+            "-p", JIRA_PROJECT,
+            "issue", "create",
+            "-t", "Bug",
+            "-s", summary,
+            "-b", description,
+            "-y", "High" if r["result"] == "FAIL" else "Medium",
+            "--no-input",
+            "--raw",
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, env=env, timeout=30,
+            )
+            if result.returncode == 0:
+                try:
+                    data = json.loads(result.stdout)
+                    key = data.get("key", "???")
+                except (json.JSONDecodeError, KeyError):
+                    key = result.stdout.strip()[:20]
+                created.append(key)
+                lines.append(f"  [{r['result']}] {r['id']}: {r['title']} → {key}")
+            else:
+                lines.append(
+                    f"  [{r['result']}] {r['id']}: {r['title']} → FAILED TO CREATE"
+                )
+                lines.append(f"    stderr: {result.stderr.strip()[:200]}")
+        except subprocess.TimeoutExpired:
+            lines.append(
+                f"  [{r['result']}] {r['id']}: {r['title']} → TIMEOUT"
+            )
+
+    lines.append("")
+    if created:
+        lines.append(f"Created {len(created)} ticket(s): {', '.join(created)}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_fallback_summary(sprint_date: str, failures: list[dict[str, Any]]) -> str:
+    """Plain text summary when Jira CLI is unavailable."""
+    lines = [
+        f"FAILED / BLOCKED TESTS — Sprint {sprint_date}",
+        "=" * 50,
+        "(Jira ticket creation unavailable — manual filing required)",
+        "",
+    ]
+    for r in failures:
         lines += [
-            f"[{r['result']}] {tc_id}: {r['title']}",
-            f"  Prefix : {prefix}",
+            f"[{r['result']}] {r['id']}: {r['title']}",
             f"  Date   : {r['date']}",
         ]
         if r["notes"]:
             lines.append(f"  Notes  : {r['notes']}")
+        lines.append(f"  Summary: [UAT] {r['id']}: {r['title']}")
         lines.append("")
-
-    lines += [
-        "--- Suggested Jira summary format ---",
-        "",
-    ]
-    for r in failures:
-        lines.append(
-            f"  [UAT-{sprint_date}] {r['id']}: {r['title']} — {r.get('notes', 'see sprint results')}"
-        )
-    lines.append("")
-
     return "\n".join(lines)
 
 
@@ -348,8 +463,8 @@ def main() -> None:
     print(f"Total: {n_total}  Pass: {n_pass}  Fail: {n_fail}  Blocked: {n_blocked}")
     print()
 
-    # Jira output
-    jira_output = build_jira_output(sprint_date, results)
+    # Jira ticket creation
+    jira_output = create_jira_tickets(sprint_date, results, dry_run=dry_run)
     print(jira_output)
 
     if dry_run:
@@ -359,13 +474,13 @@ def main() -> None:
     # Update history
     update_history(sprint_date, results)
 
-    # Update STATUS.md
-    update_status_md(sprint_date, results, HISTORY_FILE)
-
-    # Move sprint file to completed
+    # Move sprint file to completed (before STATUS.md rebuild, which scans completed/)
     COMPLETED_DIR.mkdir(parents=True, exist_ok=True)
     dest = COMPLETED_DIR / sprint_file.name
     shutil.move(str(sprint_file), str(dest))
+
+    # Update STATUS.md
+    update_status_md(sprint_date, results, HISTORY_FILE)
 
     print(f"Sprint archived to: {dest.relative_to(ROOT)}")
     print(f"History updated: {HISTORY_FILE.relative_to(ROOT)}")
