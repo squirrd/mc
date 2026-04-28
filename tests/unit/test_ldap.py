@@ -15,6 +15,7 @@ import pytest
 from unittest.mock import Mock
 import subprocess
 from mc.integrations.ldap import ldap_search, print_ldap_cards
+from mc.exceptions import APIConnectionError, MCError, ValidationError
 
 
 # Happy path tests
@@ -98,33 +99,27 @@ cn: Test User
 
 
 def test_ldap_search_input_too_short():
-    """Test LDAP search rejects input shorter than 4 characters."""
-    success, message = ldap_search("abc")
-
-    assert success is False
-    assert "must be between 4 and 15 characters" in message
+    """Test LDAP search raises ValidationError for input shorter than 4 characters."""
+    with pytest.raises(ValidationError, match="must be between 4 and 15 characters"):
+        ldap_search("abc")
 
 
 def test_ldap_search_input_too_long():
-    """Test LDAP search rejects input longer than 15 characters."""
-    success, message = ldap_search("a" * 16)
-
-    assert success is False
-    assert "must be between 4 and 15 characters" in message
+    """Test LDAP search raises ValidationError for input longer than 15 characters."""
+    with pytest.raises(ValidationError, match="must be between 4 and 15 characters"):
+        ldap_search("a" * 16)
 
 
 def test_ldap_search_command_not_found(mocker):
-    """Test LDAP search handles missing ldapsearch command."""
+    """Test LDAP search raises MCError when ldapsearch command is missing."""
     mocker.patch("subprocess.run", side_effect=FileNotFoundError)
 
-    success, message = ldap_search("testuser")
-
-    assert success is False
-    assert "'ldapsearch' command not found" in message
+    with pytest.raises(MCError, match="ldapsearch command not found"):
+        ldap_search("testuser")
 
 
 def test_ldap_search_command_failed(mocker):
-    """Test LDAP search handles subprocess command failure."""
+    """Test LDAP search raises MCError on subprocess command failure."""
     error = subprocess.CalledProcessError(
         returncode=1,
         cmd=["ldapsearch"],
@@ -132,24 +127,36 @@ def test_ldap_search_command_failed(mocker):
     )
     mocker.patch("subprocess.run", side_effect=error)
 
-    success, message = ldap_search("testuser")
-
-    assert success is False
-    assert "Error executing ldapsearch" in message
+    with pytest.raises(MCError, match="LDAP search failed"):
+        ldap_search("testuser")
 
 
 def test_ldap_search_no_results(mocker):
-    """Test LDAP search handles no results case."""
+    """Test LDAP search raises MCError when no results are found."""
     mock_result = Mock()
     mock_result.stdout = ""
     mock_result.returncode = 0
 
     mocker.patch("subprocess.run", return_value=mock_result)
 
-    success, message = ldap_search("nonexistent")
+    with pytest.raises(MCError, match="No LDAP results found"):
+        ldap_search("nonexistent")
 
-    assert success is False
-    assert "No results found" in message
+
+def test_ldap_search_unreachable_suggests_vpn(mocker):
+    """Test that LDAP connection failure suggests checking VPN."""
+    error = subprocess.CalledProcessError(
+        returncode=255,
+        cmd=["ldapsearch"],
+        stderr="Can't contact LDAP server (-1)"
+    )
+    mocker.patch("subprocess.run", side_effect=error)
+
+    with pytest.raises(APIConnectionError) as exc_info:
+        ldap_search("testuser")
+
+    assert exc_info.value.suggestion is not None
+    assert "vpn" in exc_info.value.suggestion.lower()
 
 
 # Search term logic tests
