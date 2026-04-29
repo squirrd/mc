@@ -46,10 +46,12 @@ class TestLdapSilentFailRegression:
                 ldap_ls("david")
 
     def test_ldap_unreachable_error_mentions_vpn(self) -> None:
-        """Error message should suggest checking VPN connectivity."""
+        """Error suggestion should mention checking VPN connectivity."""
         with patch("mc.integrations.ldap.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.CalledProcessError(
                 255, cmd="ldapsearch", stderr="Can't contact LDAP server (-1)"
             )
-            with pytest.raises(MCError, match="(?i)vpn"):
+            with pytest.raises(MCError) as exc_info:
                 ldap_ls("david")
+            assert exc_info.value.suggestion is not None
+            assert "vpn" in exc_info.value.suggestion.lower()
