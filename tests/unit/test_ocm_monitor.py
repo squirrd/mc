@@ -22,7 +22,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -251,3 +251,117 @@ class TestStartBackgroundMonitor:
                     monitor = OCMMonitor()
                     monitor.start_background_monitor()
         assert monitor._worker_thread is None
+
+
+# ---------------------------------------------------------------------------
+# TestRunOcmLoginPortGuard
+# ---------------------------------------------------------------------------
+
+
+class TestRunOcmLoginPortGuard:
+    """Tests for _run_ocm_login() port-conflict detection, timeout, and messaging.
+
+    Regression tests for MC-6 / ocm-login-retry: _run_ocm_login() must:
+    1. Pass a timeout to subprocess.run to prevent indefinite hangs
+    2. Check if port 9998 is already bound before launching 'ocm login'
+    3. Print a user-friendly message when port conflict is detected
+    """
+
+    def test_run_ocm_login_passes_timeout_to_subprocess(self) -> None:
+        """subprocess.run must be called with a timeout= kwarg."""
+        monitor = OCMMonitor()
+        with patch("mc.utils.ocm_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            monitor._run_ocm_login()
+
+            assert mock_run.called, "subprocess.run was not called"
+            _, kwargs = mock_run.call_args
+            assert "timeout" in kwargs, (
+                "subprocess.run called without timeout= — _run_ocm_login() can hang indefinitely"
+            )
+            assert isinstance(kwargs["timeout"], (int, float))
+            assert kwargs["timeout"] > 0
+
+    def test_run_ocm_login_skips_when_port_9998_bound(self) -> None:
+        """When port 9998 is already bound, _run_ocm_login() must not launch 'ocm login'."""
+        import socket
+
+        monitor = OCMMonitor()
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 9998))
+            sock.listen(1)
+
+            with patch("mc.utils.ocm_monitor.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                monitor._run_ocm_login()
+
+                login_calls = [
+                    c
+                    for c in mock_run.call_args_list
+                    if c[0] and "ocm" in str(c[0][0]) and "login" in str(c[0][0])
+                ]
+                assert not login_calls, (
+                    "_run_ocm_login() launched 'ocm login' while port 9998 was already bound"
+                )
+        finally:
+            sock.close()
+
+    def test_run_ocm_login_port_conflict_message(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When port 9998 is already bound, the output must mention the conflict."""
+        import socket
+
+        monitor = OCMMonitor()
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 9998))
+            sock.listen(1)
+
+            with patch("mc.utils.ocm_monitor.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                monitor._run_ocm_login()
+
+            captured = capsys.readouterr()
+            combined = (captured.out + captured.err).lower()
+            assert (
+                "already running" in combined
+                or "port" in combined
+                or "in use" in combined
+            ), (
+                f"Expected user-friendly port-conflict message, "
+                f"got stdout={captured.out!r}, stderr={captured.err!r}"
+            )
+        finally:
+            sock.close()
+
+    def test_run_ocm_login_address_in_use_stderr_message(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When ocm login returns 'address already in use' in stderr, the user
+        must see a message about port conflict, not just a generic failure."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "listen tcp :9998: bind: address already in use"
+
+        monitor = OCMMonitor()
+
+        with patch("mc.utils.ocm_monitor.subprocess.run", return_value=mock_result):
+            monitor._run_ocm_login()
+
+        captured = capsys.readouterr()
+        combined = (captured.out + captured.err).lower()
+        assert (
+            "already running" in combined
+            or "port" in combined
+            or "in use" in combined
+        ), (
+            f"Expected port-conflict context in output, "
+            f"got stdout={captured.out!r}, stderr={captured.err!r}"
+        )
