@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import os
+import socket
 import subprocess
 import threading
 import time
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 _EXPIRY_WARNING_MINUTES = 60     # warn when token expires within this window
 _POLL_INTERVAL_SECONDS = 1800    # 30 minutes
+_OCM_LOGIN_PORT = 9998           # port used by ocm login --use-auth-code
+_OCM_LOGIN_TIMEOUT = 300         # 5-minute timeout for ocm login subprocess
 _CONSOLE = Console(stderr=True)  # stderr keeps stdout clean for scripts
 
 
@@ -163,6 +166,27 @@ def _minutes_until_expiry(exp: int) -> int:
     return int((exp - time.time()) / 60)
 
 
+def _is_port_bound(port: int, host: str = "127.0.0.1") -> bool:
+    """Check whether a TCP port is already bound on the given host.
+
+    Args:
+        port: TCP port number to probe.
+        host: Host address to check (default: loopback).
+
+    Returns:
+        True if the port is already in use, False if available.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        return result == 0
+    except OSError:
+        return False
+    finally:
+        sock.close()
+
+
 class OCMMonitor:
     """Background OCM refresh token expiry monitor.
 
@@ -269,18 +293,42 @@ class OCMMonitor:
     def _run_ocm_login(self) -> None:
         """Run 'ocm login --use-auth-code --url=prd' to refresh the OCM token.
 
-        Inherits the terminal so interactive output streams to the user.
+        Pre-checks port 9998 to avoid 'address already in use' errors when
+        another ocm login process is already running. Passes a timeout to
+        prevent indefinite hangs.
         """
+        if _is_port_bound(_OCM_LOGIN_PORT):
+            _CONSOLE.print(
+                "[yellow]\u26a0 OCM login already running on port "
+                f"{_OCM_LOGIN_PORT} \u2014 skipping re-login[/yellow]"
+            )
+            return
+
         try:
             result = subprocess.run(
                 ["ocm", "login", "--use-auth-code", "--url=prd"],
                 check=False,  # never raise; we handle returncode manually
+                timeout=_OCM_LOGIN_TIMEOUT,
+                capture_output=True,
+                text=True,
             )
             if result.returncode != 0:
-                _CONSOLE.print(
-                    "[yellow]\u26a0 OCM re-login failed \u2014 "
-                    "please run 'ocm login' manually[/yellow]"
-                )
+                stderr = result.stderr or ""
+                if "address already in use" in stderr:
+                    _CONSOLE.print(
+                        "[yellow]\u26a0 OCM login port already in use \u2014 "
+                        "another 'ocm login' is already running[/yellow]"
+                    )
+                else:
+                    _CONSOLE.print(
+                        "[yellow]\u26a0 OCM re-login failed \u2014 "
+                        "please run 'ocm login' manually[/yellow]"
+                    )
+        except subprocess.TimeoutExpired:
+            _CONSOLE.print(
+                "[yellow]\u26a0 OCM login timed out \u2014 "
+                "please run 'ocm login' manually[/yellow]"
+            )
         except FileNotFoundError:
             _CONSOLE.print(
                 "[yellow]\u26a0 'ocm' not found in PATH \u2014 "
