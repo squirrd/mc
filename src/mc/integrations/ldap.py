@@ -4,6 +4,8 @@ import logging
 import re
 import subprocess
 
+from mc.exceptions import APIConnectionError, MCError, ValidationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
     """
     # Validate search term length
     if not (4 <= len(uid) <= 15):
-        return False, f"Search term '{uid}' must be between 4 and 15 characters"
+        raise ValidationError(f"Search term '{uid}' must be between 4 and 15 characters")
 
     # Determine search pattern
     if not (5 <= len(uid) < 15):
@@ -50,12 +52,20 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
         result = subprocess.run(command, capture_output=True, text=True, check=True)  # nosec B603
         output = result.stdout
     except FileNotFoundError:
-        return False, "Error: 'ldapsearch' command not found. Is it installed and in your PATH?"
+        raise MCError(
+            "ldapsearch command not found",
+            suggestion="Check: ldapsearch is installed and in your PATH",
+        )
     except subprocess.CalledProcessError as e:
-        return False, f"Error executing ldapsearch: {e.stderr}"
+        if e.stderr and "Can't contact LDAP server" in e.stderr:
+            raise APIConnectionError(
+                "Failed to connect to LDAP server",
+                suggestion="Check: VPN connection and network access",
+            )
+        raise MCError(f"LDAP search failed: {e.stderr}")
 
     if not output.strip():
-        return False, "No results found."
+        raise MCError(f"No LDAP results found for '{uid}'")
 
     if show_all:
         # Intentional user output - raw LDAP data
