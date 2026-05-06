@@ -71,7 +71,10 @@ def _run_upgrade() -> int:
         )
         return result.returncode
     except FileNotFoundError:
-        print("Error: uv not found. Install from https://docs.astral.sh/uv/", file=sys.stderr)
+        print(
+            "Error: mc-update not found on PATH. Re-install MC CLI and try again.",
+            file=sys.stderr,
+        )
         return 1
 
 
@@ -95,7 +98,10 @@ def _verify_mc_version() -> bool:
             return True
         return False
     except FileNotFoundError:
-        print("Error: mc not found on PATH after upgrade. Check: uv tool list", file=sys.stderr)
+        print(
+            "Error: mc not found on PATH after upgrade. Run: mc-update check",
+            file=sys.stderr,
+        )
         return False
 
 
@@ -103,7 +109,7 @@ def _print_recovery_instructions() -> None:
     """Print actionable recovery instructions to stderr when upgrade fails."""
     print("", file=sys.stderr)
     print("Upgrade failed. To recover, run:", file=sys.stderr)
-    print(f"  uv tool install --force {_MC_GIT_URL}", file=sys.stderr)
+    print("  mc-update upgrade", file=sys.stderr)
 
 
 _GITHUB_HEADERS = {
@@ -217,13 +223,16 @@ def pin(version: str) -> ExitCode:
         )
         if result.returncode != 0:
             print(
-                f"Warning: config pinned to {version} but uv install failed. "
-                f"To retry: uv tool install --force {_MC_GIT_URL}@v{version}",
+                f"Warning: config pinned to {version} but install failed. "
+                f"To retry: mc-update pin {version}",
                 file=sys.stderr,
             )
             return 1
     except FileNotFoundError:
-        print("Error: uv not found. Install from https://docs.astral.sh/uv/", file=sys.stderr)
+        print(
+            "Error: mc-update not found on PATH. Re-install MC CLI and try again.",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Pinned to {version}. Run mc-update unpin to remove.")

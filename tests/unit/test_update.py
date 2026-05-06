@@ -92,12 +92,12 @@ class TestRunUpgrade:
             assert _run_upgrade() == 1
 
     def test_run_upgrade_uv_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test that _run_upgrade returns 1 and prints error when uv is not on PATH."""
+        """Test that _run_upgrade returns 1 and prints mc-update error when uv is not on PATH."""
         with patch("mc.update.subprocess.run", side_effect=FileNotFoundError):
             result = _run_upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv not found" in captured.err
+        assert "mc-update not found on PATH" in captured.err
 
     def test_run_upgrade_uses_list_form_not_shell(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that _run_upgrade invokes subprocess with list form and never shell=True.
@@ -220,7 +220,7 @@ class TestUpgrade:
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
+        assert "mc-update upgrade" in captured.err
 
     def test_upgrade_verify_fails_shows_recovery(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -235,7 +235,7 @@ class TestUpgrade:
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
+        assert "mc-update upgrade" in captured.err
 
     def test_upgrade_verify_step_fails_after_success(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -255,7 +255,7 @@ class TestUpgrade:
             result = upgrade()
         assert result == 1
         captured = capsys.readouterr()
-        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
+        assert "mc-update upgrade" in captured.err
         assert "Upgrade complete" not in captured.out
 
     def test_upgrade_agent_mode_does_not_call_uv(
@@ -302,13 +302,13 @@ class TestPrintRecoveryInstructions:
     def test_recovery_instructions_content(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that recovery instructions contain the exact actionable command.
 
-        The failure output must include the git+https URL (not bare 'mc') so the
-        user has a clear, copy-pasteable recovery path that actually works (mc is
-        not on PyPI, so 'uv tool install --force mc' would fail).
+        The failure output must include the 'mc-update upgrade' command so the
+        user has a clear, copy-pasteable recovery path that uses the mc-update
+        entry point instead of exposing raw uv commands.
         """
         _print_recovery_instructions()
         captured = capsys.readouterr()
-        assert "uv tool install --force git+https://github.com/squirrd/mc" in captured.err
+        assert "mc-update upgrade" in captured.err
         assert "To recover" in captured.err
 
 
