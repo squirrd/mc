@@ -634,3 +634,84 @@ class TestImagePullAndTag:
             # Note: We can't easily restore by ID without re-pulling
             # So we'll leave the pulled image in place (it's useful for other tests)
             print("\n[Test cleanup complete - pulled image left in place for other tests]")
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)"
+)
+def test_container_missing_tools_regression(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Regression test for jq and yq missing from container image.
+
+    Bug discovered: 2026-05-06
+    Platform: Both (macOS, Linux)
+    Severity: minor
+    Source: jira:MC-17
+
+    Problem:
+    The Containerfile final stage (Stage 6) dnf install list does not include
+    jq or yq. These are essential tools for Red Hat support case work -- parsing
+    JSON output from oc/kubectl, processing YAML manifests, filtering Salesforce
+    API responses, etc. Without them, engineers must manually install them in
+    every new container, defeating the purpose of a ready-to-use workspace.
+
+    Steps to reproduce:
+    1. Create a container from the published registry image
+    2. Run: which jq
+    3. Error: which: no jq in (/usr/local/sbin:/usr/local/bin:...)
+    4. Run: which yq
+    5. Error: which: no yq in (/usr/local/sbin:/usr/local/bin:...)
+
+    Expected: Both jq and yq are installed and executable inside the container
+              (exit code 0 from `which jq` and `which yq`).
+    Actual:   Neither jq nor yq is installed. `which` returns exit code 1 for
+              both tools because container/Containerfile lines 161-169 omit
+              them from the dnf install list.
+
+    This test ensures the bug does not regress.
+    """
+    import subprocess
+
+    if not check_image_exists(podman_client):
+        pytest.skip("mc-rhel10:latest image not found")
+
+    # Create container via ContainerManager (uses the standard image)
+    container = container_manager.create(
+        case_number="99911177",
+        workspace_path=temp_workspace,
+        customer_name="Missing Tools Regression",
+    )
+    cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+    # Check for jq
+    jq_result = subprocess.run(
+        ["podman", "exec", "mc-99911177", "which", "jq"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Check for yq
+    yq_result = subprocess.run(
+        ["podman", "exec", "mc-99911177", "which", "yq"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Both tools must be present and executable
+    assert jq_result.returncode == 0, (
+        f"jq not found in container.\n"
+        f"stdout: {jq_result.stdout!r}, stderr: {jq_result.stderr!r}\n"
+        f"Bug: container/Containerfile final stage dnf install does not include jq.\n"
+        f"Fix: Add jq to the dnf install list in the Containerfile final stage."
+    )
+    assert yq_result.returncode == 0, (
+        f"yq not found in container.\n"
+        f"stdout: {yq_result.stdout!r}, stderr: {yq_result.stderr!r}\n"
+        f"Bug: container/Containerfile final stage dnf install does not include yq.\n"
+        f"Fix: Add yq to the dnf install list in the Containerfile final stage."
+    )
