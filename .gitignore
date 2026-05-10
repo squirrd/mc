@@ -62,6 +62,9 @@ Claude-*.bak
 .env
 *.env
 
+# UAT in-progress runs (completed runs are tracked in git)
+tests/uat/runs/pending/
+
 # Test coverage
 .coverage
 htmlcov/
@@ -85,9 +88,6 @@ tmp/
 
 # TDD worktrees and issue tracking (local only)
 .tdd/
-
-# UAT in-progress runs (completed runs are tracked in git)
-tests/uat/runs/pending/
 
 # GSD planning artifacts (local only)
 .planning/
