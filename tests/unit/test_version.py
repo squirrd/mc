@@ -10,10 +10,11 @@ from unittest import mock
 import pytest
 
 
-def test_get_version_resolves_mc_package() -> None:
-    """get_version() must look up the 'mc' package via importlib.metadata.
+def test_get_version_resolves_mc_package_when_uv_tool_unavailable() -> None:
+    """get_version() falls back to importlib.metadata when uv tool list has no mc entry.
 
     The package name in pyproject.toml is 'mc' (since fix/rename-package-to-mc).
+    When uv tool list does not list mc, importlib.metadata is the next resolution step.
     """
     from mc.version import get_version
 
@@ -25,7 +26,15 @@ def test_get_version_resolves_mc_package() -> None:
             return "2.0.11"
         raise PackageNotFoundError(pkg)
 
-    with mock.patch("mc.version.version", side_effect=fake_version):
+    # uv tool list returns no mc entry
+    fake_completed = mock.MagicMock()
+    fake_completed.stdout = "other-tool v1.0.0\n- other-tool\n"
+    fake_completed.returncode = 0
+
+    with (
+        mock.patch("mc.version.subprocess.run", return_value=fake_completed),
+        mock.patch("mc.version.version", side_effect=fake_version),
+    ):
         result = get_version()
 
     assert "mc" in calls, (
@@ -37,11 +46,11 @@ def test_get_version_resolves_mc_package() -> None:
     )
 
 
-def test_get_version_falls_back_to_uv_tool_list_when_metadata_absent() -> None:
-    """get_version() falls back to 'uv tool list' when 'mc' is not in the active venv.
+def test_get_version_checks_uv_tool_list_first() -> None:
+    """get_version() checks 'uv tool list' as its first resolution step.
 
-    When mc is installed as a uv tool (separate isolated env), importlib.metadata
-    cannot see it. The fallback reads 'uv tool list' output to find the mc version.
+    When mc is installed as a uv tool, uv tool list is the authoritative source
+    for the installed version. It is checked before importlib.metadata.
     """
     from mc.version import get_version
 
@@ -52,7 +61,6 @@ def test_get_version_falls_back_to_uv_tool_list_when_metadata_absent() -> None:
     fake_completed.returncode = 0
 
     with (
-        mock.patch("mc.version.version", side_effect=PackageNotFoundError("mc")),
         mock.patch("mc.version.subprocess.run", return_value=fake_completed) as mock_run,
     ):
         result = get_version()
@@ -63,7 +71,7 @@ def test_get_version_falls_back_to_uv_tool_list_when_metadata_absent() -> None:
     assert kwargs.get("text") is True
     assert kwargs.get("check") is False
     assert result == "2.0.11", (
-        f"get_version() returned {result!r} when using uv tool list fallback. "
+        f"get_version() returned {result!r} when uv tool list reports mc. "
         f"Expected '2.0.11' (mc version from uv tool list)."
     )
 
@@ -82,7 +90,6 @@ class TestGetVersionUvEnv:
         fake_completed.returncode = 0
 
         with (
-            mock.patch("mc.version.version", side_effect=PackageNotFoundError("mc")),
             mock.patch("mc.version.subprocess.run", return_value=fake_completed) as mock_run,
         ):
             get_version()
@@ -109,7 +116,6 @@ class TestGetVersionUvEnv:
         fake_completed.returncode = 0
 
         with (
-            mock.patch("mc.version.version", side_effect=PackageNotFoundError("mc")),
             mock.patch("mc.version.subprocess.run", return_value=fake_completed) as mock_run,
         ):
             get_version()
@@ -122,3 +128,38 @@ class TestGetVersionUvEnv:
                 f"UV_TOOL_DIR should not be set when MC_ENV is absent, "
                 f"but found UV_TOOL_DIR={passed_env['UV_TOOL_DIR']!r}"
             )
+
+
+@pytest.mark.backwards_compatibility
+def test_get_version_prefers_uv_tool_over_metadata_when_both_available() -> None:
+    """get_version() must prefer uv tool list over importlib.metadata.
+
+    When mc is installed as a uv tool AND importlib.metadata also resolves
+    (e.g. dev checkout on PYTHONPATH), the uv tool version is the authoritative
+    installed version. importlib.metadata may reflect a bumped pyproject.toml
+    that hasn't been installed yet.
+
+    Regression test for MC-53: version-mismatch bug.
+    """
+    from mc.version import get_version
+
+    METADATA_VERSION = "2.0.99"  # dev checkout, bumped ahead
+    TOOL_VERSION = "2.0.18"  # actually installed
+
+    fake_uv_output = f"mc v{TOOL_VERSION}\n- mc\n- mc-update\n"
+    fake_completed = mock.MagicMock()
+    fake_completed.stdout = fake_uv_output
+    fake_completed.returncode = 0
+
+    with (
+        mock.patch("mc.version.version", return_value=METADATA_VERSION),
+        mock.patch("mc.version.subprocess.run", return_value=fake_completed),
+    ):
+        result = get_version()
+
+    assert result == TOOL_VERSION, (
+        f"get_version() returned {result!r} (from importlib.metadata) "
+        f"instead of {TOOL_VERSION!r} (from uv tool list). "
+        f"When mc is installed as a uv tool, get_version() must prefer the "
+        f"uv tool version over importlib.metadata."
+    )

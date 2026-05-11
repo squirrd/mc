@@ -499,3 +499,70 @@ def test_update_env_isolation_regression() -> None:
         f"UV_TOOL_DIR={captured_pin_env.get('UV_TOOL_DIR')!r}, "
         f"expected {expected_tool_dir!r}."
     )
+
+
+@pytest.mark.integration
+def test_version_mismatch_regression() -> None:
+    """Regression test for version-mismatch bug (MC-53).
+
+    Bug discovered: 2026-05-11
+    Platform: macOS / Linux (host mode only)
+    Severity: major
+    Source: MC-53
+
+    Problem:
+    get_version() uses importlib.metadata.version('mc') as its primary source.
+    In a development checkout (editable install), importlib.metadata resolves the
+    version from pyproject.toml in the working tree. When pyproject.toml is bumped
+    ahead of the production-installed uv tool version, get_version() returns the
+    wrong (too-new) version. This causes mc-update check/upgrade to report an
+    incorrect installed version, potentially skipping needed upgrades or
+    misreporting the current state.
+
+    Steps to reproduce:
+    1. Have mc installed as a uv tool at version X (e.g. 2.0.18).
+    2. Bump pyproject.toml to version Y > X (e.g. 2.0.19) in the dev checkout.
+    3. Call get_version() from the dev checkout environment.
+    4. importlib.metadata.version('mc') returns Y (pyproject.toml), not X (uv tool).
+
+    Expected:
+    When mc is installed as a uv tool AND importlib.metadata returns a version,
+    get_version() should prefer the uv tool version (the actually-installed binary)
+    over the importlib.metadata version (which reflects the dev checkout).
+
+    Actual (before fix):
+    get_version() returns importlib.metadata.version('mc') unconditionally as
+    its first resolution step and never consults uv tool list when metadata
+    succeeds, so it reports the pyproject.toml version instead of the installed
+    tool version.
+
+    This test ensures the bug does not regress.
+    """
+    from unittest import mock
+
+    from mc.version import get_version
+
+    # Simulate the mismatch scenario:
+    # - importlib.metadata sees mc at "2.0.99" (pyproject.toml bumped ahead)
+    # - uv tool list reports mc at "2.0.18" (the actually-installed version)
+    METADATA_VERSION = "2.0.99"
+    TOOL_VERSION = "2.0.18"
+
+    fake_uv_output = f"mc v{TOOL_VERSION}\n- mc\n- mc-update\n"
+    fake_completed = mock.MagicMock()
+    fake_completed.stdout = fake_uv_output
+    fake_completed.returncode = 0
+
+    with (
+        mock.patch("mc.version.version", return_value=METADATA_VERSION),
+        mock.patch("mc.version.subprocess.run", return_value=fake_completed),
+    ):
+        result = get_version()
+
+    assert result == TOOL_VERSION, (
+        f"get_version() returned {result!r} (from importlib.metadata) "
+        f"instead of {TOOL_VERSION!r} (from uv tool list). "
+        f"When mc is installed as a uv tool, get_version() must prefer the "
+        f"uv tool version over the importlib.metadata version, because the "
+        f"latter reflects the dev checkout pyproject.toml, not the installed binary."
+    )

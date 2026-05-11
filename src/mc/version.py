@@ -12,17 +12,15 @@ def get_version() -> str:
     """Get the installed mc version.
 
     Resolution order:
-    1. importlib.metadata for 'mc' (works when mc is installed in the active venv)
-    2. `uv tool list` output (works when mc is installed as a uv tool but not in the venv)
+    1. `uv tool list` output (authoritative when mc is installed as a uv tool)
+    2. importlib.metadata for 'mc' (works when mc is installed in the active venv)
     3. pyproject.toml (development mode fallback)
-    """
-    try:
-        # Works when mc package metadata is available in the active venv
-        return version("mc")
-    except PackageNotFoundError:
-        pass
 
-    # mc is installed as a uv tool (separate isolated env) — query the tool list
+    uv tool list is checked first because importlib.metadata can reflect a dev
+    checkout's pyproject.toml version rather than the actually-installed tool version
+    when both are on the Python path.
+    """
+    # mc is installed as a uv tool — query the tool list (authoritative source)
     try:
         mc_env = os.environ.get("MC_ENV")
         uv_env = dict(os.environ)
@@ -42,6 +40,12 @@ def get_version() -> str:
                 if len(parts) >= 2:
                     return parts[1].lstrip("v")
     except FileNotFoundError:
+        pass
+
+    # Fallback: importlib.metadata (works when mc is installed in the active venv)
+    try:
+        return version("mc")
+    except PackageNotFoundError:
         pass
 
     # Development mode: parse pyproject.toml
