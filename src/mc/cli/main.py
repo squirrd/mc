@@ -180,8 +180,9 @@ def main() -> ExitCode:
         if not config.get("api", {}).get("rh_api_offline_token") and config.get("api", {}).get("offline_token"):
             logger.warning("Config key 'api.offline_token' is deprecated. Please rename to 'api.rh_api_offline_token' in your config file.")
 
-        # Verify base directory exists
-        if not does_path_exist(base_dir):
+        # Verify base directory exists (skip in agent mode — agent commands use
+        # WORKSPACE_PATH inside the container, not the host base_dir)
+        if get_runtime_mode() != 'agent' and not does_path_exist(base_dir):
             logger.error("The directory '%s' must exist", base_dir)
             return 1
 

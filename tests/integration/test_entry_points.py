@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 from pytest_console_scripts import ScriptRunner
