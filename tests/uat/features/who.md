@@ -41,16 +41,16 @@
 
 ---
 
-### TC-WHO-02: Lookup with --show-all shows raw LDAP
+### TC-WHO-02: Lookup with --all shows raw LDAP
 
 **Pre-requires:** none
 **Cross-deps:** none
 **Tags:** ldap, raw-output, network, mode: host
 
-**Goal:** `mc who <uid> --show-all` displays the raw LDAP output instead of formatted cards.
+**Goal:** `mc who <uid> --all` displays the raw LDAP output instead of formatted cards.
 
 **Steps:**
-1. Run `mc who <your-uid> --show-all`
+1. Run `mc who <your-uid> --all`
 
 **Expected:**
 - Raw LDAP attributes displayed (dn:, cn:, uid:, etc.)
@@ -127,8 +127,11 @@
 **Goal:** When `ldapsearch` is not in PATH, a clear error is shown.
 
 **Steps:**
-1. Temporarily rename or remove `ldapsearch` from PATH (e.g., `PATH=/usr/bin mc who <uid>`)
-2. Run `mc who <uid>`
+1. Open a new terminal (the PATH change below will break `ldapsearch` for the session)
+2. Note the full path to mc: `which mc` (e.g., `/Users/<you>/.local/bin/mc`)
+3. Run `export PATH=/bin:/usr/sbin` to exclude `/usr/bin` where `ldapsearch` lives
+4. Run `/full/path/to/mc who <uid>` using the path from step 2
+5. Close the terminal when done (discards the modified PATH)
 
 **Expected:**
 - Error: `'ldapsearch' command not found. Is it installed and in your PATH?`
@@ -149,7 +152,7 @@
 | Behavior | TC |
 |---|---|
 | Lookup valid UID — formatted card | WHO-01 |
-| Raw LDAP output with --show-all | WHO-02 |
+| Raw LDAP output with --all | WHO-02 |
 | Search term too short rejected | WHO-03 |
 | No results found message | WHO-04 |
 | ldapsearch not installed handled | WHO-05 |

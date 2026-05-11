@@ -5,8 +5,8 @@
 **Prefix:** AGT
 
 **Pre-conditions (all TCs):**
-- A case container running (created via `mc new <case>`)
-- Tests run **inside** the container: `podman exec -it mc-<case> /bin/bash`
+- A case container running (create one with `mc container create 04433322` if none exists)
+- Tests run **inside** the container: `podman exec -it mc-04433322 /bin/bash`
 - `CASE_NUMBER` environment variable set (automatically set by ContainerManager)
 
 ---
@@ -21,9 +21,15 @@
 
 **Goal:** `mc agent init-case` reads CASE_NUMBER from env and writes case metadata files to /case/.
 
+**Setup:**
+```bash
+# Create a container if none exists
+mc container create 04433322
+```
+
 **Steps:**
-1. Enter a running container: `podman exec -it mc-<case> /bin/bash`
-2. Verify: `echo $CASE_NUMBER` (should show the case number)
+1. Enter the container: `podman exec -it mc-04433322 /bin/bash`
+2. Verify: `echo $CASE_NUMBER` (should show `04433322`)
 3. Run `mc agent init-case`
 4. Check: `ls /case/`
 
@@ -49,8 +55,14 @@
 
 **Goal:** `mc agent init-case` fails clearly when CASE_NUMBER environment variable is missing.
 
+**Setup:**
+```bash
+# Create a container if none exists
+mc container create 04433322
+```
+
 **Steps:**
-1. Enter a running container: `podman exec -it mc-<case> /bin/bash`
+1. Enter the container: `podman exec -it mc-04433322 /bin/bash`
 2. Run `unset CASE_NUMBER`
 3. Run `mc agent init-case`
 
@@ -77,8 +89,14 @@
 
 **Goal:** `mc agent backplane-login` runs OCM backplane login using the cluster_id from case data.
 
+**Setup:**
+```bash
+# Container should already exist from AGT-01
+mc container create 04433322 2>/dev/null || true
+```
+
 **Steps:**
-1. Enter a running container: `podman exec -it mc-<case> /bin/bash`
+1. Enter the container: `podman exec -it mc-04433322 /bin/bash`
 2. Ensure init-case has run (from AGT-01)
 3. Run `mc agent backplane-login`
 
@@ -105,8 +123,14 @@
 
 **Goal:** `mc agent backplane-login` skips gracefully when CASE_NUMBER is not set.
 
+**Setup:**
+```bash
+# Create a container if none exists
+mc container create 04433322
+```
+
 **Steps:**
-1. Enter a running container: `podman exec -it mc-<case> /bin/bash`
+1. Enter the container: `podman exec -it mc-04433322 /bin/bash`
 2. Run `unset CASE_NUMBER`
 3. Run `mc agent backplane-login`
 
@@ -132,17 +156,23 @@
 **Cross-deps:** NEW-01 (container must exist)
 **Tags:** agent, runtime, mode-detection, mode: agent
 
-**Goal:** Inside a container, the runtime mode is correctly detected as `agent`.
+**Goal:** Inside a container, the runtime mode is correctly detected as `agent` via env var and container indicator file.
+
+**Setup:**
+```bash
+# Create a container if none exists
+mc container create 04433322
+```
 
 **Steps:**
-1. Enter a running container: `podman exec -it mc-<case> /bin/bash`
+1. Enter the container: `podman exec -it mc-04433322 /bin/bash`
 2. Run `echo $MC_RUNTIME_MODE`
-3. Run `mc version`
+3. Run `ls /run/.containerenv`
 
 **Expected:**
 - `MC_RUNTIME_MODE` is `agent`
-- `mc version` shows version but does **not** check for updates
-- If update check is attempted, message: `Updates managed via container builds`
+- `/run/.containerenv` exists (Podman container indicator)
+- Both detection paths in `runtime.py` would return agent/container
 
 **Result:**
 - [ ] PASS

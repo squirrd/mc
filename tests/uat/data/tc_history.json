@@ -154,6 +154,186 @@
       ],
       "last_run": "2026-04-21",
       "last_result": "PASS"
+    },
+    "TC-WHO-01": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-WHO-02": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": "The TC needs amending.\nThe flag `--show-all`` is not a valid flag\n\nPlease amend the TC use `--all` instead.\n\n```\n\u279c  mc git:(main) \u2717 mc who -h\nusage: mc ldap [-h] [-A] uid\n\npositional arguments:\n  uid         The UID to search for in LDAP\n\noptions:\n  -h, --help  show this help message and exit\n  -A, --all\n\u279c  mc git:(main)\n```"
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-WHO-03": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-WHO-04": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-WHO-05": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-AGT-01": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "FAIL",
+          "notes": "It looks like the agent version of this command\n\n```\n\u279c  mc git:(main) \u2717 mc container create 04433322\n2026-05-11 12:42:09 [INFO] mc.container.manager: Local image mc-rhel10:latest is stale (local=694d7eaf2bb4, registry=e05fd00a10e2), pulling fresh image from quay.io/rhn_support_dsquirre/mc-container:latest\nContainer image is outdated \u2014 pulling latest from registry...\nPulling container image from quay.io/rhn_support_dsquirre/mc-container:latest...\n2026-05-11 12:42:14 [INFO] mc.container.manager: Successfully pulled and tagged quay.io/rhn_support_dsquirre/mc-container:latest as mc-rhel10:latest\nSuccessfully pulled image from registry\nCreated container for case 04433322\nContainer ID: ceb3903269\nWorkspace: /Users/dsquirre/mc/04433322\n\u279c  mc git:(main) \u2717 podman ps\nCONTAINER ID  IMAGE                       COMMAND               CREATED         STATUS        PORTS       NAMES\nceb3903269f9  localhost/mc-rhel10:latest  /bin/bash -c tail...  14 seconds ago  Up 6 seconds              mc-04433322\n\u279c  mc git:(main) \u2717\n\u279c  mc git:(main) \u2717\n\u279c  mc git:(main) \u2717\n\u279c  mc git:(main) \u2717"
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "FAIL"
+    },
+    "TC-AGT-02": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "BLOCKED",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "BLOCKED"
+    },
+    "TC-AGT-03": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "BLOCKED",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "BLOCKED"
+    },
+    "TC-AGT-04": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "BLOCKED",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "BLOCKED"
+    },
+    "TC-AGT-05": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-ATT-01": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-ATT-02": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-ATT-03": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-ATT-04": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
+    },
+    "TC-ATT-05": {
+      "run_count": 1,
+      "history": [
+        {
+          "date": "2026-05-11",
+          "result": "PASS",
+          "notes": ""
+        }
+      ],
+      "last_run": "2026-05-11",
+      "last_result": "PASS"
     }
   }
 }

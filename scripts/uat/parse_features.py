@@ -29,6 +29,9 @@ FIELD_RE = {
     "tags": re.compile(r"\*\*Tags:\*\*\s*(.+)"),
 }
 
+SECTION_HEADERS = ["Goal", "Setup", "Steps", "Expected", "Result"]
+SECTION_RE = re.compile(r"^\*\*(" + "|".join(SECTION_HEADERS) + r"):\*\*", re.MULTILINE)
+
 
 def load_history() -> dict[str, Any]:
     if HISTORY_FILE.exists():
@@ -61,6 +64,20 @@ def parse_tc_block(tc_id: str, title: str, block: str, feature: str) -> dict[str
         else:
             # Extract TC IDs from text like "TC-UPIN-01 (reason), TC-UPIN-02 (other)"
             tc[field] = re.findall(r"TC-[A-Z]+-\d+", value)
+
+    # Extract runnable content sections (Goal, Setup, Steps, Expected)
+    section_matches = list(SECTION_RE.finditer(block))
+    for i, sm in enumerate(section_matches):
+        name = sm.group(1).lower()
+        if name == "result":
+            continue
+        start = sm.end()
+        end = section_matches[i + 1].start() if i + 1 < len(section_matches) else len(block)
+        content = block[start:end].strip()
+        # Goal is inline on the same line as the header
+        if name == "goal":
+            content = content.lstrip(": ").split("\n")[0].strip() if content else ""
+        tc[name] = content
 
     return tc
 

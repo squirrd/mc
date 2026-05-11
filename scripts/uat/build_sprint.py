@@ -198,7 +198,7 @@ def generate_sprint_markdown(
         f"**Estimated time:** ~{est_total} minutes",
         "",
         "**How to run:**",
-        "1. Open each TC's feature file (linked below) for full steps",
+        "1. Work through each TC below — steps are included inline",
         "2. Mark exactly one checkbox per TC",
         "3. Add notes for any FAIL or BLOCKED result",
         "4. When done: run `/uat-process-sprint`",
@@ -241,6 +241,23 @@ def generate_sprint_markdown(
         lines += [
             f"**Selected because:** {'; '.join(reasons)}",
             "",
+        ]
+
+        goal = tc.get("goal")
+        setup = tc.get("setup")
+        steps = tc.get("steps")
+        expected = tc.get("expected")
+
+        if goal:
+            lines += [f"**Goal:** {goal}", ""]
+        if setup:
+            lines += ["**Setup:**", setup, ""]
+        if steps:
+            lines += ["**Steps:**", steps, ""]
+        if expected:
+            lines += ["**Expected:**", expected, ""]
+
+        lines += [
             "**Result:**",
             "- [ ] PASS",
             "- [ ] FAIL",
