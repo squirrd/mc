@@ -1637,3 +1637,88 @@ def test_iterm2_macos_extra_not_installed_regression() -> None:
         "mc.terminal.macos._ITERM2_LIB_AVAILABLE is False even though iterm2 is importable. "
         "The module-level import guard may have a bug."
     )
+
+
+@pytest.mark.integration
+def test_stdin_capture_oserror_regression(mocker):
+    """Regression test for jira:MC-54 — OSError from input() under pytest capture.
+
+    Bug discovered: 2026-05-11
+    Platform: Both
+    Severity: minor
+    Source: jira:MC-54
+
+    Problem:
+    When attach_terminal() finds a window in the registry but focus_window_by_id()
+    returns False (race condition: window closed between validation and focus),
+    it calls input() at line 324 of attach.py to ask the user whether to create a
+    new terminal. Under pytest output capture or any non-interactive environment,
+    this raises:
+        OSError: pytest: reading from stdin while output is captured!
+
+    Steps to reproduce:
+    1. Run attach_terminal() with a mocked WindowRegistry that returns a window_id
+    2. Mock focus_window_by_id() to return False (simulating focus failure)
+    3. pytest captures stdout/stderr, so input() raises OSError
+
+    Expected: attach_terminal handles focus failure gracefully without calling input(),
+              e.g. auto-creates a new window or catches the OSError and proceeds.
+    Actual:   OSError propagates from input() at attach.py:324, crashing the caller.
+
+    This test ensures the bug does not regress.
+    """
+    from unittest.mock import MagicMock, patch
+
+    from mc.terminal.attach import attach_terminal
+    from mc.terminal.macos import MacOSLauncher
+
+    # Set up mocks to reach the code path at line 324 where input() is called
+    mock_config = MagicMock()
+    mock_config.get.return_value = "/tmp/mc-test"
+
+    mock_api = MagicMock()
+
+    mock_cm = MagicMock()
+    mock_cm.status.return_value = {
+        "status": "running",
+        "workspace_path": "/tmp/mc-test/cases/test/12345678-test",
+    }
+
+    mock_case_details = {"summary": "Test case", "status": "open", "severity": "low"}
+    mock_account_details = {"name": "TestCustomer"}
+
+    # Launcher must pass isinstance(launcher, MacOSLauncher)
+    mock_launcher = MagicMock(spec=MacOSLauncher)
+    # After the fix auto-proceeds past the focus failure, the code falls through
+    # to launch a new terminal window. _capture_window_id returning None skips
+    # window registration (which would access launcher.terminal on the mock).
+    mock_launcher._capture_window_id.return_value = None
+
+    # Registry returns a window_id so we enter the focus path
+    mock_registry = MagicMock()
+    mock_registry.get_terminal_type.return_value = "iTerm2"
+    mock_registry.lookup.return_value = "fake-window-id-123"
+
+    # The typed_launcher for the stored terminal type — focus returns False
+    mock_typed_launcher = MagicMock(spec=MacOSLauncher)
+    mock_typed_launcher.focus_window_by_id.return_value = False
+
+    with (
+        patch("mc.terminal.attach.should_launch_terminal", return_value=True),
+        patch("mc.terminal.attach.validate_case_number", return_value="12345678"),
+        patch(
+            "mc.terminal.attach.get_case_metadata",
+            return_value=(mock_case_details, mock_account_details, False),
+        ),
+        patch("mc.terminal.attach.write_bashrc", return_value="/tmp/bashrc"),
+        patch("mc.terminal.attach.get_launcher", return_value=mock_launcher),
+        patch("mc.terminal.attach.WindowRegistry", return_value=mock_registry),
+        patch("mc.terminal.macos.MacOSLauncher.__init__", return_value=None),
+        patch.object(MacOSLauncher, "focus_window_by_id", return_value=False),
+    ):
+        # attach_terminal should NOT raise OSError from input().
+        # Before the fix, the input() call at line 324 raises:
+        #   OSError: pytest: reading from stdin while output is captured!
+        # After the fix, the function handles focus failure gracefully by
+        # catching OSError and auto-proceeding to create a new terminal.
+        attach_terminal("12345678", mock_config, mock_api, mock_cm)
