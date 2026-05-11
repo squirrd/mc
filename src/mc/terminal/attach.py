@@ -321,10 +321,20 @@ def attach_terminal(
                 # Focus failed after validation - race condition (user closed window between validation and focus)
                 # Ask user whether to create new window
                 logger.warning("Window focus failed for case %s after validation - window may have closed", case_number)
-                response = input(
-                    f"Window focus failed (window may have closed). "
-                    f"Create new terminal instead? (y/n): "
-                ).lower()
+                try:
+                    response = input(
+                        f"Window focus failed (window may have closed). "
+                        f"Create new terminal instead? (y/n): "
+                    ).lower()
+                except OSError:
+                    # Non-interactive context (pytest capture, pipes, cron) —
+                    # auto-proceed to create a new terminal.
+                    logger.info(
+                        "Non-interactive environment detected for case %s, "
+                        "auto-creating new terminal after focus failure",
+                        case_number,
+                    )
+                    response = "y"
 
                 if response != 'y':
                     # User chose not to create new window - abort
