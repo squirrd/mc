@@ -252,3 +252,85 @@ def test_remove_update_feature_regression() -> None:
         f"Subcommand line: {subcommand_line!r}\n"
         "The 'version' subparser registration must be removed from cli/main.py."
     )
+
+
+@pytest.mark.integration
+def test_hide_quick_access_help_regression() -> None:
+    """Regression test for MC-51 — quick_access must not appear in mc --help output.
+
+    Bug discovered: 2026-05-11
+    Platform: Both
+    Severity: minor
+    Source: MC-51
+
+    Problem:
+    The quick_access subcommand is registered with argparse.SUPPRESS as its help
+    text, but argparse.SUPPRESS only hides the help description — it does NOT
+    remove the subcommand name from the choices list or the subcommand summary.
+    As a result, 'quick_access' appears in the help output alongside the literal
+    text '==SUPPRESS==', which is confusing and exposes an internal implementation
+    detail to users.
+
+    Steps to reproduce:
+    1. Run: mc --help
+    2. Observe: 'quick_access' appears in the subcommand choices list
+    3. Observe: 'quick_access        ==SUPPRESS==' appears in the help body
+
+    Expected:
+    - 'quick_access' does NOT appear anywhere in mc --help output
+    - '==SUPPRESS==' does NOT appear anywhere in mc --help output
+    - The help text mentions that 'mc <case_number>' is valid shorthand
+      for quick case access
+
+    Actual (before fix):
+    - 'quick_access' appears in the choices list: {attachments,...,quick_access,...}
+    - The help body shows: 'quick_access        ==SUPPRESS=='
+    - There is no mention of the 'mc <case_number>' shorthand in --help
+
+    This test ensures the bug does not regress.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "mc.cli.main", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"mc --help should exit 0, got {result.returncode}.\n"
+        f"stdout: {result.stdout!r}\nstderr: {result.stderr!r}"
+    )
+
+    help_output = result.stdout
+
+    # --- Assert 1: 'quick_access' must not appear anywhere in help output ---
+    assert "quick_access" not in help_output, (
+        f"'quick_access' is visible in --help output. "
+        f"It should be completely hidden from the user.\n"
+        f"stdout:\n{help_output}"
+    )
+
+    # --- Assert 2: '==SUPPRESS==' must not leak into help output ---
+    assert "SUPPRESS" not in help_output, (
+        f"'==SUPPRESS==' text is leaking into --help output. "
+        f"argparse internals should never be visible to users.\n"
+        f"stdout:\n{help_output}"
+    )
+
+    # --- Assert 3: help should mention the mc <case_number> shorthand ---
+    # The quick_access feature allows `mc 12345678` as shorthand for
+    # `mc case 12345678`. Since the subcommand is hidden, the help text
+    # should document this shorthand so users can discover it.
+    help_lower = help_output.lower()
+    has_shorthand_hint = (
+        "case_number" in help_lower
+        or "case number" in help_lower
+        or "<case" in help_lower
+        or "mc <8" in help_lower
+        or "8-digit" in help_lower
+        or "shorthand" in help_lower
+    )
+    assert has_shorthand_hint, (
+        f"mc --help does not mention the 'mc <case_number>' shorthand. "
+        f"Since quick_access is hidden, the help text should document "
+        f"this feature so users can discover it.\n"
+        f"stdout:\n{help_output}"
+    )

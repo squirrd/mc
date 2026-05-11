@@ -30,7 +30,12 @@ def main() -> ExitCode:
             sys.argv = [sys.argv[0], 'quick_access'] + sys.argv[1:]
 
         # Create argument parser early to handle --version/--help without config
-        parser = argparse.ArgumentParser(prog='mc', description='MC CLI tool')
+        parser = argparse.ArgumentParser(
+            prog='mc',
+            description='MC CLI tool',
+            epilog='Shorthand: mc <case_number> is equivalent to mc case <case_number>',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
         parser.add_argument('--version', action='version',
                             version=f'%(prog)s {get_version()}')
         parser.add_argument('--debug', action='store_true',
@@ -39,7 +44,14 @@ def main() -> ExitCode:
                             help='Output logs as JSON (for CI/automation)')
         parser.add_argument('--debug-file', type=str,
                             help='Write debug logs to file')
-        subparsers = parser.add_subparsers(dest='command', help='Available commands')
+        subparsers = parser.add_subparsers(
+            dest='command',
+            help='Available commands',
+            metavar=(
+                '{attachments,att,check,chk,create,new,comments,cmt,'
+                'case,cs,ldap,who,launch,url,container,agent,agt}'
+            ),
+        )
 
         # Attachments subcommand
         parser_attach = subparsers.add_parser('attachments', aliases=['att'],
@@ -120,6 +132,11 @@ def main() -> ExitCode:
         # Quick access subcommand (hidden, used via mc <case_number>)
         quick_parser = subparsers.add_parser('quick_access', help=argparse.SUPPRESS)
         quick_parser.add_argument('case_number', type=str, help='Case number')
+        # Remove quick_access from the help formatter's list so it doesn't appear
+        # in --help output (argparse.SUPPRESS alone still shows ==SUPPRESS== text)
+        subparsers._choices_actions = [
+            a for a in subparsers._choices_actions if a.dest != 'quick_access'
+        ]
 
         # Agent subcommand (runs inside container in agent mode)
         agent_parser = subparsers.add_parser('agent', aliases=['agt'],
