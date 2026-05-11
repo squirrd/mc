@@ -164,7 +164,7 @@ def create_jira_tickets(
     sprint_date: str, results: list[dict[str, Any]], dry_run: bool = False
 ) -> str:
     """Create Jira Bug tickets for FAIL/BLOCKED TCs. Returns summary text."""
-    failures = [r for r in results if r["result"] in ("FAIL", "BLOCKED")]
+    failures = [r for r in results if r["result"] == "FAIL"]
     if not failures:
         return f"Sprint {sprint_date}: All tests passed. No Jira tickets to create.\n"
 
@@ -209,7 +209,7 @@ def create_jira_tickets(
             "-t", "Bug",
             "-s", summary,
             "-b", description,
-            "-y", "High" if r["result"] == "FAIL" else "Medium",
+            "-y", "High",
             "--no-input",
             "--raw",
         ]
