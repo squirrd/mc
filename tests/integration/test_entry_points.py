@@ -6,9 +6,14 @@ when installed via uv tool install or uv run.
 import os
 import subprocess
 import sys
+import tempfile
 
 import pytest
 from pytest_console_scripts import ScriptRunner
+
+from mc.container.manager import ContainerManager
+from mc.container.state import StateDatabase
+from mc.integrations.podman import PodmanClient
 
 
 def test_mc_version(script_runner: ScriptRunner) -> None:
@@ -334,3 +339,103 @@ def test_hide_quick_access_help_regression() -> None:
         f"this feature so users can discover it.\n"
         f"stdout:\n{help_output}"
     )
+
+
+def _podman_available() -> bool:
+    """Check if Podman is available for integration tests."""
+    try:
+        client = PodmanClient()
+        return client.ping()
+    except Exception:
+        return False
+
+
+def _image_exists() -> bool:
+    """Check if the mc container image is available."""
+    try:
+        client = PodmanClient()
+        client.client.images.get("mc-rhel10:latest")
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+@pytest.mark.skipif(not _image_exists(), reason="mc-rhel10:latest image not found")
+def test_agent_base_dir_check_regression() -> None:
+    """Regression test for MC-57 — agent commands must not fail on host base_dir validation.
+
+    Bug discovered: 2026-05-11
+    Platform: Both
+    Severity: major
+    Source: MC-57
+
+    Problem:
+    main() in cli/main.py unconditionally validates that base_dir (read from the
+    host-mounted config file) exists on the filesystem before routing to any command.
+    Inside a container, base_dir is a host path (e.g. /Users/dsquirre/mc) that does
+    not exist. Agent commands (mc agent init-case, mc agent backplane-login) never use
+    base_dir — they use WORKSPACE_PATH=/case — but the validation kills the process
+    with exit 1 before the agent command routing is reached.
+
+    Steps to reproduce:
+    1. Create a container with mc container create (host config is mounted read-only)
+    2. Inside the container, run: mc agent init-case
+    3. Observe: exit 1 with "The directory '/Users/dsquirre/mc' must exist"
+
+    Expected: mc agent init-case proceeds past base_dir validation and executes
+              the agent init-case logic (may fail for other reasons like missing
+              CASE_NUMBER env var, but NOT because of base_dir).
+    Actual:   mc agent init-case exits 1 with base_dir validation error before
+              the agent command is even reached.
+
+    This test ensures the bug does not regress.
+    """
+    client = PodmanClient()
+    state_db = StateDatabase(":memory:")
+    manager = ContainerManager(client, state_db)
+
+    container_name = "mc-99922233"
+    try:
+        # Clean up any leftover container from a previous run
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            capture_output=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            container = manager.create(
+                case_number="99922233",
+                workspace_path=tmpdir,
+                customer_name="AgentBaseDirCheck",
+            )
+
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "mc", "agent", "init-case",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            combined_output = result.stdout + result.stderr
+
+            assert "must exist" not in combined_output, (
+                f"mc agent init-case hit the base_dir validation inside the container.\n"
+                f"exit code: {result.returncode}\n"
+                f"stdout: {result.stdout!r}\n"
+                f"stderr: {result.stderr!r}\n"
+                f"\nBug: cli/main.py line 167-169 unconditionally validates base_dir "
+                f"(read from host-mounted config) before reaching agent command routing. "
+                f"The host path does not exist in the container.\n"
+                f"Fix: skip base_dir validation when get_runtime_mode() == 'agent'."
+            )
+
+    finally:
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            capture_output=True,
+        )
