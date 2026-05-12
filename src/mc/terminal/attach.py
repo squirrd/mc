@@ -71,12 +71,18 @@ def build_exec_command(container_id: str, bashrc_path: str, case_number: str) ->
             f"--env 'HTTP_PROXY={https_proxy}' "
         )
 
+    # Translate host bashrc path to container-internal path.
+    # ~/mc/config on the host is mounted at /home/mcuser/mc/config inside the container,
+    # so the bashrc file lives at /home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc.
+    # Using the host path would point to a non-existent file inside the container (MC-65).
+    container_bashrc_path = f"/home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc"
+
     # Build command with BASH_ENV for custom config and PS1 for prompt
     # Use single quotes to prevent shell glob expansion of brackets and handle paths with spaces
     # Append '; exit' to auto-close terminal when shell exits
     return (
         f"podman exec -it "
-        f"--env 'BASH_ENV={bashrc_path}' "
+        f"--env 'BASH_ENV={container_bashrc_path}' "
         f"--env 'PS1=[MC-{case_number}] \\w\\$ ' "
         f"{proxy_env}"
         f"{container_id} /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit"
