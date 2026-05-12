@@ -82,6 +82,10 @@ class ConfigManager:
     def load(self) -> dict[str, Any]:
         """Load configuration from file.
 
+        In agent mode (MC_RUNTIME_MODE=agent), overrides base_directory to
+        os.path.expanduser('~/mc') so that agent-mode code never uses the
+        host path that config.toml was mounted with.
+
         Returns:
             Configuration dictionary
 
@@ -93,7 +97,15 @@ class ConfigManager:
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
         with open(config_path, "rb") as f:
-            return tomllib.load(f)
+            config = tomllib.load(f)
+
+        # Override base_directory in agent mode — config.toml is mounted from the
+        # host and contains the host path (e.g. /Users/dsquirre/mc) which does not
+        # exist inside the container.
+        if os.environ.get("MC_RUNTIME_MODE") == "agent" and "base_directory" in config:
+            config["base_directory"] = os.path.expanduser("~/mc")
+
+        return config
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get config value by dotted key path with default fallback.
