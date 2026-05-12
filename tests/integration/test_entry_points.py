@@ -440,3 +440,103 @@ def test_agent_base_dir_check_regression() -> None:
             ["podman", "rm", "-f", container_name],
             capture_output=True,
         )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_agent_init_case_path_regression() -> None:
+    """Regression test for MC-61 — published container image must include MC-57 fix.
+
+    Bug discovered: 2026-05-12
+    Platform: Both
+    Severity: major
+    Source: MC-61
+
+    Problem:
+    The code fix for MC-57 (commit 61fba39) correctly skips base_dir validation
+    when running in agent mode. However, the published container image at
+    quay.io/rhn_support_dsquirre/mc-container:latest was not rebuilt after the
+    fix was merged. As a result, any container created from the published image
+    still has the old code that unconditionally validates base_dir from the
+    host-mounted config file. Running `mc agent init-case` inside the container
+    fails with exit 1 and "The directory '/Users/<user>/mc' must exist" because
+    the host path does not exist in the container filesystem.
+
+    Steps to reproduce:
+    1. Create a container via `mc container create` (pulls from quay.io)
+    2. Inside the container, run: mc agent init-case
+    3. Observe: exit 1 with "The directory '/Users/dsquirre/mc' must exist"
+
+    Expected: mc agent init-case inside a container created from the published
+              quay.io image proceeds past base_dir validation. It may fail for
+              other reasons (e.g. missing CASE_NUMBER env var), but NOT because
+              of host base_dir validation.
+    Actual:   mc agent init-case exits 1 with base_dir validation error before
+              the agent command is even reached, because the published image
+              does not include the MC-57 fix.
+
+    This test ensures the published container image is kept in sync with the
+    source code. Unlike test_agent_base_dir_check_regression (MC-57) which
+    validates the local image, this test validates the image pulled from
+    quay.io by ContainerManager.create().
+
+    This test ensures the bug does not regress.
+    """
+    client = PodmanClient()
+    state_db = StateDatabase(":memory:")
+    manager = ContainerManager(client, state_db)
+
+    container_name = "mc-99933344"
+    try:
+        # Clean up any leftover container from a previous run
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            capture_output=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a container using the standard flow — this pulls from
+            # quay.io/rhn_support_dsquirre/mc-container:latest (the published image).
+            # Unlike test_agent_base_dir_check_regression which uses the local
+            # mc-rhel10:latest image, this validates the actual published artifact.
+            container = manager.create(
+                case_number="99933344",
+                workspace_path=tmpdir,
+                customer_name="AgentInitCasePath",
+            )
+
+            # Run mc agent init-case WITHOUT injecting any source fixes.
+            # If the published image still has the old code (pre MC-57 fix),
+            # this will exit 1 with "The directory '/Users/<user>/mc' must exist".
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "mc", "agent", "init-case",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            combined_output = result.stdout + result.stderr
+
+            # The bug manifests as "must exist" in the output — the host
+            # base_dir path fails validation inside the container.
+            assert "must exist" not in combined_output, (
+                f"mc agent init-case hit the base_dir validation inside the "
+                f"published container image (quay.io). The image needs to be "
+                f"rebuilt with the MC-57 fix (commit 61fba39).\n"
+                f"exit code: {result.returncode}\n"
+                f"stdout: {result.stdout!r}\n"
+                f"stderr: {result.stderr!r}\n"
+                f"\nThe published image at quay.io/rhn_support_dsquirre/"
+                f"mc-container:latest is stale and must be rebuilt from "
+                f"current main which includes the base_dir validation skip "
+                f"for agent mode."
+            )
+
+    finally:
+        subprocess.run(
+            ["podman", "rm", "-f", container_name],
+            capture_output=True,
+        )
