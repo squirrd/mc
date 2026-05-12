@@ -10,3 +10,5 @@ Tracks branches that failed the test suite during release builds.
 | 2026-04-01 | 2.0.11 | `fix/worktree-venv-isolation` | ⚠️ Included (pre-existing failure) | test_duplicate_terminal_prevention_regression in test_case_terminal.py — unrelated iTerm2 window focus flaky test, not caused by branch changes |
 | 2026-04-01 | 2.0.12 | `fix/update-checks-wrong-package` | ✅ Merged | Unit tests aligned to final 'mc' package name direction — 764 passed |
 | 2026-04-01 | 2.0.12 | `fix/window-registry-stale-cleanup` | ✅ Merged | Window registry stale cleanup fix — 764 passed |
+| 2026-05-11 | 2.0.21 | `fix/agent-base-dir-check` | ❌ Failed | Merge conflict in tests/integration/test_entry_points.py — manual resolution required |
+| 2026-05-12 | 2.0.22 | `fix/agent-base-dir-check` | ✅ Merged | Rebased onto main, conflict resolved — 798 passed |
