@@ -164,6 +164,9 @@ class ContainerManager:
         mc_state = Path.home() / "mc" / "state"
         mc_state.mkdir(parents=True, exist_ok=True)
         volumes[str(mc_state)] = {"bind": "/home/mcuser/mc/state", "mode": "rw"}
+        mc_auth = Path.home() / "mc" / "auth"
+        mc_auth.mkdir(parents=True, exist_ok=True)
+        volumes[str(mc_auth)] = {"bind": "/home/mcuser/mc/auth", "mode": "rw"}
         ocm_config = get_ocm_config_path()
         if ocm_config.exists():
             volumes[str(ocm_config)] = {"bind": "/home/mcuser/.config/ocm/ocm.json", "mode": "ro"}
