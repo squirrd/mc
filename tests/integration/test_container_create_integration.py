@@ -286,3 +286,83 @@ def test_reconciliation_with_real_podman():
                     state_db.delete_container("88888888")
             except Exception:
                 pass
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_agent_auth_mount_regression():
+    """Regression test for MC-64: ~/mc/auth/ not volume-mounted into container.
+
+    Bug discovered: 2026-05-12
+    Platform: Both
+    Severity: major
+    Source: MC-64
+
+    Problem:
+    ContainerManager.create() builds volume mounts for ~/mc/config (ro) and
+    ~/mc/state (rw), but omits ~/mc/auth/. Inside the container, auth.py defines
+    TOKEN_CACHE_PATH = ~/mc/auth/token. When agent code calls save_token_cache(),
+    the directory /home/mcuser/mc/auth/ does not exist as a host-mounted volume,
+    causing: [Errno 13] Permission denied: '/home/mcuser/mc/auth'
+
+    Steps to reproduce:
+    1. Run `mc case 12345678` to create a container.
+    2. Inside the container, attempt to write to /home/mcuser/mc/auth/token.
+    3. The write fails because ~/mc/auth/ is not volume-mounted from the host.
+
+    Expected: /home/mcuser/mc/auth/ is a host-mounted volume (rw) inside the
+              container, so auth.py can persist token cache across container
+              recreations.
+    Actual:   /home/mcuser/mc/auth/ is not volume-mounted; writes fail with
+              Permission denied or the token cache is lost on container recreation.
+
+    This test ensures the bug does not regress.
+    """
+    case_number = "55550064"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP: Remove any stale container from previous runs
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "AuthMountTest")
+
+            # Verify that /home/mcuser/mc/auth/ is a host-mounted volume inside
+            # the container. This is the correct assertion depth for a
+            # host->container boundary bug: we must check the actual in-container
+            # state via podman exec, not just the Python object.
+            mount_result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "bash", "-c",
+                    "mount | grep '/home/mcuser/mc/auth' || echo 'NOT_MOUNTED'"
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert "NOT_MOUNTED" not in mount_result.stdout, (
+                "/home/mcuser/mc/auth/ is NOT volume-mounted from the host. "
+                "auth.py TOKEN_CACHE_PATH will not persist across container "
+                "recreations and may fail with Permission denied.\n"
+                f"Mount output: {mount_result.stdout}"
+            )
+
+        finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
