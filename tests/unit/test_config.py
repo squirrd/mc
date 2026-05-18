@@ -417,6 +417,107 @@ class TestVersionConfig:
         assert 'initial' not in loaded_config
 
 
+class TestConfigManagerAgentBaseDir:
+    """Tests for agent-mode base_directory override in ConfigManager.load()."""
+
+    @pytest.mark.backwards_compatibility
+    def test_load_overrides_base_directory_in_agent_mode(self, tmp_path, monkeypatch):
+        """When MC_RUNTIME_MODE=agent, load() must override base_directory to ~/mc.
+
+        Bug: config.toml is mounted from the host into the container with
+        base_directory set to the host path (e.g. /Users/dsquirre/mc). Agent-mode
+        code that reads base_directory gets a path that does not exist inside the
+        container.
+
+        Expected: In agent mode, base_directory in the returned config dict is
+                  os.path.expanduser('~/mc'), regardless of the TOML value.
+        Actual (before fix): base_directory is the verbatim host path from config.toml.
+        """
+        monkeypatch.setenv("MC_RUNTIME_MODE", "agent")
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        # Write config with a host-specific base_directory that won't exist in container
+        host_path = "/Users/hostuser/mc"
+        test_config = {
+            "base_directory": host_path,
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+        }
+        manager.save(test_config)
+
+        loaded_config = manager.load()
+
+        # In agent mode, base_directory must be overridden to ~/mc (container path)
+        expected_base_dir = os.path.expanduser("~/mc")
+        assert loaded_config["base_directory"] == expected_base_dir, (
+            f"In agent mode, base_directory should be '{expected_base_dir}' "
+            f"but got '{loaded_config['base_directory']}'. "
+            f"The host path leaked through config.toml without override."
+        )
+
+    @pytest.mark.backwards_compatibility
+    def test_load_preserves_base_directory_in_controller_mode(self, tmp_path, monkeypatch):
+        """When MC_RUNTIME_MODE=controller, load() must NOT override base_directory.
+
+        This ensures the agent-mode override does not affect normal host operation.
+        """
+        monkeypatch.setenv("MC_RUNTIME_MODE", "controller")
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        custom_path = "/custom/host/path"
+        test_config = {
+            "base_directory": custom_path,
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+        }
+        manager.save(test_config)
+
+        loaded_config = manager.load()
+
+        assert loaded_config["base_directory"] == custom_path, (
+            f"In controller mode, base_directory should be preserved as '{custom_path}' "
+            f"but got '{loaded_config['base_directory']}'"
+        )
+
+    @pytest.mark.backwards_compatibility
+    def test_load_preserves_base_directory_when_runtime_mode_unset(
+        self, tmp_path, monkeypatch
+    ):
+        """When MC_RUNTIME_MODE is not set, load() must NOT override base_directory.
+
+        Default mode is controller — base_directory should be preserved.
+        """
+        monkeypatch.delenv("MC_RUNTIME_MODE", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        manager = ConfigManager()
+        manager._config_path = tmp_path / "config.toml"
+
+        custom_path = "/custom/host/path"
+        test_config = {
+            "base_directory": custom_path,
+            "api": {
+                "rh_api_offline_token": "test_token"
+            },
+        }
+        manager.save(test_config)
+
+        loaded_config = manager.load()
+
+        assert loaded_config["base_directory"] == custom_path, (
+            f"When MC_RUNTIME_MODE is unset, base_directory should be preserved "
+            f"as '{custom_path}' but got '{loaded_config['base_directory']}'"
+        )
+
+
 class TestConfigManagerEnvIsolation:
     """Tests for MC_ENV-based path isolation in ConfigManager."""
 

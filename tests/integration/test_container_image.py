@@ -715,3 +715,114 @@ def test_container_missing_tools_regression(
         f"Bug: container/Containerfile final stage dnf install does not include yq.\n"
         f"Fix: Add yq to the dnf install list in the Containerfile final stage."
     )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)",
+)
+def test_agent_base_dir_override_regression(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Regression test for config.toml base_directory leaking host path into container.
+
+    Bug discovered: 2026-05-12
+    Platform: Both (macOS, Linux)
+    Severity: minor
+    Source: MC-66 / MC-61 investigation
+
+    Problem:
+    config.toml is mounted read-only from the host into the container at
+    /home/mcuser/mc/config/config.toml. This file contains base_directory
+    set to the host filesystem path (e.g. /Users/dsquirre/mc on macOS or
+    /home/hostuser/mc on Linux). When agent-mode code inside the container
+    reads base_directory via ConfigManager, it receives the host path which
+    does not exist inside the container. Any agent-mode feature that uses
+    base_directory (workspace resolution, artifact storage) would silently
+    operate on a nonexistent path.
+
+    Steps to reproduce:
+    1. Have config.toml with base_directory = "/Users/dsquirre/mc" (host path)
+    2. Create a container via ContainerManager (mounts config.toml into container)
+    3. Inside the container, run: python3 -c "from mc.config.manager import ConfigManager; ..."
+    4. ConfigManager.load() returns base_directory = "/Users/dsquirre/mc"
+    5. os.path.isdir("/Users/dsquirre/mc") returns False inside the container
+
+    Expected: In agent mode (MC_RUNTIME_MODE=agent), base_directory resolves to a
+              path that exists inside the container (e.g. ~/mc expands to
+              /home/mcuser/mc), regardless of what config.toml says.
+    Actual:   base_directory is read verbatim from config.toml and contains the
+              host path (e.g. /Users/dsquirre/mc) which does not exist inside
+              the container.
+
+    This test ensures the bug does not regress.
+    """
+    import subprocess
+
+    if not check_image_exists(podman_client):
+        pytest.skip("mc-rhel10:latest image not found")
+
+    CASE_NUMBER = "99922266"
+
+    # Create container via ContainerManager (mounts host config.toml read-only)
+    container = container_manager.create(
+        case_number=CASE_NUMBER,
+        workspace_path=temp_workspace,
+        customer_name="Base Dir Override Regression",
+    )
+    cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+    # Inside the container, load config.toml via ConfigManager and read base_directory.
+    # The config.toml is mounted from the host and contains the HOST path.
+    # In agent mode, the code should override base_directory to a container-appropriate
+    # path, not pass through the host path verbatim.
+    result = subprocess.run(
+        [
+            "podman",
+            "exec",
+            f"mc-{CASE_NUMBER}",
+            "python3",
+            "-c",
+            (
+                "from mc.config.manager import ConfigManager; "
+                "import os; "
+                "cm = ConfigManager(); "
+                "config = cm.load(); "
+                "bd = config.get('base_directory', os.path.expanduser('~/mc')); "
+                "print(f'BASE_DIR={bd}'); "
+                "print(f'EXISTS={os.path.isdir(bd)}'); "
+                "print(f'HOME={os.path.expanduser(\"~\")}'); "
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, (
+        f"Python exec failed inside container:\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+    output = result.stdout.strip()
+    lines = {
+        line.split("=", 1)[0]: line.split("=", 1)[1]
+        for line in output.splitlines()
+        if "=" in line
+    }
+
+    base_dir = lines.get("BASE_DIR", "")
+    exists = lines.get("EXISTS", "")
+
+    # The base_directory loaded in agent mode must exist inside the container.
+    # If it doesn't exist, the host path leaked through config.toml without
+    # being overridden for the container environment.
+    assert exists == "True", (
+        f"base_directory '{base_dir}' does not exist inside the container.\n"
+        f"Bug: src/mc/cli/main.py:174 reads base_directory from config.toml "
+        f"without overriding for agent mode. The host path leaks into the "
+        f"container.\n"
+        f"Fix: When MC_RUNTIME_MODE=agent, override base_dir to "
+        f"os.path.expanduser('~/mc') regardless of config.toml value."
+    )
