@@ -120,10 +120,12 @@ class TestCreateNewContainer:
         assert create_call.kwargs["environment"]["WORKSPACE_PATH"] == "/case"
         assert create_call.kwargs["environment"]["MC_RUNTIME_MODE"] == "agent"
         mc_state_path = str(Path.home() / "mc" / "state")
+        mc_auth_path = str(Path.home() / "mc" / "auth")
         assert create_call.kwargs["volumes"] == {
             "/path/to/workspace": {"bind": "/case", "mode": "rw"},
             "/fake/home/mc/config": {"bind": "/home/mcuser/mc/config", "mode": "ro"},
             mc_state_path: {"bind": "/home/mcuser/mc/state", "mode": "rw"},
+            mc_auth_path: {"bind": "/home/mcuser/mc/auth", "mode": "rw"},
         }
 
         # Verify container started

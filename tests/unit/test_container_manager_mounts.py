@@ -171,6 +171,56 @@ class TestClaudeDirMount:
         podman.client.containers.create.assert_called_once()
 
 
+class TestAuthMount:
+    """Tests for ~/mc/auth read-write mount (MC-64 regression guard)."""
+
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_auth_dir_mounted_readwrite(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path
+    ):
+        """~/mc/auth is added to volumes dict with mode 'rw'.
+
+        auth.py TOKEN_CACHE_PATH resolves to ~/mc/auth/token. Without this mount
+        the container agent cannot read or write cached Red Hat SSO tokens, causing
+        Permission denied errors and forcing re-authentication on every API call.
+        """
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+
+        # Find the auth mount — the host path is ~/mc/auth (Path.home() / "mc" / "auth")
+        mc_auth_path = str(Path.home() / "mc" / "auth")
+        assert mc_auth_path in volumes, (
+            f"~/mc/auth/ is not volume-mounted. TOKEN_CACHE_PATH will not persist. "
+            f"Volumes: {list(volumes.keys())}"
+        )
+        assert volumes[mc_auth_path]["bind"] == "/home/mcuser/mc/auth", (
+            f"auth mount bind target is wrong. Got: {volumes[mc_auth_path]['bind']}"
+        )
+        assert volumes[mc_auth_path]["mode"] == "rw", (
+            f"auth mount must be rw for token cache writes. Got: {volumes[mc_auth_path]['mode']}"
+        )
+
+
 class TestAllMountsTogether:
     """Tests for workspace + mc/config + OCM + claude combined mount scenarios."""
 
@@ -207,6 +257,7 @@ class TestAllMountsTogether:
         manager.create("12345678", "/workspace", "Customer")
 
         mc_state_path = str(Path.home() / "mc" / "state")
+        mc_auth_path = str(Path.home() / "mc" / "auth")
         call_kwargs = podman.client.containers.create.call_args[1]
         volumes = call_kwargs["volumes"]
         assert "/workspace" in volumes
@@ -214,7 +265,8 @@ class TestAllMountsTogether:
         assert "/home/user/.config/ocm/ocm.json" in volumes
         assert "/home/user/.claude" in volumes
         assert mc_state_path in volumes
-        assert len(volumes) == 5
+        assert mc_auth_path in volumes
+        assert len(volumes) == 6
 
 
 class TestVertexEnvForwarding:
