@@ -50,12 +50,18 @@ class TestBuildExecCommand:
 
         # Verify command structure
         assert result.startswith("podman exec -it")
-        assert f"--env 'BASH_ENV={bashrc_path}'" in result
+        # BASH_ENV uses container-internal path, not the host bashrc_path (MC-65)
+        expected_container_bashrc = f"/home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc"
+        assert f"--env 'BASH_ENV={expected_container_bashrc}'" in result
         assert f"--env 'PS1=[MC-{case_number}" in result
         assert result.endswith(f"{container_id} /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit")
 
-    def test_build_exec_command_special_chars(self) -> None:
-        """Test exec command handles special characters in paths."""
+    def test_build_exec_command_special_chars_in_host_path_not_leaked(self) -> None:
+        """Host bashrc_path with special chars must not leak into BASH_ENV.
+
+        After MC-65 fix, BASH_ENV is derived from case_number (container-internal
+        path), so the host bashrc_path -- even with special chars -- is irrelevant.
+        """
         container_id = "mc-12345678"
         bashrc_path = "/tmp/path with spaces/bashrc"
         case_number = "12345678"
@@ -64,8 +70,10 @@ class TestBuildExecCommand:
             with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
                 result = build_exec_command(container_id, bashrc_path, case_number)
 
-        # Path should be included as-is (shell escaping happens at launch)
-        assert bashrc_path in result
+        # Host path must NOT appear — BASH_ENV uses container-internal path
+        assert bashrc_path not in result
+        expected = f"/home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc"
+        assert f"BASH_ENV={expected}" in result
 
     def test_build_exec_command_includes_proxy_from_env(self) -> None:
         """Proxy from HTTPS_PROXY env var is passed as --env to podman exec."""
@@ -135,6 +143,38 @@ class TestBuildExecCommand:
 
         assert "HTTPS_PROXY" not in result
         assert "HTTP_PROXY" not in result
+
+    def test_build_exec_command_bash_env_uses_container_path(self) -> None:
+        """BASH_ENV must use the container-internal path, not the host path.
+
+        Regression test for MC-65: BASH_ENV was set to the host filesystem path
+        (e.g. /Users/dsquirre/mc/config/bashrc/mc-12345678.bashrc) but inside
+        the container ~/mc/config is mounted at /home/mcuser/mc/config. The host
+        path does not exist in the container, so the bashrc is never sourced.
+
+        The fix must translate the host path to the container-internal equivalent:
+          /home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc
+        """
+        container_id = "mc-12345678"
+        # Simulate a host-side bashrc path (macOS style)
+        host_bashrc_path = "/Users/someuser/mc/config/bashrc/mc-12345678.bashrc"
+        case_number = "12345678"
+
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("mc.terminal.attach.detect_macos_proxy", return_value=None):
+                result = build_exec_command(container_id, host_bashrc_path, case_number)
+
+        # BASH_ENV must NOT contain the host path
+        assert host_bashrc_path not in result, (
+            f"BASH_ENV still uses the host path '{host_bashrc_path}'. "
+            f"Inside the container, ~/mc/config is mounted at /home/mcuser/mc/config, "
+            f"so the bashrc file is at /home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc."
+        )
+        # BASH_ENV must use the container-internal path
+        expected_container_path = f"/home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc"
+        assert f"BASH_ENV={expected_container_path}" in result, (
+            f"BASH_ENV should be set to '{expected_container_path}' but was not found in: {result}"
+        )
 
 
 class TestBuildWindowTitle:
@@ -303,6 +343,8 @@ class TestAttachTerminal:
         assert "podman exec" in launch_options.command
         assert "mc-12345678" in launch_options.command
         assert launch_options.auto_focus is True
+        # BASH_ENV uses container-internal path (MC-65)
+        assert "--env 'BASH_ENV=/home/mcuser/mc/config/bashrc/mc-12345678.bashrc'" in launch_options.command
 
     def test_attach_terminal_custom_bashrc(self, mock_dependencies, mocker: Mock) -> None:
         """Test attach_terminal generates custom bashrc with case metadata."""
@@ -365,7 +407,8 @@ class TestAttachTerminal:
 
         command = launch_options.command
         assert command.startswith("podman exec -it")
-        assert "--env 'BASH_ENV=/tmp/bashrc'" in command
+        # BASH_ENV uses container-internal path, not the host bashrc path (MC-65)
+        assert "--env 'BASH_ENV=/home/mcuser/mc/config/bashrc/mc-12345678.bashrc'" in command
         assert "--env 'PS1=[MC-12345678]" in command
         assert "mc-12345678 /bin/bash -c 'mc agent init-case || true; mc agent backplane-login || true; exec bash'; exit" in command
 

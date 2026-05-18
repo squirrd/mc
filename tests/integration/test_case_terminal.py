@@ -1722,3 +1722,146 @@ def test_stdin_capture_oserror_regression(mocker):
         # After the fix, the function handles focus failure gracefully by
         # catching OSError and auto-proceeding to create a new terminal.
         attach_terminal("12345678", mock_config, mock_api, mock_cm)
+
+
+# ---------------------------------------------------------------------------
+# Regression test — BASH_ENV host path (fix/bash-env-host-path, MC-65)
+# ---------------------------------------------------------------------------
+
+_BASHENV_CONTAINER_NAME = "mc-test-bashenv-mc65"
+
+
+@pytest.fixture(scope="module")
+def bashenv_container():
+    """Create a temporary container with ~/mc/config mounted, matching production layout.
+
+    The production container mounts host ~/mc/config at /home/mcuser/mc/config (ro).
+    This fixture replicates that mount so we can verify that BASH_ENV points to a path
+    that exists inside the container.
+    """
+    mc_config = Path.home() / "mc" / "config"
+    mc_config.mkdir(parents=True, exist_ok=True)
+
+    # Remove any stale container from a previous run
+    subprocess.run(
+        ["podman", "rm", "-f", _BASHENV_CONTAINER_NAME],
+        capture_output=True, timeout=15,
+    )
+
+    # Create container with the same volume mount as ContainerManager.create():
+    #   host ~/mc/config -> /home/mcuser/mc/config (ro)
+    result = subprocess.run(
+        [
+            "podman", "create",
+            "--name", _BASHENV_CONTAINER_NAME,
+            "-v", f"{mc_config}:/home/mcuser/mc/config:ro",
+            "--userns=keep-id",
+            "quay.io/rhn_support_dsquirre/mc-container:latest",
+            "tail", "-f", "/dev/null",
+        ],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, f"Container create failed: {result.stderr}"
+
+    # Start the container
+    result = subprocess.run(
+        ["podman", "start", _BASHENV_CONTAINER_NAME],
+        capture_output=True, text=True, timeout=15,
+    )
+    assert result.returncode == 0, f"Container start failed: {result.stderr}"
+
+    yield _BASHENV_CONTAINER_NAME
+
+    # Teardown: remove container
+    subprocess.run(
+        ["podman", "rm", "-f", _BASHENV_CONTAINER_NAME],
+        capture_output=True, timeout=15,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_bash_env_host_path_regression(bashenv_container: str) -> None:
+    """Regression test for fix/bash-env-host-path — BASH_ENV points to non-existent host path.
+
+    Bug discovered: 2026-05-12
+    Platform: macOS (reproduced), affects Linux too
+    Severity: medium
+    Source: MC-65
+
+    Problem:
+    build_exec_command() in terminal/attach.py passes the HOST filesystem path
+    (e.g. /Users/dsquirre/mc/config/bashrc/mc-04441640.bashrc) as the BASH_ENV
+    value to podman exec. Inside the container, the host path does not exist.
+    The bashrc file is mounted at /home/mcuser/mc/config/bashrc/mc-<case>.bashrc
+    because ~/mc/config is bind-mounted to /home/mcuser/mc/config. As a result,
+    the bashrc is never sourced -- no welcome banner, no aliases, no MC_CASE_ID,
+    MC_CUSTOMER, or MC_DESCRIPTION environment variables.
+
+    Steps to reproduce:
+    1. Call write_bashrc() to create a case bashrc on the host
+    2. Call build_exec_command() with the returned host path
+    3. Extract the BASH_ENV value from the generated command
+    4. Check whether that path exists inside a running container with
+       the same volume mount layout as production
+
+    Expected: BASH_ENV contains a container-relative path
+              (/home/mcuser/mc/config/bashrc/mc-<case>.bashrc) that exists
+              inside the container.
+    Actual:   BASH_ENV contains the host path (e.g. /Users/.../mc/config/bashrc/...)
+              which does not exist inside the container. The bashrc is never sourced.
+
+    This test ensures the bug does not regress.
+    """
+    from mc.terminal.shell import write_bashrc
+    from mc.terminal.attach import build_exec_command
+
+    case_number = "99990065"
+    metadata = {
+        "case_number": case_number,
+        "customer_name": "MC65 BashEnv Test Corp",
+        "description": "BASH_ENV host path regression",
+    }
+
+    # Write bashrc on the host (same as production flow)
+    host_bashrc_path = write_bashrc(case_number, metadata)
+
+    try:
+        # Verify the file exists on the host
+        assert os.path.isfile(host_bashrc_path), (
+            f"Bashrc not created at {host_bashrc_path}"
+        )
+
+        # Get the BASH_ENV value that build_exec_command() would pass to the container
+        exec_cmd = build_exec_command(bashenv_container, host_bashrc_path, case_number)
+
+        # Extract the BASH_ENV value from the command string
+        # Format: --env 'BASH_ENV=/path/to/bashrc'
+        match = re.search(r"BASH_ENV=([^'\"]+)", exec_cmd)
+        assert match, f"BASH_ENV not found in exec command: {exec_cmd}"
+        bash_env_path = match.group(1)
+
+        # The critical check: does the BASH_ENV path exist INSIDE the container?
+        # This is a host->container boundary test -- we MUST verify inside a real container.
+        result = subprocess.run(
+            [
+                "podman", "exec", bashenv_container,
+                "test", "-f", bash_env_path,
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+
+        assert result.returncode == 0, (
+            f"BASH_ENV points to a path that does not exist inside the container.\n"
+            f"BASH_ENV value: {bash_env_path}\n"
+            f"This is a HOST path. Inside the container, the file is at:\n"
+            f"  /home/mcuser/mc/config/bashrc/mc-{case_number}.bashrc\n"
+            f"Because ~/mc/config is mounted at /home/mcuser/mc/config.\n"
+            f"The bashrc is never sourced -- no banner, no aliases, no MC_CASE_ID."
+        )
+    finally:
+        # Cleanup the test bashrc
+        try:
+            os.remove(host_bashrc_path)
+        except OSError:
+            pass
