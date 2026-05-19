@@ -117,27 +117,27 @@ class TestCaseEnvFormat:
 
 class TestFileWriting:
     def test_sfdc_case_json_written(self, tmp_path, mocker):
-        """sfdc-case.json is created in case_dir."""
+        """sfdc-case.json is created in case_dir/sfdc/."""
         _mock_init(mocker, BASE_CASE_DETAILS)
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
-        assert (tmp_path / "sfdc-case.json").exists()
+        assert (tmp_path / "sfdc" / "sfdc-case.json").exists()
 
     def test_sfdc_case_json_is_valid_json(self, tmp_path, mocker):
         """sfdc-case.json contains valid JSON matching the mock response."""
         _mock_init(mocker, BASE_CASE_DETAILS)
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
-        data = json.loads((tmp_path / "sfdc-case.json").read_text())
+        data = json.loads((tmp_path / "sfdc" / "sfdc-case.json").read_text())
         assert data["summary"] == BASE_CASE_DETAILS["summary"]
         assert data["status"] == BASE_CASE_DETAILS["status"]
 
     def test_sfdc_comments_json_written(self, tmp_path, mocker):
-        """sfdc-comments.json is created in case_dir."""
+        """sfdc-comments.json is created in case_dir/sfdc/."""
         _mock_init(mocker, BASE_CASE_DETAILS)
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
-        assert (tmp_path / "sfdc-comments.json").exists()
+        assert (tmp_path / "sfdc" / "sfdc-comments.json").exists()
 
     def test_case_env_written(self, tmp_path, mocker):
         """case.env is created in case_dir."""
@@ -151,7 +151,7 @@ class TestFileWriting:
         # First call
         _mock_init(mocker, BASE_CASE_DETAILS)
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
-        first_content = (tmp_path / "sfdc-case.json").read_text()
+        first_content = (tmp_path / "sfdc" / "sfdc-case.json").read_text()
 
         # Second call with different case details
         updated_details = {**BASE_CASE_DETAILS, "summary": "Updated summary after second call"}
@@ -166,7 +166,7 @@ class TestFileWriting:
 
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
-        second_content = (tmp_path / "sfdc-case.json").read_text()
+        second_content = (tmp_path / "sfdc" / "sfdc-case.json").read_text()
         assert first_content != second_content
         assert "Updated summary after second call" in second_content
 
@@ -213,7 +213,7 @@ class TestOcmBehavior:
 
         assert not (tmp_path / "ocm-cluster.json").exists()
         # Other files should still have been written
-        assert (tmp_path / "sfdc-case.json").exists()
+        assert (tmp_path / "sfdc" / "sfdc-case.json").exists()
         assert (tmp_path / "case.env").exists()
 
     def test_ocm_cluster_json_not_written_when_ocm_timeout(self, tmp_path, mocker):
@@ -277,14 +277,14 @@ class TestFailureHandling:
         captured = capsys.readouterr()
         assert "Warning" in captured.out
         # No files should be written
-        assert not (tmp_path / "sfdc-case.json").exists()
+        assert not (tmp_path / "sfdc" / "sfdc-case.json").exists()
 
     def test_comments_api_failure_writes_empty_list(self, tmp_path, mocker):
         """When fetch_case_comments fails, sfdc-comments.json is written as empty array."""
         _mock_init(mocker, BASE_CASE_DETAILS, comments_raises=True)
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
-        comments_path = tmp_path / "sfdc-comments.json"
+        comments_path = tmp_path / "sfdc" / "sfdc-comments.json"
         assert comments_path.exists()
         assert json.loads(comments_path.read_text()) == []
 
@@ -298,4 +298,38 @@ class TestFailureHandling:
 
         captured = capsys.readouterr()
         assert "Warning" in captured.out
-        assert not (tmp_path / "sfdc-case.json").exists()
+        assert not (tmp_path / "sfdc" / "sfdc-case.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# SFDC file path regression tests (fix/sfdc-file-save-path, MC-73)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.backwards_compatibility
+class TestSfdcFilePathRegression:
+    """Verify sfdc-case.json and sfdc-comments.json are written to the sfdc/ subdirectory."""
+
+    def test_sfdc_case_json_written_to_sfdc_subdirectory(self, tmp_path, mocker):
+        """sfdc-case.json must be written to <case_dir>/sfdc/sfdc-case.json, not case root."""
+        _mock_init(mocker, BASE_CASE_DETAILS)
+        sfdc_dir = tmp_path / "sfdc"
+        sfdc_dir.mkdir()
+
+        init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
+
+        assert (sfdc_dir / "sfdc-case.json").exists(), (
+            f"sfdc-case.json not at {sfdc_dir}/sfdc-case.json — written to case root instead"
+        )
+
+    def test_sfdc_comments_json_written_to_sfdc_subdirectory(self, tmp_path, mocker):
+        """sfdc-comments.json must be written to <case_dir>/sfdc/sfdc-comments.json."""
+        _mock_init(mocker, BASE_CASE_DETAILS)
+        sfdc_dir = tmp_path / "sfdc"
+        sfdc_dir.mkdir()
+
+        init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
+
+        assert (sfdc_dir / "sfdc-comments.json").exists(), (
+            f"sfdc-comments.json not at {sfdc_dir}/sfdc-comments.json — written to case root"
+        )

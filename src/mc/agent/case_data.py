@@ -65,13 +65,15 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
         print(f"Warning: Failed to fetch case comments: {e}")
         comments = []
 
-    # 5. Write sfdc-case.json — full raw case_details dict serialized as JSON
-    sfdc_case_path = os.path.join(case_dir, "sfdc-case.json")
+    # 5. Write sfdc-case.json to sfdc/ subdirectory
+    sfdc_dir = os.path.join(case_dir, "sfdc")
+    os.makedirs(sfdc_dir, exist_ok=True)
+    sfdc_case_path = os.path.join(sfdc_dir, "sfdc-case.json")
     with open(sfdc_case_path, "w") as f:
         json.dump(case_details, f, indent=2)
 
-    # 6. Write sfdc-comments.json — full raw comments list as JSON
-    sfdc_comments_path = os.path.join(case_dir, "sfdc-comments.json")
+    # 6. Write sfdc-comments.json to sfdc/ subdirectory
+    sfdc_comments_path = os.path.join(sfdc_dir, "sfdc-comments.json")
     with open(sfdc_comments_path, "w") as f:
         json.dump(comments, f, indent=2)
 
