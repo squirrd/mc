@@ -1865,3 +1865,104 @@ def test_bash_env_host_path_regression(bashenv_container: str) -> None:
             os.remove(host_bashrc_path)
         except OSError:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Regression test — PAC proxy detection fallback (fix/pac-proxy-detection, MC-69)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_pac_proxy_detection_regression() -> None:
+    """Regression test for fix/pac-proxy-detection — PAC URL unreachable loses proxy.
+
+    Bug discovered: 2026-05-19
+    Platform: macOS
+    Severity: major
+    Source: MC-69
+
+    Problem:
+    detect_macos_proxy() returns None when a PAC URL is configured via
+    scutil --proxy (ProxyAutoConfigEnable=1, ProxyAutoConfigURLString set)
+    but the PAC URL is unreachable (e.g. curl to localhost:8888/proxy.pac
+    returns connection refused). Even though networksetup -getsecurewebproxy
+    shows a valid proxy server (squid.corp.redhat.com:3128), the function
+    never consults networksetup as a fallback. This causes containers to
+    launch without HTTPS_PROXY, breaking ocm/backplane connectivity.
+
+    Steps to reproduce:
+    1. macOS host with PAC proxy configured (scutil --proxy shows
+       ProxyAutoConfigURLString)
+    2. PAC server is unreachable (curl returns exit code 7)
+    3. networksetup -getsecurewebproxy shows a valid proxy server
+    4. Call detect_macos_proxy()
+
+    Expected: detect_macos_proxy() returns "http://squid.corp.redhat.com:3128"
+              by falling back to networksetup -getsecurewebproxy when the PAC
+              URL is unreachable.
+    Actual:   detect_macos_proxy() returns None. No fallback to networksetup.
+
+    This test ensures the bug does not regress.
+    """
+    import platform
+    from unittest.mock import patch, MagicMock
+
+    from mc.terminal.shell import detect_macos_proxy
+
+    # Simulates scutil --proxy output when PAC is active but no direct HTTPS proxy
+    scutil_output = (
+        "<dictionary> {\n"
+        "  ExceptionsList : <array> {\n"
+        "    0 : *.local\n"
+        "    1 : 169.254/16\n"
+        "  }\n"
+        "  FTPPassive : 1\n"
+        "  HTTPEnable : 0\n"
+        "  HTTPSEnable : 0\n"
+        "  ProxyAutoConfigEnable : 1\n"
+        "  ProxyAutoConfigURLString : http://localhost:8888/proxy.pac\n"
+        "}\n"
+    )
+
+    # Simulates networksetup -getsecurewebproxy output for the active service
+    networksetup_output = (
+        "Enabled: No\n"
+        "Server: squid.corp.redhat.com\n"
+        "Port: 3128\n"
+        "Authenticated Proxy Enabled: 0\n"
+    )
+
+    def fake_subprocess_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        """Route subprocess.run calls to fake responses."""
+        result = MagicMock()
+        if cmd == ["scutil", "--proxy"]:
+            result.stdout = scutil_output
+            result.returncode = 0
+        elif isinstance(cmd, list) and cmd[0] == "curl":
+            # PAC URL unreachable — connection refused
+            result.stdout = ""
+            result.returncode = 7
+        elif isinstance(cmd, list) and cmd[0] == "networksetup":
+            result.stdout = networksetup_output
+            result.returncode = 0
+        else:
+            return subprocess.run(cmd, **kwargs)
+        return result
+
+    with (
+        patch("mc.terminal.shell.platform.system", return_value="Darwin"),
+        patch("mc.terminal.shell.subprocess.run", side_effect=fake_subprocess_run),
+    ):
+        proxy = detect_macos_proxy()
+
+    assert proxy is not None, (
+        "detect_macos_proxy() returned None when PAC URL is configured but "
+        "unreachable. It should fall back to networksetup -getsecurewebproxy "
+        "to discover the configured proxy server (squid.corp.redhat.com:3128)."
+    )
+    assert "squid.corp.redhat.com" in proxy, (
+        f"Expected proxy to contain 'squid.corp.redhat.com', got: {proxy!r}"
+    )
+    assert "3128" in proxy, (
+        f"Expected proxy to contain port '3128', got: {proxy!r}"
+    )
