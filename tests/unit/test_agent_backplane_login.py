@@ -56,7 +56,9 @@ def test_token_expired_returns_false_for_generic_error() -> None:
 
 
 def test_read_sfdc_cluster_id_returns_value(tmp_path: pytest.TempPathFactory) -> None:
-    sfdc = tmp_path / "sfdc-case.json"  # type: ignore[operator]
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
     sfdc.write_text(json.dumps({"openshiftClusterID": "abc-123-xyz"}))
     assert _read_sfdc_cluster_id(str(tmp_path)) == "abc-123-xyz"
 
@@ -66,15 +68,28 @@ def test_read_sfdc_cluster_id_returns_empty_when_file_missing(tmp_path: pytest.T
 
 
 def test_read_sfdc_cluster_id_returns_empty_when_field_absent(tmp_path: pytest.TempPathFactory) -> None:
-    sfdc = tmp_path / "sfdc-case.json"  # type: ignore[operator]
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
     sfdc.write_text(json.dumps({"caseNumber": "12345678"}))
     assert _read_sfdc_cluster_id(str(tmp_path)) == ""
 
 
 def test_read_sfdc_cluster_id_returns_empty_when_field_is_none(tmp_path: pytest.TempPathFactory) -> None:
-    sfdc = tmp_path / "sfdc-case.json"  # type: ignore[operator]
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
     sfdc.write_text(json.dumps({"openshiftClusterID": None}))
     assert _read_sfdc_cluster_id(str(tmp_path)) == ""
+
+
+def test_read_sfdc_cluster_id_reads_from_sfdc_subdirectory(tmp_path: pytest.TempPathFactory) -> None:
+    """Regression: _read_sfdc_cluster_id must read from sfdc/ subdirectory, not case root."""
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
+    sfdc.write_text(json.dumps({"openshiftClusterID": "correct-cluster-from-subdir"}))
+    assert _read_sfdc_cluster_id(str(tmp_path)) == "correct-cluster-from-subdir"
 
 
 # --- Source priority ---
@@ -82,7 +97,9 @@ def test_read_sfdc_cluster_id_returns_empty_when_field_is_none(tmp_path: pytest.
 
 def test_sfdc_case_json_cluster_id_wins_over_state_db(tmp_path: pytest.TempPathFactory, mocker: MagicMock) -> None:
     """sfdc-case.json cluster_id takes priority; subprocess is called with sfdc cluster_id."""
-    sfdc = tmp_path / "sfdc-case.json"  # type: ignore[operator]
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
     sfdc.write_text(json.dumps({"openshiftClusterID": "sfdc-cluster-id"}))
 
     db = StateDatabase(":memory:")
@@ -173,7 +190,9 @@ def test_successful_login_persists_user_entered_id_to_state_db(tmp_path: pytest.
 
 def test_sfdc_cluster_id_not_persisted_to_state_db(tmp_path: pytest.TempPathFactory, mocker: MagicMock) -> None:
     """sfdc-sourced cluster_id is NOT written to StateDatabase after login."""
-    sfdc = tmp_path / "sfdc-case.json"  # type: ignore[operator]
+    sfdc_dir = tmp_path / "sfdc"  # type: ignore[operator]
+    sfdc_dir.mkdir()
+    sfdc = sfdc_dir / "sfdc-case.json"
     sfdc.write_text(json.dumps({"openshiftClusterID": "sfdc-cluster-id"}))
 
     db = StateDatabase(":memory:")

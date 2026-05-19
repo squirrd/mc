@@ -41,8 +41,8 @@ def _is_token_expired(stderr_output: str) -> bool:
 
 
 def _read_sfdc_cluster_id(case_dir: str) -> str:
-    """Read cluster_id from sfdc-case.json. Returns '' if file absent or field missing."""
-    sfdc_path = os.path.join(case_dir, "sfdc-case.json")
+    """Read cluster_id from sfdc/sfdc-case.json. Returns '' if file absent or field missing."""
+    sfdc_path = os.path.join(case_dir, "sfdc", "sfdc-case.json")
     try:
         with open(sfdc_path) as f:
             data = json.load(f)
