@@ -221,18 +221,125 @@ class TestAuthMount:
         )
 
 
-class TestAllMountsTogether:
-    """Tests for workspace + mc/config + OCM + claude combined mount scenarios."""
+class TestClaudeJsonMount:
+    """Tests for ~/.claude.json read-only mount (MC-74 regression guard)."""
 
+    @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_claude_json_mounted_readonly_when_present(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path
+    ):
+        """~/.claude.json is added to volumes dict with mode 'ro' when it exists.
+
+        This file contains hasCompletedOnboarding and hasTrustDialogAccepted state.
+        Without it, each new container forces Claude Code re-onboarding.
+        """
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
+        claude_json = MagicMock()
+        claude_json.exists.return_value = True
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        assert "/home/user/.claude.json" in volumes, (
+            f"~/.claude.json is not volume-mounted. "
+            f"Volumes: {list(volumes.keys())}"
+        )
+        assert volumes["/home/user/.claude.json"]["bind"] == "/home/mcuser/.claude.json", (
+            f"claude.json mount bind target is wrong. "
+            f"Got: {volumes['/home/user/.claude.json']['bind']}"
+        )
+        assert volumes["/home/user/.claude.json"]["mode"] == "ro", (
+            f"claude.json mount must be ro to prevent container writes back to host. "
+            f"Got: {volumes['/home/user/.claude.json']['mode']}"
+        )
+
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_claude_json_absent_from_volumes_when_missing(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path
+    ):
+        """~/.claude.json is not in volumes when the file does not exist."""
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
+        claude_json = MagicMock()
+        claude_json.exists.return_value = False
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        # No key containing ".claude.json" should be present
+        claude_json_keys = [k for k in volumes if ".claude.json" in k]
+        assert len(claude_json_keys) == 0, (
+            f"~/.claude.json should not be in volumes when absent. "
+            f"Found: {claude_json_keys}"
+        )
+
+
+class TestAllMountsTogether:
+    """Tests for workspace + mc/config + OCM + claude + claude.json combined mount scenarios."""
+
+    @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
     def test_all_mounts_present_when_all_paths_exist(
-        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path, mock_adc_path
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path
     ):
-        """Workspace, mc/config, OCM, and claude all mounted when all host paths exist."""
+        """Workspace, mc/config, OCM, claude, and claude.json all mounted when all host paths exist."""
         mc_config = MagicMock()
         mc_config.exists.return_value = True
         mc_config.__str__ = lambda self: "/home/user/mc/config"
@@ -253,6 +360,11 @@ class TestAllMountsTogether:
         adc.exists.return_value = False
         mock_adc_path.return_value = adc
 
+        claude_json = MagicMock()
+        claude_json.exists.return_value = True
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
         manager, podman = _make_manager()
         manager.create("12345678", "/workspace", "Customer")
 
@@ -264,9 +376,10 @@ class TestAllMountsTogether:
         assert "/home/user/mc/config" in volumes
         assert "/home/user/.config/ocm/ocm.json" in volumes
         assert "/home/user/.claude" in volumes
+        assert "/home/user/.claude.json" in volumes
         assert mc_state_path in volumes
         assert mc_auth_path in volumes
-        assert len(volumes) == 6
+        assert len(volumes) == 7
 
 
 class TestVertexEnvForwarding:
