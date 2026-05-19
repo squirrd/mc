@@ -317,7 +317,7 @@ end tell
 
         try:
             iterm2.run_until_complete(_main)
-        except Exception:
+        except BaseException:
             pass
         return result[0]
 
@@ -411,7 +411,7 @@ end tell
 
         try:
             iterm2.run_until_complete(_main)
-        except Exception:
+        except BaseException:
             pass
         return result[0]
 
@@ -593,7 +593,7 @@ end tell
         try:
             with contextlib.redirect_stderr(_iterm2_stderr):
                 iterm2.run_until_complete(_main)
-        except Exception:
+        except BaseException:
             _captured = _iterm2_stderr.getvalue().strip()
             if _captured:
                 logger.debug("iterm2 API teardown output: %s", _captured)
@@ -615,7 +615,7 @@ end tell
             return None
         try:
             return self._launch_via_iterm2_api(options)
-        except Exception:
+        except BaseException:
             logger.debug("iTerm2 Python API unavailable", exc_info=True)
             return None
 

@@ -943,3 +943,160 @@ def test_cleanup_finally_split_regression() -> None:
         f"If stop() raised and remove() was in the same try block, remove() would be skipped.\n"
         f"Fix: always use separate try/except blocks for stop() and remove() in test cleanup."
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — iterm2 websocket SystemExit guard (fix/iterm2-ws-test-guard, MC-71)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    platform.system() != "Darwin",
+    reason="macOS-specific test — iterm2 package is macOS-only",
+)
+class TestIterm2WebsocketSystemExitGuard:
+    """Regression tests for fix/iterm2-ws-test-guard (MC-71).
+
+    Bug discovered: 2026-05-19
+    Platform: macOS
+    Severity: minor
+    Source: MC-71
+
+    Problem:
+        test_stale_window_id_handling and test_registry_corruption_graceful_fallback
+        fail with SystemExit(1) when iTerm2's Python API websocket cannot connect.
+
+        The iterm2 library's async_connect() has this pattern:
+
+            try:
+                return await coro(self)
+            except Exception as _err:
+                traceback.print_exc()
+                sys.exit(1)
+
+        sys.exit(1) raises SystemExit, which inherits from BaseException — NOT
+        Exception. Three methods in MacOSLauncher catch `except Exception` around
+        iterm2.run_until_complete(), so SystemExit escapes uncaught:
+
+        1. _window_exists_by_id_api() — lines 318-321
+        2. _focus_window_by_id_api() — lines 412-415
+        3. _try_iterm2_api() — line 618 (launch path, via _launch_via_iterm2_api)
+
+    Expected behaviour:
+        All three methods catch SystemExit (or BaseException) from
+        iterm2.run_until_complete() and return their fallback value (None for
+        _window_exists_by_id_api/_focus_window_by_id_api, None for _try_iterm2_api)
+        so the caller falls through to the AppleScript path.
+
+    Actual behaviour (bug present):
+        SystemExit(1) propagates out of the method, crashes the test runner (or the
+        mc CLI process), and shows a raw traceback. In integration tests like
+        test_stale_window_id_handling, the entire test aborts with exit code 1.
+
+    Root cause:
+        `except Exception` does not catch SystemExit because SystemExit inherits from
+        BaseException, not Exception. The fix is to widen the catch to
+        `except BaseException` (or explicitly `except (Exception, SystemExit)`) in
+        all three locations.
+    """
+
+    def test_window_exists_by_id_api_survives_sys_exit(self) -> None:
+        """_window_exists_by_id_api must not propagate SystemExit from iterm2 library.
+
+        When iterm2.run_until_complete() calls sys.exit(1) due to a websocket
+        connection failure (ConnectionRefusedError), the SystemExit must be caught
+        and the method must return None (API unavailable), allowing the caller
+        to fall back to AppleScript.
+
+        Bug present  -> raises SystemExit(1) -> test fails / process killed
+        Bug fixed    -> returns None -> caller uses AppleScript fallback
+        """
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from mc.terminal.macos import MacOSLauncher
+
+        with patch("mc.terminal.macos._ITERM2_LIB_AVAILABLE", True):
+            launcher = MacOSLauncher(terminal="iTerm2")
+
+            mock_iterm2 = MagicMock()
+            mock_iterm2.run_until_complete.side_effect = SystemExit(1)
+
+            with patch.dict(sys.modules, {"iterm2": mock_iterm2}):
+                result = launcher._window_exists_by_id_api("some-window-id")
+
+        assert result is None, (
+            f"Expected None (API unavailable) but got {result!r}.\n"
+            "SystemExit(1) from iterm2.run_until_complete() was not caught.\n"
+            "Fix: widen `except Exception` to `except BaseException` in "
+            "_window_exists_by_id_api() around the run_until_complete() call."
+        )
+
+    def test_focus_window_by_id_api_survives_sys_exit(self) -> None:
+        """_focus_window_by_id_api must not propagate SystemExit from iterm2 library.
+
+        Same bug as _window_exists_by_id_api: sys.exit(1) from run_until_complete()
+        is a SystemExit (BaseException), not caught by `except Exception`.
+
+        Bug present  -> raises SystemExit(1) -> test fails / process killed
+        Bug fixed    -> returns None -> caller uses AppleScript fallback
+        """
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from mc.terminal.macos import MacOSLauncher
+
+        with patch("mc.terminal.macos._ITERM2_LIB_AVAILABLE", True):
+            launcher = MacOSLauncher(terminal="iTerm2")
+
+            mock_iterm2 = MagicMock()
+            mock_iterm2.run_until_complete.side_effect = SystemExit(1)
+
+            with patch.dict(sys.modules, {"iterm2": mock_iterm2}):
+                result = launcher._focus_window_by_id_api("some-window-id")
+
+        assert result is None, (
+            f"Expected None (API unavailable) but got {result!r}.\n"
+            "SystemExit(1) from iterm2.run_until_complete() was not caught.\n"
+            "Fix: widen `except Exception` to `except BaseException` in "
+            "_focus_window_by_id_api() around the run_until_complete() call."
+        )
+
+    def test_try_iterm2_api_survives_sys_exit(self) -> None:
+        """_try_iterm2_api must not propagate SystemExit from _launch_via_iterm2_api.
+
+        The launch path has the same vulnerability: _launch_via_iterm2_api catches
+        `except Exception` around run_until_complete(), and _try_iterm2_api also
+        catches `except Exception` around _launch_via_iterm2_api(). Neither catches
+        SystemExit, so it propagates all the way up to launch() and kills the process.
+
+        Bug present  -> raises SystemExit(1) -> mc crashes on launch
+        Bug fixed    -> returns None -> launch() falls back to Terminal.app
+        """
+        from unittest.mock import patch
+
+        from mc.terminal.launcher import LaunchOptions
+        from mc.terminal.macos import MacOSLauncher
+
+        options = LaunchOptions(
+            title="12345678:Test Corp:Test case:/case",
+            command="podman exec -it mc-12345678 /bin/bash; exit",
+        )
+
+        with patch("mc.terminal.macos._ITERM2_LIB_AVAILABLE", True):
+            launcher = MacOSLauncher(terminal="iTerm2")
+
+            with patch.object(
+                MacOSLauncher,
+                "_launch_via_iterm2_api",
+                side_effect=SystemExit(1),
+            ):
+                result = launcher._try_iterm2_api(options)
+
+        assert result is None, (
+            f"Expected None (API unavailable) but got {result!r}.\n"
+            "SystemExit(1) from _launch_via_iterm2_api() was not caught.\n"
+            "Fix: widen `except Exception` to `except BaseException` in "
+            "_try_iterm2_api() so the launch path falls back to Terminal.app."
+        )
