@@ -19,3 +19,5 @@ Tracks branches that failed the test suite during release builds.
 | 2026-05-19 | 2.0.24 | `fix/ocm-port-guard-tests` | ✅ Merged | 829 passed (3 pre-existing: MC-69 proxy + iTerm2 websocket x2 — fixed by subsequent branches) |
 | 2026-05-19 | 2.0.24 | `fix/pac-proxy-detection` | ✅ Merged | 829 passed, 0 failed |
 | 2026-05-19 | 2.0.24 | `fix/iterm2-ws-test-guard` | ✅ Merged | 832 passed, 0 failed |
+| 2026-05-19 | 2.0.25 | `fix/sfdc-file-save-path` | ✅ Merged | 837 passed, 0 failed |
+| 2026-05-19 | 2.0.25 | `fix/claude-container-settings` | ✅ Merged | 840 passed, 0 failed |
