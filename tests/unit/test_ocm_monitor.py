@@ -267,7 +267,10 @@ class TestRunOcmLoginPortGuard:
     3. Print a user-friendly message when port conflict is detected
     """
 
-    def test_run_ocm_login_passes_timeout_to_subprocess(self) -> None:
+    @patch("mc.utils.ocm_monitor._is_port_bound", return_value=False)
+    def test_run_ocm_login_passes_timeout_to_subprocess(
+        self, _mock_port: MagicMock
+    ) -> None:
         """subprocess.run must be called with a timeout= kwarg."""
         monitor = OCMMonitor()
         with patch("mc.utils.ocm_monitor.subprocess.run") as mock_run:
@@ -340,8 +343,9 @@ class TestRunOcmLoginPortGuard:
         finally:
             sock.close()
 
+    @patch("mc.utils.ocm_monitor._is_port_bound", return_value=False)
     def test_run_ocm_login_address_in_use_stderr_message(
-        self, capsys: pytest.CaptureFixture[str]
+        self, _mock_port: MagicMock, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """When ocm login returns 'address already in use' in stderr, the user
         must see a message about port conflict, not just a generic failure."""

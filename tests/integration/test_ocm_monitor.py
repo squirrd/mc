@@ -44,8 +44,10 @@ class TestOcmLoginRetryRegression:
     This test ensures the bug does not regress.
     """
 
+    @patch("mc.utils.ocm_monitor._is_port_bound", return_value=False)
     def test_ocm_login_retry_regression_port_conflict_message(
         self,
+        _mock_port: MagicMock,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """When ocm login fails with 'address already in use', the user must see
@@ -69,7 +71,8 @@ class TestOcmLoginRetryRegression:
             f"but got stdout={captured.out!r}, stderr={captured.err!r}"
         )
 
-    def test_ocm_login_retry_regression_timeout(self) -> None:
+    @patch("mc.utils.ocm_monitor._is_port_bound", return_value=False)
+    def test_ocm_login_retry_regression_timeout(self, _mock_port: MagicMock) -> None:
         """_run_ocm_login() must pass a timeout to subprocess.run so that it
         cannot hang indefinitely when ocm login blocks on port acquisition
         or user interaction.
@@ -161,17 +164,19 @@ class TestOcmPortGuardTestsRegression:
     This test ensures the bug does not regress.
     """
 
-    def test_ocm_port_guard_tests_regression(self) -> None:
-        """When port 9998 is bound, mocking only subprocess.run is insufficient.
+    @patch("mc.utils.ocm_monitor._is_port_bound", return_value=False)
+    def test_ocm_port_guard_tests_regression(self, _mock_port: MagicMock) -> None:
+        """Verify that mocking _is_port_bound prevents the port guard from
+        short-circuiting _run_ocm_login() even when port 9998 is bound.
 
         This test binds port 9998 to simulate a real-world condition where
         another process occupies the OCM login port, then calls
-        _run_ocm_login() with subprocess.run mocked but _is_port_bound()
-        NOT mocked. The assertion that subprocess.run was called FAILS
-        because the port guard sees port 9998 bound and returns early.
+        _run_ocm_login() with BOTH subprocess.run AND _is_port_bound mocked.
+        Because _is_port_bound returns False (mocked), the port guard does
+        not early-return, and subprocess.run IS called.
 
-        The fix is to add @patch for _is_port_bound(return_value=False) to
-        all tests that need to reach the subprocess.run code path.
+        Before the fix, tests omitted the _is_port_bound mock and failed
+        when port 9998 happened to be occupied on the host.
         """
         monitor = OCMMonitor()
 
@@ -186,13 +191,11 @@ class TestOcmPortGuardTestsRegression:
                 mock_run.return_value = MagicMock(returncode=0)
                 monitor._run_ocm_login()
 
-                # This assertion mirrors the real tests' assertions.
-                # It FAILS because _is_port_bound() sees port 9998 bound
-                # and _run_ocm_login() returns before calling subprocess.run.
+                # With _is_port_bound mocked to False, the port guard
+                # no longer blocks, so subprocess.run IS called.
                 assert mock_run.called, (
-                    "subprocess.run was not called — _is_port_bound() returned "
-                    "True and the port guard early-returned before reaching "
-                    "the mock"
+                    "subprocess.run was not called — _is_port_bound() mock "
+                    "did not prevent the port guard from early-returning"
                 )
         finally:
             sock.close()
