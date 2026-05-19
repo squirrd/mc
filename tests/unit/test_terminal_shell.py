@@ -9,7 +9,13 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from mc.terminal.banner import format_field, generate_banner
-from mc.terminal.shell import detect_macos_proxy, generate_bashrc, get_bashrc_path, write_bashrc
+from mc.terminal.shell import (
+    _detect_proxy_via_networksetup,
+    detect_macos_proxy,
+    generate_bashrc,
+    get_bashrc_path,
+    write_bashrc,
+)
 
 
 class TestGenerateBashrc:
@@ -163,6 +169,208 @@ class TestDetectMacosProxy:
         with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
              patch("mc.terminal.shell.subprocess.run", side_effect=FileNotFoundError("scutil not found")):
             result = detect_macos_proxy()
+        assert result is None
+
+    def test_pac_url_unreachable_falls_back_to_networksetup(self):
+        """PAC URL configured but curl fails → fallback to networksetup proxy."""
+        scutil_output = (
+            "<dictionary> {\n"
+            "  HTTPSEnable : 0\n"
+            "  ProxyAutoConfigEnable : 1\n"
+            "  ProxyAutoConfigURLString : http://localhost:8888/proxy.pac\n"
+            "}\n"
+        )
+        services_output = (
+            "An asterisk (*) denotes that a network service is disabled.\n"
+            "Wi-Fi\n"
+            "Ethernet\n"
+        )
+        proxy_output = (
+            "Enabled: No\n"
+            "Server: squid.corp.redhat.com\n"
+            "Port: 3128\n"
+            "Authenticated Proxy Enabled: 0\n"
+        )
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            result = MagicMock()
+            if cmd == ["scutil", "--proxy"]:
+                result.stdout = scutil_output
+                result.returncode = 0
+            elif isinstance(cmd, list) and cmd[0] == "curl":
+                result.stdout = ""
+                result.returncode = 7  # connection refused
+            elif isinstance(cmd, list) and cmd[0] == "networksetup":
+                if "-listallnetworkservices" in cmd:
+                    result.stdout = services_output
+                else:
+                    result.stdout = proxy_output
+                result.returncode = 0
+            else:
+                result.stdout = ""
+                result.returncode = 1
+            return result
+
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = detect_macos_proxy()
+        assert result == "http://squid.corp.redhat.com:3128"
+
+    def test_pac_url_no_proxy_directive_falls_back_to_networksetup(self):
+        """PAC URL fetched OK but no PROXY directive → fallback to networksetup."""
+        scutil_output = (
+            "<dictionary> {\n"
+            "  ProxyAutoConfigURLString : https://corp.example.com/proxy.pac\n"
+            "}\n"
+        )
+        pac_content = (
+            'function FindProxyForURL(url, host) {\n'
+            '  return "DIRECT";\n'
+            '}\n'
+        )
+        services_output = "An asterisk (*) denotes disabled.\nWi-Fi\n"
+        proxy_output = "Enabled: No\nServer: proxy.corp.example.com\nPort: 8080\n"
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            result = MagicMock()
+            if cmd == ["scutil", "--proxy"]:
+                result.stdout = scutil_output
+                result.returncode = 0
+            elif isinstance(cmd, list) and cmd[0] == "curl":
+                result.stdout = pac_content
+                result.returncode = 0
+            elif isinstance(cmd, list) and cmd[0] == "networksetup":
+                if "-listallnetworkservices" in cmd:
+                    result.stdout = services_output
+                else:
+                    result.stdout = proxy_output
+                result.returncode = 0
+            else:
+                result.stdout = ""
+                result.returncode = 1
+            return result
+
+        with patch("mc.terminal.shell.platform.system", return_value="Darwin"), \
+             patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = detect_macos_proxy()
+        assert result == "http://proxy.corp.example.com:8080"
+
+
+class TestDetectProxyViaNetworksetup:
+    """Tests for _detect_proxy_via_networksetup helper."""
+
+    def test_returns_proxy_from_first_service_with_server(self):
+        """Returns proxy URL from the first service that has Server/Port."""
+        services_output = (
+            "An asterisk (*) denotes that a network service is disabled.\n"
+            "Wi-Fi\n"
+            "Ethernet\n"
+        )
+        proxy_output = (
+            "Enabled: Yes\n"
+            "Server: proxy.corp.example.com\n"
+            "Port: 8080\n"
+            "Authenticated Proxy Enabled: 0\n"
+        )
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            result = MagicMock()
+            if "-listallnetworkservices" in cmd:
+                result.stdout = services_output
+            else:
+                result.stdout = proxy_output
+            result.returncode = 0
+            return result
+
+        with patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = _detect_proxy_via_networksetup()
+        assert result == "http://proxy.corp.example.com:8080"
+
+    def test_returns_none_when_no_services_have_proxy(self):
+        """Returns None when no service has a valid proxy server."""
+        services_output = (
+            "An asterisk (*) denotes that a network service is disabled.\n"
+            "Wi-Fi\n"
+        )
+        proxy_output = (
+            "Enabled: No\n"
+            "Server:\n"
+            "Port: 0\n"
+        )
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            result = MagicMock()
+            if "-listallnetworkservices" in cmd:
+                result.stdout = services_output
+            else:
+                result.stdout = proxy_output
+            result.returncode = 0
+            return result
+
+        with patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = _detect_proxy_via_networksetup()
+        assert result is None
+
+    def test_returns_none_when_networksetup_fails(self):
+        """Returns None when networksetup -listallnetworkservices fails."""
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            raise FileNotFoundError("networksetup not found")
+
+        with patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = _detect_proxy_via_networksetup()
+        assert result is None
+
+    def test_skips_disabled_services(self):
+        """Lines starting with * (disabled services) are still queried but stripped."""
+        services_output = (
+            "An asterisk (*) denotes that a network service is disabled.\n"
+            "* Bluetooth PAN\n"
+            "Wi-Fi\n"
+        )
+        proxy_output = (
+            "Enabled: No\n"
+            "Server: squid.corp.redhat.com\n"
+            "Port: 3128\n"
+        )
+        calls = []
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(cmd)
+            result = MagicMock()
+            if "-listallnetworkservices" in cmd:
+                result.stdout = services_output
+            else:
+                result.stdout = proxy_output
+            result.returncode = 0
+            return result
+
+        with patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = _detect_proxy_via_networksetup()
+        assert result == "http://squid.corp.redhat.com:3128"
+
+    def test_skips_null_server(self):
+        """Server value of (null) is treated as no proxy."""
+        services_output = (
+            "An asterisk (*) denotes that a network service is disabled.\n"
+            "Wi-Fi\n"
+        )
+        proxy_output = (
+            "Enabled: No\n"
+            "Server: (null)\n"
+            "Port: 0\n"
+        )
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            result = MagicMock()
+            if "-listallnetworkservices" in cmd:
+                result.stdout = services_output
+            else:
+                result.stdout = proxy_output
+            result.returncode = 0
+            return result
+
+        with patch("mc.terminal.shell.subprocess.run", side_effect=fake_run):
+            result = _detect_proxy_via_networksetup()
         assert result is None
 
 

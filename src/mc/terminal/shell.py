@@ -17,13 +17,74 @@ from platformdirs import user_data_dir
 from mc.terminal.banner import generate_banner
 
 
+def _detect_proxy_via_networksetup() -> Optional[str]:
+    """Fallback proxy detection via networksetup -getsecurewebproxy.
+
+    Queries each network service for a configured HTTPS proxy. This is
+    useful when a PAC URL is configured but unreachable — the proxy server
+    may still be set at the network-service level.
+
+    Returns:
+        Proxy URL string (e.g. "http://proxy.corp.example.com:3128"), or None
+        if no proxy is found on any service.
+    """
+    try:
+        svc_result = subprocess.run(
+            ["networksetup", "-listallnetworkservices"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if svc_result.returncode != 0:
+            return None
+
+        # First line is a header ("An asterisk (*) denotes ..."); skip it.
+        # Lines starting with * are disabled services; skip those too.
+        services = [
+            line.lstrip("* ").strip()
+            for line in svc_result.stdout.splitlines()[1:]
+            if line.strip()
+        ]
+
+        for service in services:
+            proxy_result = subprocess.run(
+                ["networksetup", "-getsecurewebproxy", service],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if proxy_result.returncode != 0:
+                continue
+
+            server_match = re.search(
+                r"^Server[^\S\n]*:[^\S\n]*(\S+)", proxy_result.stdout, re.MULTILINE
+            )
+            port_match = re.search(
+                r"^Port[^\S\n]*:[^\S\n]*(\d+)", proxy_result.stdout, re.MULTILINE
+            )
+            if server_match and port_match:
+                server = server_match.group(1)
+                port = port_match.group(1)
+                # Skip empty or placeholder server values
+                if server and server not in ("", "(null)"):
+                    return f"http://{server}:{port}"
+    except Exception:
+        pass
+    return None
+
+
 def detect_macos_proxy() -> Optional[str]:
-    """Detect macOS system proxy via scutil --proxy.
+    """Detect macOS system proxy via scutil --proxy with networksetup fallback.
 
     On macOS with a PAC-based corporate proxy, HTTPS_PROXY env var is often
     empty even though Go binaries on the host auto-detect the proxy via
     CFNetworkCopySystemProxySettings. This function bridges that gap for the
     Linux container which only reads env vars.
+
+    Detection order:
+    1. Direct HTTPS proxy from scutil --proxy (HTTPSProxy/HTTPSPort)
+    2. PAC URL from scutil --proxy → curl the PAC file → parse PROXY directive
+    3. Fallback: networksetup -getsecurewebproxy on each network service
 
     Returns:
         Proxy URL string (e.g. "http://proxy.corp.example.com:8080"), or None
@@ -58,6 +119,13 @@ def detect_macos_proxy() -> Optional[str]:
         proxy_match = re.search(r'return\s+"PROXY\s+([^:;"]+):(\d+)', curl_result.stdout)
         if proxy_match:
             return f"http://{proxy_match.group(1)}:{proxy_match.group(2)}"
+
+        # PAC URL was configured but we couldn't resolve a proxy from it
+        # (unreachable, or no PROXY directive found).  Fall back to
+        # networksetup -getsecurewebproxy on each network service.
+        networksetup_proxy = _detect_proxy_via_networksetup()
+        if networksetup_proxy:
+            return networksetup_proxy
     except Exception:
         pass
     return None
