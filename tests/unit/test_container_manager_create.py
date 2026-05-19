@@ -29,6 +29,7 @@ class TestContainerManagerInit:
 class TestCreateNewContainer:
     """Tests for creating new containers."""
 
+    @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
     @patch('mc.container.manager.get_mc_config_path')
@@ -36,7 +37,8 @@ class TestCreateNewContainer:
     @patch('mc.container.manager.os.makedirs')
     def test_create_new_container(
         self, mock_makedirs, mock_get_ocm_config_path, mock_get_mc_config_path,
-        mock_get_claude_config_path, mock_get_gcloud_adc_path
+        mock_get_claude_config_path, mock_get_gcloud_adc_path,
+        mock_get_claude_global_config_path
     ):
         """Test creating new container when none exists."""
         # Mock OCM config as absent
@@ -59,6 +61,11 @@ class TestCreateNewContainer:
         mock_adc_path = MagicMock()
         mock_adc_path.exists.return_value = False
         mock_get_gcloud_adc_path.return_value = mock_adc_path
+
+        # Mock claude.json as absent so volumes stays minimal
+        mock_claude_json = MagicMock()
+        mock_claude_json.exists.return_value = False
+        mock_get_claude_global_config_path.return_value = mock_claude_json
 
         # Setup mocks
         podman_client = Mock(spec=PodmanClient)
