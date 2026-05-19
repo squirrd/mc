@@ -366,3 +366,83 @@ def test_agent_auth_mount_regression():
                 except Exception:
                     pass
             subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_claude_container_settings_regression():
+    """Regression test for MC-74: ~/.claude.json not mounted into container.
+
+    Bug discovered: 2026-05-19
+    Platform: Both
+    Severity: minor
+    Source: MC-74
+
+    Problem:
+    ContainerManager.create() mounts ~/.claude/ (directory) but NOT ~/.claude.json
+    (file at HOME root). This file contains hasCompletedOnboarding and
+    hasTrustDialogAccepted state. Without it mounted, each new container forces
+    Claude Code to re-run the onboarding wizard and trust dialog on every launch.
+
+    Steps to reproduce:
+    1. Ensure ~/.claude.json exists on the host with hasCompletedOnboarding: true.
+    2. Run `mc case 12345678` to create a new container.
+    3. Inside the container, check for /home/mcuser/.claude.json.
+    4. The file does not exist as a host mount — Claude Code prompts for onboarding.
+
+    Expected: /home/mcuser/.claude.json is mounted read-only from the host, so
+              Claude Code skips onboarding and trust dialogs in new containers.
+    Actual:   /home/mcuser/.claude.json is NOT mounted; Claude Code asks "What text
+              style do you prefer?" and "Do you trust the files?" on every launch.
+
+    This test ensures the bug does not regress.
+    """
+    case_number = "55550074"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "ClaudeJsonTest")
+
+            # Check if ~/.claude.json is mounted inside the container.
+            # For host->container boundary bugs, we MUST verify in-container state
+            # via podman exec — checking the Python volumes dict is not enough.
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "bash", "-c",
+                    "test -f /home/mcuser/.claude.json && echo 'MOUNTED' || echo 'NOT_MOUNTED'"
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0, f"podman exec failed: {result.stderr}"
+
+            # This assertion should FAIL because the file is not currently mounted.
+            assert result.stdout.strip() == "MOUNTED", (
+                "/home/mcuser/.claude.json is NOT mounted inside the container. "
+                "Claude Code will force re-onboarding on every container launch. "
+                f"Output: {result.stdout.strip()}"
+            )
+
+        finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
