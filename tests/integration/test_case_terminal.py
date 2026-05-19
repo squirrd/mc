@@ -1924,8 +1924,15 @@ def test_pac_proxy_detection_regression() -> None:
         "}\n"
     )
 
+    # Simulates networksetup -listallnetworkservices output
+    networksetup_services_output = (
+        "An asterisk (*) denotes that a network service is disabled.\n"
+        "Wi-Fi\n"
+        "Ethernet\n"
+    )
+
     # Simulates networksetup -getsecurewebproxy output for the active service
-    networksetup_output = (
+    networksetup_proxy_output = (
         "Enabled: No\n"
         "Server: squid.corp.redhat.com\n"
         "Port: 3128\n"
@@ -1943,7 +1950,10 @@ def test_pac_proxy_detection_regression() -> None:
             result.stdout = ""
             result.returncode = 7
         elif isinstance(cmd, list) and cmd[0] == "networksetup":
-            result.stdout = networksetup_output
+            if "-listallnetworkservices" in cmd:
+                result.stdout = networksetup_services_output
+            else:
+                result.stdout = networksetup_proxy_output
             result.returncode = 0
         else:
             return subprocess.run(cmd, **kwargs)
