@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 
-from mc.container.manager import ContainerManager
+from mc.container.manager import ContainerManager, get_ocm_config_path
 from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
 
@@ -446,3 +446,109 @@ def test_claude_container_settings_regression():
                 except Exception:
                     pass
             subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_mc_79_ocm_config_readonly_mount_regression():
+    """Regression test for MC-79: OCM config file mounted read-only into container.
+
+    Bug discovered: 2026-05-20
+    Platform: Both
+    Severity: major
+    Source: MC-79
+
+    Problem:
+    ContainerManager.create() bind-mounts the host OCM config file (ocm.json) into
+    the container with mode "ro" (read-only). The OCM CLI needs to write token
+    refreshes back to ocm.json during normal operation. When it attempts to save
+    the refreshed token, it fails with:
+      Error: Can't save config file: can't write file
+             '/home/mcuser/.config/ocm/ocm.json': read-only file system
+
+    Steps to reproduce:
+    1. Ensure ~/.config/ocm/ocm.json (or macOS equivalent) exists on the host.
+    2. Run `mc case 12345678` to create a container.
+    3. Inside the container, run any OCM command that triggers a token refresh.
+    4. OCM CLI fails with "read-only file system" when saving the refreshed token.
+
+    Expected: The OCM config file is mounted read-write (rw) inside the container,
+              allowing OCM CLI to persist token refreshes to disk.
+    Actual:   The OCM config file is mounted read-only (ro); any write attempt
+              from OCM CLI fails with "read-only file system".
+
+    This test ensures the bug does not regress.
+    """
+    case_number = "55550079"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    # Ensure the host OCM config exists (create a temp one if needed)
+    ocm_config = get_ocm_config_path()
+    created_ocm_dir = False
+    created_ocm_file = False
+
+    if not ocm_config.parent.exists():
+        ocm_config.parent.mkdir(parents=True, exist_ok=True)
+        created_ocm_dir = True
+    if not ocm_config.exists():
+        ocm_config.write_text('{"access_token": "test", "refresh_token": "test"}')
+        created_ocm_file = True
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "OcmMountTest")
+
+            # Verify via podman exec that the OCM config file is writable inside
+            # the container. This is the correct assertion depth for a
+            # host->container boundary bug: we must check actual in-container
+            # state, not just the Python volumes dict.
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "bash", "-c",
+                    # Attempt to append to ocm.json — fails if read-only
+                    "echo '' >> /home/mcuser/.config/ocm/ocm.json "
+                    "&& echo 'WRITABLE' || echo 'READ_ONLY'"
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0, f"podman exec failed: {result.stderr}"
+
+            assert "WRITABLE" in result.stdout, (
+                "OCM config file is NOT writable inside the container. "
+                "OCM CLI cannot persist token refreshes. "
+                f"Output: {result.stdout.strip()} "
+                f"Stderr: {result.stderr.strip()}"
+            )
+
+        finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+            # Clean up temp OCM config if we created it
+            if created_ocm_file and ocm_config.exists():
+                ocm_config.unlink()
+            if created_ocm_dir and ocm_config.parent.exists():
+                try:
+                    ocm_config.parent.rmdir()
+                except OSError:
+                    pass

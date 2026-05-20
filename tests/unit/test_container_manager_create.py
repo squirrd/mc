@@ -190,7 +190,7 @@ class TestCreateNewContainer:
         assert "/fake/home/.config/ocm/ocm.json" in volumes
         assert volumes["/fake/home/.config/ocm/ocm.json"] == {
             "bind": "/home/mcuser/.config/ocm/ocm.json",
-            "mode": "ro",
+            "mode": "rw",
         }
 
     @patch('mc.container.manager.get_claude_config_path')
