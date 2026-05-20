@@ -27,3 +27,4 @@ Tracks branches that failed the test suite during release builds.
 | 2026-05-20 | 2.0.26 | `fix/MC-78-ocm-sync-login` | ✅ Merged | 841 passed, 0 failed |
 | 2026-05-20 | 2.0.26 | `feat/MC-14-ldap-email-search` | ✅ Merged | 843 passed, 0 failed |
 | 2026-05-20 | 2.0.26 | `feat/MC-7-iso-datetime-last-failed-fetch` | ✅ Merged | 846 passed, 0 failed |
+| 2026-05-20 | 2.0.27 | `fix/MC-79-ocm-config-readonly-mount` | ✅ Merged | 848 passed, 0 failed |
