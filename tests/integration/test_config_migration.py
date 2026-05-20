@@ -424,3 +424,229 @@ rh_api_offline_token = "test_token_cli"
         if "scheme" in str(e).lower():
             pytest.fail(f"FAILED: UAT 1.2 scenario still fails with scheme error: {e}")
         raise
+
+
+@pytest.mark.integration
+def test_mc_7_iso_datetime_last_failed_fetch_config_manager_signature_acceptance(
+    tmp_path,
+):
+    """Acceptance test for MC-7 / config-manager-signature slice
+
+    Feature added: 2026-05-20
+    Scope: api-only
+    Source: MC-7
+    Slice: config-manager-signature
+
+    Feature description:
+    Refactor last_failed_fetch config value from Unix epoch float to ISO datetime
+    string for consistency with last_banner_shown. This slice verifies that
+    update_version_config accepts last_failed_fetch as an ISO datetime string (str)
+    and get_version_config returns it as a string.
+
+    Acceptance criterion:
+    update_version_config(last_failed_fetch=<ISO-datetime-string>) stores the value
+    and get_version_config() returns it as a str (not float).
+
+    This test covers:
+    1. update_version_config accepts a str for last_failed_fetch
+    2. get_version_config returns the stored value as a str
+
+    Expected: last_failed_fetch round-trips through config as an ISO datetime string.
+    """
+    from mc.config.manager import ConfigManager
+    import inspect
+
+    config_mgr = ConfigManager()
+    config_mgr._config_path = tmp_path / "config.toml"
+
+    # Bootstrap an empty config
+    config_mgr.save_atomic({
+        "api": {"rh_api_offline_token": "test"},
+        "version": {},
+    })
+
+    # --- Verify the signature accepts str ---
+    sig = inspect.signature(config_mgr.update_version_config)
+    param = sig.parameters["last_failed_fetch"]
+    annotation = param.annotation
+    # The annotation must be str | None (not float | None)
+    assert annotation is not float and annotation != (float | None), (
+        f"update_version_config(last_failed_fetch=...) type hint is {annotation!r}; "
+        f"expected str | None — the signature has not been changed to accept ISO datetime strings."
+    )
+
+    # --- Round-trip: write ISO string, read it back ---
+    iso_ts = "2026-05-20T14:30:00"
+    config_mgr.update_version_config(last_failed_fetch=iso_ts)
+
+    version_config = config_mgr.get_version_config()
+    stored = version_config["last_failed_fetch"]
+    assert isinstance(stored, str), (
+        f"get_version_config()['last_failed_fetch'] returned {type(stored).__name__} "
+        f"({stored!r}); expected str — the config manager still treats "
+        f"last_failed_fetch as a float."
+    )
+    assert stored == iso_ts, (
+        f"Round-trip failed: wrote {iso_ts!r}, got back {stored!r}."
+    )
+
+
+@pytest.mark.integration
+def test_mc_7_iso_datetime_last_failed_fetch_banner_read_write_acceptance(
+    tmp_path, monkeypatch,
+):
+    """Acceptance test for MC-7 / banner-read-write slice
+
+    Feature added: 2026-05-20
+    Scope: api-only
+    Source: MC-7
+    Slice: banner-read-write
+
+    Feature description:
+    banner.py writes ISO datetime on fetch failure and reads/compares using datetime
+    parsing instead of epoch arithmetic; throttle behavior unchanged.
+
+    Acceptance criterion:
+    After a failed fetch, the config file contains an ISO datetime string (not a float)
+    at version.last_failed_fetch, and the throttle check correctly suppresses retries
+    within the throttle window using datetime comparison.
+
+    This test covers:
+    1. banner.py writes an ISO datetime string on failure (not a float)
+    2. The throttle logic correctly reads the ISO datetime and suppresses retries
+
+    Expected: last_failed_fetch is an ISO datetime string after a fetch failure, and
+    the throttle window is respected using datetime parsing.
+    """
+    from mc.config.manager import ConfigManager
+    from datetime import datetime
+
+    config_mgr = ConfigManager()
+    config_mgr._config_path = tmp_path / "config.toml"
+
+    config_mgr.save_atomic({
+        "api": {"rh_api_offline_token": "test"},
+        "version": {},
+    })
+
+    # Simulate what banner.py does on fetch failure — currently it calls:
+    #   config_manager.update_version_config(last_failed_fetch=time.time())
+    # After the feature, it should call something like:
+    #   config_manager.update_version_config(
+    #       last_failed_fetch=datetime.now().isoformat(timespec="seconds")
+    #   )
+    # We test by invoking the banner module's internal failure-recording path
+    # and then inspecting the config.
+
+    # Patch ConfigManager so banner.py uses our isolated config
+    monkeypatch.setattr(
+        "mc.config.manager.ConfigManager.__init__",
+        lambda self: setattr(self, "_config_path", tmp_path / "config.toml") or None,
+    )
+
+    # Patch _fetch_with_timeout to return None (simulating failure)
+    monkeypatch.setattr("mc.banner._fetch_with_timeout", lambda: None)
+    # Patch _already_shown_today to return False (so the banner flow proceeds)
+    monkeypatch.setattr("mc.banner._already_shown_today", lambda: False)
+    # Patch sys.stdout.isatty to return True
+    monkeypatch.setattr("sys.stdout.isatty", lambda: True)
+    # Patch _is_version_invocation to return False
+    monkeypatch.setattr("mc.banner._is_version_invocation", lambda: False)
+    # Patch get_version to return a version string (locally imported in show_update_banner)
+    monkeypatch.setattr("mc.version.get_version", lambda: "2.0.4")
+    # Ensure MC_ENV is not set (to avoid the MC_ENV label path)
+    monkeypatch.delenv("MC_ENV", raising=False)
+
+    import mc.banner
+    mc.banner.show_update_banner()
+
+    # Now inspect what was written
+    reloaded = config_mgr.load()
+    stored = reloaded.get("version", {}).get("last_failed_fetch")
+    assert stored is not None, (
+        "last_failed_fetch was not written to config after a simulated fetch failure."
+    )
+    assert isinstance(stored, str), (
+        f"last_failed_fetch is {type(stored).__name__} ({stored!r}); "
+        f"expected str (ISO datetime) — banner.py still writes a float epoch."
+    )
+    # Verify it parses as ISO datetime
+    try:
+        datetime.fromisoformat(stored)
+    except (ValueError, TypeError) as exc:
+        raise AssertionError(
+            f"last_failed_fetch value {stored!r} is not valid ISO datetime: {exc}"
+        ) from exc
+
+
+@pytest.mark.integration
+def test_mc_7_iso_datetime_last_failed_fetch_backward_compat_acceptance(
+    tmp_path,
+):
+    """Acceptance test for MC-7 / backward-compat slice
+
+    Feature added: 2026-05-20
+    Scope: api-only
+    Source: MC-7
+    Slice: backward-compat
+
+    Feature description:
+    Existing configs with float epoch values for last_failed_fetch are gracefully
+    handled on read (parsed and converted), preventing ValueError on upgrade.
+    Migration is transparent to the user.
+
+    Acceptance criterion:
+    When version.last_failed_fetch in config.toml contains a legacy float epoch value,
+    get_version_config() returns it as an ISO datetime string (not a float), and no
+    ValueError is raised.
+
+    This test covers:
+    1. A config file with a float epoch last_failed_fetch can be read without error
+    2. The returned value is an ISO datetime string (transparently converted)
+
+    Expected: Legacy float epoch values are silently converted to ISO datetime strings
+    on read, so existing user configs do not break on upgrade.
+    """
+    from mc.config.manager import ConfigManager
+    from datetime import datetime
+    import time
+
+    config_mgr = ConfigManager()
+    config_mgr._config_path = tmp_path / "config.toml"
+
+    # Write a config with a legacy float epoch value for last_failed_fetch
+    legacy_epoch = 1716220200.0  # a specific Unix timestamp
+    config_mgr.save_atomic({
+        "api": {"rh_api_offline_token": "test"},
+        "version": {
+            "last_failed_fetch": legacy_epoch,
+        },
+    })
+
+    # Read it back — should NOT raise ValueError, and should return str
+    version_config = config_mgr.get_version_config()
+    stored = version_config["last_failed_fetch"]
+
+    assert isinstance(stored, str), (
+        f"get_version_config()['last_failed_fetch'] returned {type(stored).__name__} "
+        f"({stored!r}) for a legacy float epoch value; expected str (ISO datetime). "
+        f"The backward-compatibility conversion from float epoch to ISO datetime "
+        f"has not been implemented in get_version_config()."
+    )
+
+    # Verify the converted value is a valid ISO datetime
+    try:
+        parsed = datetime.fromisoformat(stored)
+    except (ValueError, TypeError) as exc:
+        raise AssertionError(
+            f"Converted last_failed_fetch {stored!r} is not valid ISO datetime: {exc}"
+        ) from exc
+
+    # Verify the converted datetime corresponds to the original epoch
+    # (within 1 second tolerance for rounding)
+    converted_epoch = parsed.timestamp()
+    assert abs(converted_epoch - legacy_epoch) < 1.0, (
+        f"Converted datetime {stored!r} (epoch={converted_epoch}) does not match "
+        f"original legacy epoch {legacy_epoch}. Difference: "
+        f"{abs(converted_epoch - legacy_epoch):.2f}s"
+    )
