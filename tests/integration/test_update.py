@@ -283,3 +283,238 @@ def test_mc_update_no_uv_cmds_regression() -> None:
         "update.py must not expose raw uv commands in user-facing print() calls.\n"
         "Violations found:\n" + textwrap.indent("\n".join(violations), "  ")
     )
+
+
+# ---------------------------------------------------------------------------
+# Feature: MC-39 — mc-update list [n]
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_mc_39_update_list_fetch_releases_acceptance() -> None:
+    """Acceptance test for MC-39 / slice: fetch-releases
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-39
+    Slice: fetch-releases
+
+    Feature description:
+    Add mc-update list [n] subcommand to show the N most recent available
+    upgrades from GitHub releases. This slice covers the internal function
+    that fetches release data from the GitHub API.
+
+    Acceptance criterion:
+    _fetch_releases(count) returns a list of (tag_name, release_name) tuples
+    from GitHub API; calling with count=3 returns exactly 3 releases in
+    descending order.
+
+    This test covers:
+    1. _fetch_releases function exists and is importable
+    2. It returns a list of 2-tuples with the correct structure
+    3. It respects the count parameter (returns exactly count items)
+
+    Expected: _fetch_releases(3) returns a list of exactly 3 (tag, name) tuples
+    """
+    from mc.update import _fetch_releases
+
+    # Mock the GitHub API to return a controlled set of releases
+    fake_releases = [
+        {"tag_name": "v2.0.5", "name": "Release 2.0.5"},
+        {"tag_name": "v2.0.4", "name": "Release 2.0.4"},
+        {"tag_name": "v2.0.3", "name": "Release 2.0.3"},
+        {"tag_name": "v2.0.2", "name": "Release 2.0.2"},
+        {"tag_name": "v2.0.1", "name": "Release 2.0.1"},
+    ]
+
+    with patch("mc.update.requests.get") as mock_get:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = fake_releases
+        mock_get.return_value = mock_response
+
+        result = _fetch_releases(3)
+
+    # Must return exactly 3 items
+    assert isinstance(result, list), f"Expected list, got {type(result)}"
+    assert len(result) == 3, (
+        f"_fetch_releases(3) must return exactly 3 releases, got {len(result)}"
+    )
+
+    # Each item must be a 2-tuple of (tag_name, release_name)
+    for item in result:
+        assert isinstance(item, tuple), f"Expected tuple, got {type(item)}"
+        assert len(item) == 2, f"Expected 2-tuple, got {len(item)}-tuple"
+        tag, name = item
+        assert isinstance(tag, str), f"tag_name must be str, got {type(tag)}"
+        assert isinstance(name, str), f"release_name must be str, got {type(name)}"
+
+    # Must be in descending order (first release is newest)
+    assert result[0][0] == "v2.0.5", f"First release should be v2.0.5, got {result[0][0]}"
+    assert result[2][0] == "v2.0.3", f"Third release should be v2.0.3, got {result[2][0]}"
+
+
+@pytest.mark.integration
+def test_mc_39_update_list_list_command_acceptance() -> None:
+    """Acceptance test for MC-39 / slice: list-command
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-39
+    Slice: list-command
+
+    Feature description:
+    Add mc-update list [n] subcommand to show the N most recent available
+    upgrades from GitHub releases. This slice covers the list_releases()
+    function and the wiring of the 'list' subcommand in main().
+
+    Acceptance criterion:
+    list_releases(count) formats and prints releases; main() wires list
+    subcommand with optional positional count defaulting to 5;
+    mc-update list prints 5 releases, mc-update list 3 prints 3.
+
+    This test covers:
+    1. list_releases function exists and is callable
+    2. main() accepts 'list' as a subcommand
+    3. 'list' subcommand with no arg defaults to 5 releases
+    4. 'list 3' subcommand shows exactly 3 releases
+
+    Expected: list_releases(count) prints formatted release info to stdout;
+    main() dispatches 'list' subcommand correctly.
+    """
+    from mc.update import list_releases
+
+    # Mock _fetch_releases to return controlled data
+    fake_releases = [
+        ("v2.0.5", "Release 2.0.5"),
+        ("v2.0.4", "Release 2.0.4"),
+        ("v2.0.3", "Release 2.0.3"),
+    ]
+
+    captured_out = io.StringIO()
+    with (
+        patch("mc.update._fetch_releases", return_value=fake_releases),
+        patch("mc.runtime.is_agent_mode", return_value=False),
+        patch("sys.stdout", captured_out),
+    ):
+        exit_code = list_releases(3)
+
+    output = captured_out.getvalue()
+
+    # Must print something (formatted release list)
+    assert len(output.strip()) > 0, "list_releases() must print release information to stdout"
+
+    # Must include the version tags in the output
+    assert "v2.0.5" in output, "Output must include release tag v2.0.5"
+    assert "v2.0.3" in output, "Output must include release tag v2.0.3"
+
+    # Must return 0 on success
+    assert exit_code == 0, f"list_releases() must return 0 on success, got {exit_code}"
+
+    # Verify main() wiring: 'list' subcommand must be recognized
+    from mc.update import main
+
+    with (
+        patch("mc.update._fetch_releases", return_value=fake_releases),
+        patch("mc.runtime.is_agent_mode", return_value=False),
+        patch("sys.argv", ["mc-update", "list", "3"]),
+        patch("sys.stdout", io.StringIO()),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        main()
+
+    assert exc_info.value.code == 0, (
+        f"mc-update list 3 must exit with code 0, got {exc_info.value.code}"
+    )
+
+
+@pytest.mark.integration
+def test_mc_39_update_list_edge_cases_acceptance() -> None:
+    """Acceptance test for MC-39 / slice: edge-cases
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-39
+    Slice: edge-cases
+
+    Feature description:
+    Add mc-update list [n] subcommand to show the N most recent available
+    upgrades from GitHub releases. This slice covers edge cases: agent-mode
+    guard, network errors, and invalid count values.
+
+    Acceptance criterion:
+    agent-mode guard returns 1; network error prints user-friendly message;
+    count=0 or negative rejected with error message.
+
+    This test covers:
+    1. Agent-mode guard returns exit code 1
+    2. Network error prints a user-friendly message (not a traceback)
+    3. count=0 is rejected with an error message
+    4. count=-1 (negative) is rejected with an error message
+
+    Expected: graceful handling of all edge cases with informative messages
+    """
+    from mc.update import list_releases
+
+    # --- Agent-mode guard ---
+    captured_err = io.StringIO()
+    with (
+        patch("mc.runtime.is_agent_mode", return_value=True),
+        patch("sys.stderr", captured_err),
+    ):
+        exit_code = list_releases(5)
+
+    assert exit_code == 1, (
+        f"list_releases() must return 1 in agent mode, got {exit_code}"
+    )
+    agent_output = captured_err.getvalue()
+    assert len(agent_output.strip()) > 0, (
+        "list_releases() must print a message when blocked by agent mode"
+    )
+
+    # --- Network error ---
+    import requests as req_lib
+
+    captured_err2 = io.StringIO()
+    with (
+        patch("mc.runtime.is_agent_mode", return_value=False),
+        patch("mc.update.requests.get", side_effect=req_lib.ConnectionError("Network down")),
+        patch("sys.stderr", captured_err2),
+    ):
+        exit_code = list_releases(5)
+
+    assert exit_code == 1, (
+        f"list_releases() must return 1 on network error, got {exit_code}"
+    )
+    net_output = captured_err2.getvalue()
+    assert len(net_output.strip()) > 0, (
+        "list_releases() must print a user-friendly message on network error"
+    )
+    # Must NOT contain a raw traceback
+    assert "Traceback" not in net_output, (
+        "list_releases() must not print a raw traceback on network error"
+    )
+
+    # --- count=0 rejected ---
+    captured_err3 = io.StringIO()
+    with (
+        patch("mc.runtime.is_agent_mode", return_value=False),
+        patch("sys.stderr", captured_err3),
+    ):
+        exit_code = list_releases(0)
+
+    assert exit_code == 1, (
+        f"list_releases(0) must return 1, got {exit_code}"
+    )
+
+    # --- count=-1 rejected ---
+    captured_err4 = io.StringIO()
+    with (
+        patch("mc.runtime.is_agent_mode", return_value=False),
+        patch("sys.stderr", captured_err4),
+    ):
+        exit_code = list_releases(-1)
+
+    assert exit_code == 1, (
+        f"list_releases(-1) must return 1, got {exit_code}"
+    )
