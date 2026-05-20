@@ -1336,8 +1336,8 @@ def test_container_ocm_env_setup_ocm_config_mounted_regression(tmp_path: Path) -
         - Creates a fake OCM config file in tmp_path
         - Patches get_ocm_config_path() to return that temp path
         - Calls ContainerManager.create() with mocked Podman
-        - Asserts the volumes dict includes a read-only mount at
-          /root/.config/ocm/ocm.json pointing at the host config file
+        - Asserts the volumes dict includes a read-write mount at
+          /home/mcuser/.config/ocm/ocm.json pointing at the host config file
         No real Podman required.
 
     This test will fail until the bug is fixed, then pass automatically.
@@ -1384,8 +1384,9 @@ def test_container_ocm_env_setup_ocm_config_mounted_regression(tmp_path: Path) -
         f"Bug: OCM config volume is missing or mounted at wrong path."
     )
     _src, spec = ocm_mounts[0]
-    assert spec["mode"] == "ro", (
-        f"OCM config mount must be read-only (mode='ro'), got mode='{spec['mode']}'"
+    assert spec["mode"] == "rw", (
+        f"OCM config mount must be read-write (mode='rw') for token refresh writes (MC-79), "
+        f"got mode='{spec['mode']}'"
     )
 
 
@@ -1417,7 +1418,7 @@ def test_ocm_config_mount_regression(tmp_path: Path) -> None:
         - Creates a fake OCM config file in tmp_path
         - Patches get_ocm_config_path() to return that temp path
         - Calls ContainerManager.create() with mocked Podman
-        - Asserts the volumes dict includes a read-only mount at
+        - Asserts the volumes dict includes a read-write mount at
           /home/mcuser/.config/ocm/ocm.json (the correct path for the container user)
         No real Podman required.
 
@@ -1467,8 +1468,9 @@ def test_ocm_config_mount_regression(tmp_path: Path) -> None:
         f"Bug: OCM config is mounted at /root/.config/ocm/ocm.json — mcuser cannot read /root/."
     )
     _src, spec = ocm_mounts[0]
-    assert spec["mode"] == "ro", (
-        f"OCM config mount must be read-only (mode='ro'), got mode='{spec['mode']}'"
+    assert spec["mode"] == "rw", (
+        f"OCM config mount must be read-write (mode='rw') for token refresh writes (MC-79), "
+        f"got mode='{spec['mode']}'"
     )
 
 
