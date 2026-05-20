@@ -204,8 +204,13 @@ class OCMMonitor:
         """Check OCM token expiry and start a daemon polling thread.
 
         Runs synchronously: checks token, prints warning if near expiry,
+        runs ocm login synchronously to refresh the token before returning,
         then starts daemon thread for ongoing polling. No-op if OCM config
         is absent or token cannot be decoded.
+
+        MC-78: When the token is near/past expiry, ocm login runs synchronously
+        on the calling thread so the token is refreshed before the caller
+        proceeds to create containers that bind-mount the token file.
         """
         ocm_path = get_ocm_config_path()
 
@@ -228,12 +233,16 @@ class OCMMonitor:
 
         minutes_left = _minutes_until_expiry(exp)
 
+        # MC-78 fix: run ocm login synchronously when token is near/past expiry,
+        # so the token on disk is fresh before the caller creates containers.
+        login_done = False
         if minutes_left <= _EXPIRY_WARNING_MINUTES:
             _CONSOLE.print(
                 f"[yellow]\u26a0 OCM token expires in {minutes_left} min "
                 f"\u2014 re-logging in...[/yellow]"
             )
-            # Fall through to start daemon thread (will run ocm login immediately)
+            self._run_ocm_login()
+            login_done = True
 
         # Guard: skip if already running in this process
         if self._worker_thread and self._worker_thread.is_alive():
@@ -243,10 +252,17 @@ class OCMMonitor:
         if not _check_and_acquire_lock(pid_path):
             return  # Another process is already monitoring
 
+        # Tell the worker that initial login was already handled (if it was).
+        # Pass a value above the warning threshold so the worker skips the
+        # immediate login call and goes straight to the polling loop.
+        worker_minutes = (
+            _EXPIRY_WARNING_MINUTES + 1 if login_done else minutes_left
+        )
+
         self._stop_event.clear()
         self._worker_thread = threading.Thread(
             target=self._monitor_worker,
-            args=(minutes_left,),
+            args=(worker_minutes,),
             daemon=True,
             name="ocm-monitor",
         )
