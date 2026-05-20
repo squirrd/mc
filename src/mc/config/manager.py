@@ -192,15 +192,24 @@ class ConfigManager:
         - pinned_mc: Version string (default: "latest" if not set)
         - last_banner_shown: ISO 8601 datetime string or None if never shown
         - last_failed_fetch: ISO 8601 datetime string of last failed GitHub
-          fetch, or None if no failure recorded
+          fetch, or None if no failure recorded. Legacy float epoch values
+          are transparently converted to ISO datetime strings on read.
 
         Returns:
             Version configuration dictionary
         """
+        last_failed_fetch = self.get('version.last_failed_fetch', None)
+        if isinstance(last_failed_fetch, (int, float)):
+            from datetime import datetime
+
+            last_failed_fetch = datetime.fromtimestamp(
+                last_failed_fetch
+            ).isoformat(timespec="seconds")
+
         return {
             'pinned_mc': self.get('version.pinned_mc', 'latest'),
             'last_banner_shown': self.get('version.last_banner_shown', None),
-            'last_failed_fetch': self.get('version.last_failed_fetch', None),
+            'last_failed_fetch': last_failed_fetch,
         }
 
     def update_version_config(
