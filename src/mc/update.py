@@ -6,6 +6,7 @@ partial package upgrade — even if mc's CLI machinery is temporarily broken dur
 package replacement, mc-update can still run and complete the upgrade.
 
 Usage:
+    mc-update            # Show version status (default: check)
     mc-update upgrade    # Upgrade MC CLI via uv tool upgrade mc
 """
 
@@ -432,9 +433,13 @@ def main() -> None:
     """mc-update CLI entry point.
 
     Parses arguments and dispatches to the appropriate subcommand.
+    Defaults to 'check' when no subcommand is given.
     Registered as the 'mc-update' console_scripts entry point in pyproject.toml.
     """
-    parser = argparse.ArgumentParser(prog="mc-update", description="MC CLI updater")
+    parser = argparse.ArgumentParser(
+        prog="mc-update",
+        description="MC CLI updater (default: check)",
+    )
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("upgrade", help="Upgrade MC CLI via uv tool upgrade mc")
     pin_parser = subparsers.add_parser("pin", help="Pin MC CLI to a specific version")
@@ -460,8 +465,7 @@ def main() -> None:
     elif args.command == "list":
         sys.exit(list_releases(args.count))
     else:
-        parser.print_help()
-        sys.exit(0)
+        sys.exit(check())
 
 
 if __name__ == "__main__":

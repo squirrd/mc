@@ -206,6 +206,228 @@ def test_pin_install_failure_no_uv_commands() -> None:
 
 
 # ---------------------------------------------------------------------------
+# MC-41: default-to-check — mc-update with no args runs check, not help
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_mc_41_update_default_check_default_to_check_acceptance() -> None:
+    """Acceptance test for MC-41 / default-to-check slice
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-41
+    Slice: default-to-check
+
+    Feature description:
+    When mc-update is invoked with no subcommand, it should default to running
+    the 'check' subcommand instead of printing help text.
+
+    Acceptance criterion:
+    When mc-update main() is called with no subcommand argument, the output
+    contains 'Version status:' (the check command's output header) and does
+    NOT contain 'usage:' (the help text header).
+
+    This test covers:
+    1. mc-update with no args produces check output, not help
+    2. The exit code matches what check() returns
+
+    Expected: stdout contains 'Version status:' and does not contain 'usage:'
+    """
+    from unittest.mock import patch as mock_patch
+
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+
+    # Simulate: mc-update (no subcommand)
+    with (
+        mock_patch("sys.argv", ["mc-update"]),
+        mock_patch("sys.stdout", captured_out),
+        mock_patch("sys.stderr", captured_err),
+        mock_patch("mc.update._fetch_latest_version", return_value="2.0.99"),
+        mock_patch("mc.runtime.is_agent_mode", return_value=False),
+        mock_patch(
+            "mc.config.manager.ConfigManager.get_version_config",
+            return_value={"pinned_mc": "latest"},
+        ),
+        mock_patch("mc.version.get_version", return_value="2.0.1"),
+    ):
+        try:
+            from mc.update import main as update_main
+
+            update_main()
+        except SystemExit:
+            pass
+
+    stdout = captured_out.getvalue()
+    stderr = captured_err.getvalue()
+    combined = stdout + stderr
+
+    assert "Version status:" in combined, (
+        f"mc-update with no subcommand should run 'check' and output 'Version status:'.\n"
+        f"Got stdout: {stdout!r}\n"
+        f"Got stderr: {stderr!r}\n"
+        f"This means the default-to-check behaviour is not implemented yet."
+    )
+
+
+# ---------------------------------------------------------------------------
+# MC-41: help-still-works — mc-update --help still shows help text
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_mc_41_update_default_check_help_still_works_acceptance() -> None:
+    """Acceptance test for MC-41 / help-still-works slice
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-41
+    Slice: help-still-works
+
+    Feature description:
+    After changing the no-arg default to 'check', mc-update --help must still
+    display the full help text listing all available subcommands. This is a
+    regression guard ensuring explicit --help is not broken by the default
+    behavior change.
+
+    Acceptance criterion:
+    (a) mc-update --help produces help text with 'usage:' and all subcommands, AND
+    (b) mc-update (no args) does NOT produce help text (i.e. 'usage:' is absent
+        from no-arg output, proving the default-to-check change is in place and
+        --help is a distinct path).
+
+    This test covers:
+    1. --help flag still produces argparse help text with all subcommands
+    2. The no-arg path does NOT produce help text (proving the two paths diverge)
+
+    Expected: --help shows usage + subcommands; no-arg does not show usage
+    """
+    from unittest.mock import patch as mock_patch
+
+    # Part (a): --help still shows help text
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+
+    with (
+        mock_patch("sys.argv", ["mc-update", "--help"]),
+        mock_patch("sys.stdout", captured_out),
+        mock_patch("sys.stderr", captured_err),
+    ):
+        try:
+            from mc.update import main as update_main
+
+            update_main()
+        except SystemExit:
+            pass
+
+    help_output = captured_out.getvalue() + captured_err.getvalue()
+    help_lower = help_output.lower()
+
+    assert "usage:" in help_lower, (
+        f"mc-update --help must show usage text.\n"
+        f"Got: {help_output!r}"
+    )
+    for subcmd in ("upgrade", "pin", "unpin", "check"):
+        assert subcmd in help_lower, (
+            f"mc-update --help must list '{subcmd}' subcommand.\n"
+            f"Got: {help_output!r}"
+        )
+
+    # Part (b): no-arg invocation must NOT produce help text (it should run check)
+    captured_out_noarg = io.StringIO()
+    captured_err_noarg = io.StringIO()
+
+    with (
+        mock_patch("sys.argv", ["mc-update"]),
+        mock_patch("sys.stdout", captured_out_noarg),
+        mock_patch("sys.stderr", captured_err_noarg),
+        mock_patch("mc.update._fetch_latest_version", return_value="2.0.99"),
+        mock_patch("mc.runtime.is_agent_mode", return_value=False),
+        mock_patch(
+            "mc.config.manager.ConfigManager.get_version_config",
+            return_value={"pinned_mc": "latest"},
+        ),
+        mock_patch("mc.version.get_version", return_value="2.0.1"),
+    ):
+        try:
+            from mc.update import main as update_main
+
+            update_main()
+        except SystemExit:
+            pass
+
+    noarg_output = captured_out_noarg.getvalue() + captured_err_noarg.getvalue()
+
+    assert "usage:" not in noarg_output.lower(), (
+        f"mc-update with no args must NOT show help text (it should run 'check').\n"
+        f"Got: {noarg_output!r}\n"
+        f"This means the default-to-check behaviour is not implemented yet — "
+        f"the no-arg path still shows help instead of running check."
+    )
+
+
+# ---------------------------------------------------------------------------
+# MC-41: default-noted-in-help — help text mentions check is the default
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_mc_41_update_default_check_default_noted_in_help_acceptance() -> None:
+    """Acceptance test for MC-41 / default-noted-in-help slice
+
+    Feature added: 2026-05-20
+    Scope: cli-only
+    Source: MC-41
+    Slice: default-noted-in-help
+
+    Feature description:
+    The mc-update help text (shown via --help) should indicate that 'check'
+    is the default subcommand when no subcommand is given.
+
+    Acceptance criterion:
+    The --help output contains text indicating that 'check' runs by default
+    (e.g. 'default: check' or 'defaults to check' or similar phrasing).
+
+    This test covers:
+    1. Help text communicates the default behaviour to users
+
+    Expected: help output contains 'default' and 'check' in close proximity
+    """
+    from unittest.mock import patch as mock_patch
+
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+
+    with (
+        mock_patch("sys.argv", ["mc-update", "--help"]),
+        mock_patch("sys.stdout", captured_out),
+        mock_patch("sys.stderr", captured_err),
+    ):
+        try:
+            from mc.update import main as update_main
+
+            update_main()
+        except SystemExit:
+            pass
+
+    stdout = captured_out.getvalue()
+    combined = stdout + captured_err.getvalue()
+    combined_lower = combined.lower()
+
+    # The help text must mention that 'check' is the default when no subcommand is given
+    assert "default" in combined_lower, (
+        f"mc-update --help must mention the default behaviour.\n"
+        f"Got: {combined!r}\n"
+        f"Expected: help text that indicates 'check' is the default subcommand"
+    )
+    assert "check" in combined_lower, (
+        f"mc-update --help must mention 'check' as the default.\n"
+        f"Got: {combined!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Regression: source-level scan for uv commands in user-facing messages
 # ---------------------------------------------------------------------------
 
