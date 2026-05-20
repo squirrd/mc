@@ -387,8 +387,7 @@ def main() -> None:
     elif args.command == "check":
         sys.exit(check())
     else:
-        parser.print_help()
-        sys.exit(0)
+        sys.exit(check())
 
 
 if __name__ == "__main__":
