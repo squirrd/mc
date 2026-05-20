@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 import sys
 import threading
-import time
 from datetime import date, datetime
 from typing import Optional
 
@@ -142,15 +141,22 @@ def show_update_banner() -> None:
     pinned_mc: str = version_config["pinned_mc"]
 
     # Skip fetch if the last attempt failed recently (failure throttle)
-    last_failed_fetch: Optional[float] = version_config.get("last_failed_fetch")
+    last_failed_fetch: Optional[str] = version_config.get("last_failed_fetch")
     if last_failed_fetch is not None:
-        if time.time() - last_failed_fetch < _FAILURE_THROTTLE_SECONDS:
-            return
+        try:
+            failed_dt = datetime.fromisoformat(last_failed_fetch)
+            elapsed = (datetime.now() - failed_dt).total_seconds()
+            if elapsed < _FAILURE_THROTTLE_SECONDS:
+                return
+        except (ValueError, TypeError):
+            pass  # Invalid/corrupt value — proceed with fetch
 
     latest = _fetch_with_timeout()
     if latest is None:
         # Record failure timestamp so we don't hammer GitHub on every MC run
-        config_manager.update_version_config(last_failed_fetch=time.time())
+        config_manager.update_version_config(
+            last_failed_fetch=datetime.now().isoformat(timespec="seconds")
+        )
         return
 
     from packaging.version import InvalidVersion, Version

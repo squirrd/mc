@@ -3,7 +3,6 @@
 import os
 import pytest
 import sys
-import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from mc.config.manager import ConfigManager
@@ -289,17 +288,17 @@ class TestVersionConfig:
         manager = ConfigManager()
         manager._config_path = tmp_path / "config.toml"
 
-        # Save config with version section
+        # Save config with version section using ISO datetime string
         config = get_default_config()
         config['version']['pinned_mc'] = "2.0.4"
-        config['version']['last_failed_fetch'] = 1234567890.0
+        config['version']['last_failed_fetch'] = "2024-05-20T14:30:00"
         manager.save(config)
 
         # Load version config
         version_config = manager.get_version_config()
 
         assert version_config['pinned_mc'] == "2.0.4"
-        assert version_config['last_failed_fetch'] == 1234567890.0
+        assert version_config['last_failed_fetch'] == "2024-05-20T14:30:00"
 
     def test_update_version_config_creates_section_if_missing(self, tmp_path):
         """Test update_version_config creates [version] section if missing."""
@@ -321,14 +320,14 @@ class TestVersionConfig:
         manager.save(config)
 
         # Update version config
-        timestamp = time.time()
-        manager.update_version_config(pinned_mc="2.0.4", last_failed_fetch=timestamp)
+        iso_ts = "2026-05-20T14:30:00"
+        manager.update_version_config(pinned_mc="2.0.4", last_failed_fetch=iso_ts)
 
         # Verify [version] section exists with correct values
         loaded_config = manager.load()
         assert 'version' in loaded_config
         assert loaded_config['version']['pinned_mc'] == "2.0.4"
-        assert loaded_config['version']['last_failed_fetch'] == timestamp
+        assert loaded_config['version']['last_failed_fetch'] == iso_ts
 
     def test_update_version_config_partial_update_preserves_fields(self, tmp_path):
         """Test update_version_config partial update preserves other fields."""
@@ -338,7 +337,7 @@ class TestVersionConfig:
         # Create config with version fields set
         config = get_default_config()
         config['version']['pinned_mc'] = "2.0.3"
-        config['version']['last_failed_fetch'] = 1234567890.0
+        config['version']['last_failed_fetch'] = "2024-05-20T14:30:00"
         manager.save(config)
 
         # Update only pinned_mc
@@ -347,7 +346,7 @@ class TestVersionConfig:
         # Verify pinned_mc changed but last_failed_fetch preserved
         loaded_config = manager.load()
         assert loaded_config['version']['pinned_mc'] == "2.0.5"
-        assert loaded_config['version']['last_failed_fetch'] == 1234567890.0
+        assert loaded_config['version']['last_failed_fetch'] == "2024-05-20T14:30:00"
 
     def test_update_version_config_strips_stale_version_check_keys(self, tmp_path):
         """Test update_version_config removes stale last_check/last_status_code from config.

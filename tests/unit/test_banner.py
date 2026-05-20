@@ -369,15 +369,17 @@ class TestVersionCheckFailureThrottle:
 
     def test_skips_fetch_when_last_check_failed_recently(self) -> None:
         """show_update_banner() must NOT fetch when last fetch failed < 1 hour ago."""
-        import time
+        from datetime import datetime, timedelta
 
-        recent_failure_ts = time.time() - 60  # 1 minute ago — within 1-hour throttle
+        recent_failure_iso = (
+            datetime.now() - timedelta(seconds=60)
+        ).isoformat(timespec="seconds")  # 1 minute ago — within 1-hour throttle
 
         mock_config = MagicMock()
         mock_config.get_version_config.return_value = {
             "pinned_mc": "latest",
             "last_banner_shown": None,
-            "last_failed_fetch": recent_failure_ts,
+            "last_failed_fetch": recent_failure_iso,
         }
 
         with patch("mc.banner._is_version_invocation", return_value=False), \
@@ -391,15 +393,17 @@ class TestVersionCheckFailureThrottle:
 
     def test_does_fetch_when_last_failure_was_over_one_hour_ago(self) -> None:
         """show_update_banner() MUST fetch when last failure was > 1 hour ago."""
-        import time
+        from datetime import datetime, timedelta
 
-        old_failure_ts = time.time() - 3700  # just over 1 hour ago
+        old_failure_iso = (
+            datetime.now() - timedelta(seconds=3700)
+        ).isoformat(timespec="seconds")  # just over 1 hour ago
 
         mock_config = MagicMock()
         mock_config.get_version_config.return_value = {
             "pinned_mc": "latest",
             "last_banner_shown": None,
-            "last_failed_fetch": old_failure_ts,
+            "last_failed_fetch": old_failure_iso,
         }
 
         with patch("mc.banner._is_version_invocation", return_value=False), \
@@ -448,7 +452,10 @@ class TestVersionCheckFailureThrottle:
         mock_config.update_version_config.assert_called_once()
         call_kwargs = mock_config.update_version_config.call_args[1]
         assert "last_failed_fetch" in call_kwargs
-        assert isinstance(call_kwargs["last_failed_fetch"], float)
+        assert isinstance(call_kwargs["last_failed_fetch"], str)
+        # Verify it's a valid ISO datetime string
+        from datetime import datetime
+        datetime.fromisoformat(call_kwargs["last_failed_fetch"])
 
 
 class TestMCEnvDisplay:
