@@ -191,7 +191,7 @@ class ConfigManager:
         Returns dict with keys:
         - pinned_mc: Version string (default: "latest" if not set)
         - last_banner_shown: ISO 8601 datetime string or None if never shown
-        - last_failed_fetch: Unix epoch timestamp (float) of last failed GitHub
+        - last_failed_fetch: ISO 8601 datetime string of last failed GitHub
           fetch, or None if no failure recorded
 
         Returns:
@@ -207,7 +207,7 @@ class ConfigManager:
         self,
         pinned_mc: str | None = None,
         last_banner_shown: str | None = None,
-        last_failed_fetch: float | None = None,
+        last_failed_fetch: str | None = None,
     ) -> None:
         """Update version configuration fields atomically.
 
@@ -218,7 +218,7 @@ class ConfigManager:
         Args:
             pinned_mc: Version string to pin to, or None to keep current
             last_banner_shown: ISO 8601 datetime string, or None to keep current
-            last_failed_fetch: Unix epoch timestamp of last failed GitHub fetch,
+            last_failed_fetch: ISO 8601 datetime string of last failed GitHub fetch,
                 or None to keep current
         """
         # Load current config (or get defaults if missing)
