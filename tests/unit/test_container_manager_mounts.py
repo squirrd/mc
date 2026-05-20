@@ -574,3 +574,56 @@ class TestVertexEnvForwarding:
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in env, (
             f"GOOGLE_APPLICATION_CREDENTIALS should not be set when ADC absent. Got: {env}"
         )
+
+
+class TestOcmConfigMountMode:
+    """Tests for OCM config (ocm.json) mount mode (MC-79 regression guard).
+
+    OCM CLI writes token refreshes back to ocm.json. If the file is mounted
+    read-only, OCM commands fail with 'read-only file system' errors.
+    """
+
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_ocm_config_mounted_readwrite_when_present(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path
+    ):
+        """ocm.json must be mounted rw so OCM CLI can persist token refreshes.
+
+        MC-79: OCM config was previously mounted ro, causing 'read-only file
+        system' errors when OCM CLI tried to write back refreshed tokens.
+        """
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = True
+        ocm_config.__str__ = lambda self: "/home/user/.config/ocm/ocm.json"
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        assert "/home/user/.config/ocm/ocm.json" in volumes, (
+            f"OCM config not volume-mounted. Volumes: {list(volumes.keys())}"
+        )
+        assert volumes["/home/user/.config/ocm/ocm.json"]["bind"] == (
+            "/home/mcuser/.config/ocm/ocm.json"
+        ), (
+            f"OCM config mount bind target is wrong. "
+            f"Got: {volumes['/home/user/.config/ocm/ocm.json']['bind']}"
+        )
+        assert volumes["/home/user/.config/ocm/ocm.json"]["mode"] == "rw", (
+            f"OCM config mount must be rw for token refresh writes (MC-79). "
+            f"Got: {volumes['/home/user/.config/ocm/ocm.json']['mode']}"
+        )
