@@ -252,6 +252,68 @@ class TestStartBackgroundMonitor:
                     monitor.start_background_monitor()
         assert monitor._worker_thread is None
 
+    def test_start_background_monitor_blocks_until_login_complete(
+        self, tmp_path: Path
+    ) -> None:
+        """MC-78: start_background_monitor() must call _run_ocm_login() synchronously
+        on the calling thread when the token is expired/near-expiry.
+
+        Bug: _run_ocm_login() was only called inside the daemon thread, meaning
+        start_background_monitor() returned immediately with the stale token
+        still on disk. The container was then created with the expired token.
+
+        This test verifies that _run_ocm_login() is called on the main thread
+        (the thread that called start_background_monitor()), not on a daemon thread.
+        """
+        import threading
+
+        # Create an expired token (10 minutes ago)
+        exp = int(time.time()) - (10 * 60)
+        token = _make_jwt({"exp": exp})
+        ocm_file = tmp_path / "ocm.json"
+        ocm_file.write_text(json.dumps({"refresh_token": token}))
+        pid_path = tmp_path / "test.pid"
+
+        login_thread_name: Optional[str] = None
+        calling_thread_name = threading.current_thread().name
+
+        def tracking_login(self_ref: OCMMonitor) -> None:
+            nonlocal login_thread_name
+            login_thread_name = threading.current_thread().name
+
+        monitor = OCMMonitor()
+        with (
+            patch(
+                "mc.utils.ocm_monitor.get_ocm_config_path",
+                return_value=ocm_file,
+            ),
+            patch("mc.utils.ocm_monitor._get_pid_path", return_value=pid_path),
+            patch.object(OCMMonitor, "_run_ocm_login", tracking_login),
+        ):
+            monitor.start_background_monitor()
+
+        # Give the daemon thread a moment to run if it calls login
+        time.sleep(0.5)
+
+        # _run_ocm_login must have been called
+        assert login_thread_name is not None, (
+            "start_background_monitor() never called _run_ocm_login() despite "
+            "expired token."
+        )
+        # It must have been called on the calling thread, not the daemon thread
+        assert login_thread_name == calling_thread_name, (
+            f"_run_ocm_login() was called on thread '{login_thread_name}' "
+            f"instead of the calling thread '{calling_thread_name}'. "
+            f"When the OCM token is expired, login must run synchronously on "
+            f"the caller's thread so the token is refreshed before the caller "
+            f"proceeds to create the container."
+        )
+
+        # Cleanup
+        monitor._stop_event.set()
+        if monitor._worker_thread:
+            monitor._worker_thread.join(timeout=3)
+
 
 # ---------------------------------------------------------------------------
 # TestRunOcmLoginPortGuard

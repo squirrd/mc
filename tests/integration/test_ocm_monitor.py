@@ -6,12 +6,24 @@ concurrent ocm login invocations are handled gracefully rather than crashing wit
 """
 from __future__ import annotations
 
+import base64
+import json
+import os
 import socket
+import subprocess
+import tempfile
+import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mc.utils.ocm_monitor import OCMMonitor
+from mc.integrations.podman import PodmanClient
+from mc.utils.ocm_monitor import (
+    OCMMonitor,
+    _decode_jwt_exp,
+    _minutes_until_expiry,
+)
 
 
 @pytest.mark.integration
@@ -199,3 +211,195 @@ class TestOcmPortGuardTestsRegression:
                 )
         finally:
             sock.close()
+
+
+def _podman_available() -> bool:
+    """Check if Podman is available and accessible."""
+    try:
+        client = PodmanClient()
+        return client.ping()
+    except Exception:
+        return False
+
+
+def _make_expired_jwt(minutes_ago: int = 10) -> str:
+    """Create a JWT with an exp claim that expired `minutes_ago` minutes ago.
+
+    Use negative values for a token that expires in the future.
+    """
+    header = (
+        base64.urlsafe_b64encode(
+            json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps({"exp": int(time.time()) - (minutes_ago * 60)}).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    sig = base64.urlsafe_b64encode(b"fake-signature").decode().rstrip("=")
+    return f"{header}.{payload}.{sig}"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_mc_78_ocm_sync_login_regression() -> None:
+    """Regression test for MC-78 / ocm-sync-login — async OCM login race condition.
+
+    Bug discovered: 2026-05-20
+    Platform: Both
+    Severity: major
+    Source: MC-78
+
+    Problem:
+    start_background_monitor() detects an expired OCM refresh token but spawns
+    'ocm login' in a daemon thread and returns immediately. The caller
+    (cli/main.py) then proceeds to attach_terminal() which creates a container
+    that bind-mounts the host's ocm.json. Because start_background_monitor()
+    returned before 'ocm login' completed, the container receives the stale
+    (still-expired) ocm.json. Inside the container, 'mc agent init-case' and
+    'mc agent backplane-login' fail because the mounted token is expired.
+
+    Steps to reproduce:
+    1. Have an expired OCM refresh token in ocm.json
+    2. Run 'mc case 12345678'
+    3. start_background_monitor() detects expiry, prints warning, spawns daemon thread
+    4. start_background_monitor() returns immediately (daemon thread still running ocm login)
+    5. attach_terminal() creates container, bind-mounting the stale ocm.json
+    6. mc agent init-case / backplane-login fail inside container with expired credentials
+
+    Expected: When OCM token is near or past expiry, start_background_monitor() blocks
+              until 'ocm login' completes (or fails) before returning, so the container
+              receives a fresh token.
+    Actual:   start_background_monitor() returns before 'ocm login' finishes; container
+              is created with the stale expired token.
+
+    This test ensures the bug does not regress.
+    """
+    # 1. Create a temporary ocm.json with an expired refresh token
+    expired_token = _make_expired_jwt(minutes_ago=10)
+    ocm_json_content = json.dumps({"refresh_token": expired_token})
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ocm_dir = Path(tmpdir) / "ocm"
+        ocm_dir.mkdir()
+        ocm_json_path = ocm_dir / "ocm.json"
+        ocm_json_path.write_text(ocm_json_content)
+
+        # 2. Call start_background_monitor() with our expired token.
+        # Mock _run_ocm_login to simulate a slow login (sleeps 5s, then writes fresh token).
+        monitor = OCMMonitor()
+
+        def slow_ocm_login(self_ref: OCMMonitor) -> None:
+            """Simulate a slow ocm login that takes time to refresh the token."""
+            time.sleep(5)
+            fresh_token = _make_expired_jwt(minutes_ago=-120)  # expires 2h from now
+            ocm_json_path.write_text(json.dumps({"refresh_token": fresh_token}))
+
+        pid_path = Path(tmpdir) / "ocm-monitor.pid"
+
+        with (
+            patch(
+                "mc.utils.ocm_monitor.get_ocm_config_path",
+                return_value=ocm_json_path,
+            ),
+            patch("mc.utils.ocm_monitor._get_pid_path", return_value=pid_path),
+            patch.object(
+                OCMMonitor,
+                "_run_ocm_login",
+                lambda self: slow_ocm_login(self),
+            ),
+        ):
+            # This detects the expired token, prints a warning, and spawns the
+            # daemon thread. With the bug present it returns IMMEDIATELY while
+            # the thread is still "logging in" (sleeping 5s).
+            monitor.start_background_monitor()
+
+        # 3. Immediately after start_background_monitor() returns, create a real
+        # container that bind-mounts the (potentially still stale) ocm.json.
+        # In the real code flow, attach_terminal() does exactly this.
+        container_name = "mc-99998877"
+        client = PodmanClient()
+        container = None
+
+        try:
+            workspace_path = os.path.join(tmpdir, "workspace")
+            os.makedirs(workspace_path, exist_ok=True)
+
+            container = client.client.containers.create(
+                image="mc-rhel10:latest",
+                name=container_name,
+                command=["/bin/bash", "-c", "tail -f /dev/null"],
+                detach=True,
+                labels={"mc.managed": "true", "mc.case_number": "99998877"},
+                environment={
+                    "CASE_NUMBER": "99998877",
+                    "MC_RUNTIME_MODE": "agent",
+                },
+                volumes={
+                    workspace_path: {"bind": "/case", "mode": "rw"},
+                    str(ocm_json_path): {
+                        "bind": "/home/mcuser/.config/ocm/ocm.json",
+                        "mode": "ro",
+                    },
+                },
+                userns_mode="keep-id",
+                tty=True,
+                stdin_open=True,
+            )
+            container.start()
+
+            # 4. Read the token from INSIDE the container via podman exec.
+            result = subprocess.run(
+                [
+                    "podman",
+                    "exec",
+                    container_name,
+                    "cat",
+                    "/home/mcuser/.config/ocm/ocm.json",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            assert result.returncode == 0, (
+                f"Failed to read ocm.json from container: {result.stderr}"
+            )
+
+            container_ocm = json.loads(result.stdout)
+            container_token = container_ocm.get("refresh_token", "")
+            exp = _decode_jwt_exp(container_token)
+            assert exp is not None, "Could not decode JWT from container's ocm.json"
+
+            minutes_left = _minutes_until_expiry(exp)
+
+            # THE BUG ASSERTION (host->container boundary):
+            # If start_background_monitor() blocked until ocm login completed,
+            # the token on disk would be fresh (>0 min to expiry) and the container
+            # would receive the fresh token. With the bug present, the daemon thread
+            # is still sleeping and the container has the stale expired token.
+            assert minutes_left > 0, (
+                f"Container has an expired OCM token (expires in {minutes_left} min). "
+                f"start_background_monitor() returned before ocm login completed, "
+                f"so the container was created with the stale token. "
+                f"The fix must ensure the token is refreshed BEFORE the container "
+                f"is created."
+            )
+
+        finally:
+            if container is not None:
+                try:
+                    container.stop(timeout=2)
+                except Exception:
+                    pass
+                try:
+                    container.remove()
+                except Exception:
+                    pass
+            monitor._stop_event.set()
+            if monitor._worker_thread:
+                monitor._worker_thread.join(timeout=3)
