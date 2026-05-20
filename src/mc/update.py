@@ -385,6 +385,49 @@ def upgrade() -> ExitCode:
     return 0
 
 
+def list_releases(count: int) -> ExitCode:
+    """List the most recent available releases from GitHub.
+
+    Fetches release data from GitHub and prints a formatted list to stdout.
+
+    Args:
+        count: Number of releases to display.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    from mc.runtime import is_agent_mode
+
+    if is_agent_mode():
+        print(
+            "mc-update list is not available in agent mode.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if count < 1:
+        print(
+            f"Invalid count: {count}. Must be a positive integer.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        releases = _fetch_releases(count)
+    except Exception:
+        print(
+            "Cannot fetch releases: network unreachable. Try again when online.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Available releases (latest {len(releases)}):")
+    for tag, name in releases:
+        print(f"  {tag}  {name}")
+
+    return 0
+
+
 def main() -> None:
     """mc-update CLI entry point.
 
@@ -398,6 +441,11 @@ def main() -> None:
     pin_parser.add_argument("version", help="Version to pin to (e.g. 2.0.3 or v2.0.3)")
     subparsers.add_parser("unpin", help="Remove version pin")
     subparsers.add_parser("check", help="Show current version, latest version, and pin status")
+    list_parser = subparsers.add_parser("list", help="List available releases from GitHub")
+    list_parser.add_argument(
+        "count", nargs="?", default=5, type=int,
+        help="Number of releases to show (default: 5)",
+    )
 
     args = parser.parse_args()
 
@@ -409,6 +457,8 @@ def main() -> None:
         sys.exit(unpin())
     elif args.command == "check":
         sys.exit(check())
+    elif args.command == "list":
+        sys.exit(list_releases(args.count))
     else:
         parser.print_help()
         sys.exit(0)
