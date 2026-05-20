@@ -124,6 +124,29 @@ _AGENT_MODE_PIN_MSG = (
 )
 
 
+def _fetch_releases(count: int) -> list[tuple[str, str]]:
+    """Fetch the most recent releases from GitHub.
+
+    Args:
+        count: Number of releases to return.
+
+    Returns:
+        List of (tag_name, release_name) tuples in descending order (newest first).
+
+    Raises:
+        requests.RequestException: On network or API errors.
+    """
+    response = requests.get(
+        _GITHUB_RELEASES_BASE,
+        headers=_GITHUB_HEADERS,
+        params={"per_page": count},
+        timeout=10,
+    )
+    response.raise_for_status()
+    releases = response.json()
+    return [(r["tag_name"], r["name"]) for r in releases[:count]]
+
+
 def _fetch_latest_version() -> str | None:
     """Fetch the latest release version from GitHub.
 
