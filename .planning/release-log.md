@@ -21,3 +21,9 @@ Tracks branches that failed the test suite during release builds.
 | 2026-05-19 | 2.0.24 | `fix/iterm2-ws-test-guard` | ✅ Merged | 832 passed, 0 failed |
 | 2026-05-19 | 2.0.25 | `fix/sfdc-file-save-path` | ✅ Merged | 837 passed, 0 failed |
 | 2026-05-19 | 2.0.25 | `fix/claude-container-settings` | ✅ Merged | 840 passed, 0 failed |
+| 2026-05-20 | 2.0.26 | `feat/MC-39-update-list` | ✅ Merged | 836 passed, 0 failed |
+| 2026-05-20 | 2.0.26 | `fix/MC-79-ocm-config-readonly-mount` | ❌ Failed | OCM config mount mode is 'rw' instead of expected 'ro' in integration tests |
+| 2026-05-20 | 2.0.26 | `feat/MC-41-update-default-check` | ✅ Merged | 839 passed, 0 failed |
+| 2026-05-20 | 2.0.26 | `fix/MC-78-ocm-sync-login` | ✅ Merged | 841 passed, 0 failed |
+| 2026-05-20 | 2.0.26 | `feat/MC-14-ldap-email-search` | ✅ Merged | 843 passed, 0 failed |
+| 2026-05-20 | 2.0.26 | `feat/MC-7-iso-datetime-last-failed-fetch` | ✅ Merged | 846 passed, 0 failed |
