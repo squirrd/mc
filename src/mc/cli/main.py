@@ -93,7 +93,8 @@ def main() -> ExitCode:
         parser_ldap = subparsers.add_parser('ldap', aliases=['who'],
                                             help='Search for a user in LDAP')
         parser_ldap.set_defaults(command='ldap')
-        parser_ldap.add_argument('uid', type=str, help='The UID to search for in LDAP')
+        parser_ldap.add_argument('uid', type=str,
+                                  help='UID or email (user@redhat.com) to search for in LDAP')
         parser_ldap.add_argument('-A', '--all', action='store_true')
 
         # Launch subcommand
