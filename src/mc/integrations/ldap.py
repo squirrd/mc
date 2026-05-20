@@ -14,12 +14,16 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
     Search LDAP for a user and display their details.
 
     Args:
-        uid: User ID to search for
+        uid: User ID or email (user@redhat.com) to search for
         show_all: If True, show raw LDAP output
 
     Returns:
         tuple: (success: bool, output: str)
     """
+    # Strip @redhat.com domain suffix if present (accept email as input)
+    if uid.lower().endswith("@redhat.com"):
+        uid = uid[: -len("@redhat.com")]
+
     # Validate search term length
     if not (4 <= len(uid) <= 15):
         raise ValidationError(f"Search term '{uid}' must be between 4 and 15 characters")
