@@ -126,3 +126,78 @@ def test_backplane_login_reads_sfdc_from_subdirectory_regression(tmp_path):
         f"Expected 'correct-cluster-123' from sfdc/sfdc-case.json, got '{result}' — "
         "_read_sfdc_cluster_id reads from case root instead of sfdc/ subdirectory"
     )
+
+
+@pytest.mark.integration
+def test_MC_85_vpn_hint_api_errors_regression(tmp_path, mocker):
+    """Regression test for fix/MC-85-vpn-hint-api-errors (MC-85).
+
+    Bug discovered: 2026-05-26
+    Platform: Both
+    Severity: high
+    Source: MC-85
+
+    Problem:
+    APIConnectionError is raised with a suggestion containing the VPN hint
+    ("Check: VPN connection and network access"), but str(e) only returns
+    the message, not the suggestion. Any caller that catches the exception
+    and displays it via str(e) or f"{e}" (e.g., case_data.py line 58:
+    ``print(f"Warning: Failed to fetch case details: {e}")``) loses the
+    VPN hint entirely.
+
+    The root cause is that MCError inherits Exception.__str__() which only
+    returns the first positional argument (the message). The suggestion
+    attribute is set but never included in the string representation.
+
+    Steps to reproduce:
+    1. Create an APIConnectionError with message and suggestion
+    2. Call str() on it
+    3. Observe that the suggestion (VPN hint) is missing
+
+    Expected: str(APIConnectionError) includes both the message and the
+              suggestion so callers using str(e) see the VPN hint.
+    Actual:   str(APIConnectionError) returns only the message; the VPN
+              hint in the suggestion attribute is silently dropped.
+
+    This test ensures the bug does not regress.
+    """
+    from mc.exceptions import APIConnectionError, MCError
+
+    # Verify at the MCError base level — all subclasses inherit this behavior
+    base_error = MCError(
+        "Something went wrong",
+        suggestion="Try: check your configuration",
+    )
+    base_str = str(base_error)
+    assert "check your configuration" in base_str, (
+        f"MCError.__str__() must include suggestion but got: {base_str!r}"
+    )
+
+    # Verify the specific APIConnectionError case from the bug report
+    api_error = APIConnectionError(
+        "Failed to connect to API for case 04448394",
+        "Check: VPN connection and network access",
+    )
+    api_str = str(api_error)
+    assert "VPN" in api_str, (
+        f"str(APIConnectionError) must include VPN hint but got: {api_str!r}"
+    )
+    assert "Failed to connect to API for case 04448394" in api_str, (
+        f"str(APIConnectionError) must still include the message but got: {api_str!r}"
+    )
+
+    # Verify that errors WITHOUT a suggestion still work correctly
+    no_suggestion_error = MCError("Plain error message")
+    no_suggestion_str = str(no_suggestion_error)
+    assert no_suggestion_str == "Plain error message", (
+        f"MCError without suggestion should return just the message but got: "
+        f"{no_suggestion_str!r}"
+    )
+
+    # Verify the end-to-end path: case_data.py uses f"{e}" in warning messages.
+    # Simulate what case_data.py does when it catches an APIConnectionError.
+    warning_message = f"Warning: Failed to fetch case details: {api_error}"
+    assert "VPN" in warning_message, (
+        f"f-string interpolation of APIConnectionError must show VPN hint "
+        f"but got: {warning_message!r}"
+    )
