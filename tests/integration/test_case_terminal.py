@@ -1978,3 +1978,95 @@ def test_pac_proxy_detection_regression() -> None:
     assert "3128" in proxy, (
         f"Expected proxy to contain port '3128', got: {proxy!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression test -- test config isolation (fix/MC-81-test-config-isolation)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_MC_81_test_config_isolation_regression() -> None:
+    """Regression test for MC-81 -- test_fresh_install touches production ~/mc/ directory.
+
+    Bug discovered: 2026-05-26
+    Platform: Both
+    Severity: critical
+    Source: MC-81
+
+    Problem:
+    test_fresh_install_no_old_directories_created_regression in this file moves
+    the REAL production ~/mc/ directory to a timestamped backup via shutil.move
+    (line 496). During restore, shutil.rmtree(~/mc, ignore_errors=True) on
+    line 660 can fail silently. When this happens, the subsequent
+    shutil.move(backup, ~/mc) puts the backup INSIDE ~/mc/ as a subdirectory
+    instead of replacing it, because ~/mc/ still exists. This permanently loses
+    config.toml, triggering the setup wizard on the next mc invocation.
+
+    Steps to reproduce:
+    1. Run test_fresh_install_no_old_directories_created_regression
+    2. During the test's finally block, shutil.rmtree(~/mc) fails silently
+       (e.g. due to locked files, open file handles, or permissions)
+    3. shutil.move(~/mc.<timestamp>, ~/mc) puts backup inside ~/mc/ as subdirectory
+    4. config.toml is gone; next mc invocation triggers setup wizard
+
+    Expected: The fresh install test uses MC_ENV isolation (MC_ENV=test-fresh-install)
+              so it operates on ~/mc-test-fresh-install/ and never touches ~/mc/.
+              No shutil.move of production ~/mc/ directory.
+    Actual:   The test moves the real ~/mc/ via shutil.move and attempts a fragile
+              backup/restore cycle with ignore_errors=True.
+
+    This test ensures the bug does not regress.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    # Get the source code of the test function under examination
+    source = inspect.getsource(
+        test_fresh_install_no_old_directories_created_regression
+    )
+
+    # --- Assertion 1: MC_ENV must be set via monkeypatch.setenv ---
+    # Parse the AST to look for monkeypatch.setenv("MC_ENV", ...) calls
+    tree = ast.parse(textwrap.dedent(source))
+
+    mc_env_set = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "setenv"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == "MC_ENV"
+            ):
+                mc_env_set = True
+                break
+
+    assert mc_env_set, (
+        "test_fresh_install_no_old_directories_created_regression does NOT set MC_ENV "
+        "via monkeypatch.setenv(). Without MC_ENV isolation, the test moves the REAL "
+        "production ~/mc/ directory to a timestamped backup. If restore fails silently "
+        "(shutil.rmtree with ignore_errors=True), config.toml is permanently lost and "
+        "the setup wizard is triggered on next mc invocation.\n"
+        "\n"
+        "Fix: Add monkeypatch.setenv('MC_ENV', 'test-fresh-install') so ConfigManager "
+        "uses ~/mc-test-fresh-install/ instead of ~/mc/."
+    )
+
+    # --- Assertion 2: Must NOT use shutil.move on ~/mc/ ---
+    has_dangerous_move = (
+        "shutil.move" in source
+        and 'Path.home() / "mc"' in source
+    )
+
+    assert not has_dangerous_move, (
+        "test_fresh_install_no_old_directories_created_regression contains "
+        "shutil.move() calls that target the production ~/mc/ directory. "
+        "This is dangerous: if restore fails silently, config.toml is lost.\n"
+        "\n"
+        "Fix: Use MC_ENV isolation so the test operates on ~/mc-test-fresh-install/ "
+        "and never touches ~/mc/."
+    )
