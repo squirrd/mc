@@ -416,7 +416,7 @@ def test_fresh_install_missing_config_base_directory_regression(mocker, tmp_path
     not _redhat_api_configured(),
     reason="Red Hat API credentials not configured"
 )
-def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
+def test_fresh_install_no_old_directories_created_regression(monkeypatch, mocker, tmp_path):
     """Regression test for UAT 1.1 - No directories created in old platformdirs locations.
 
     Bug discovered: 2026-02-04
@@ -434,38 +434,26 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
     which creates directories in platform-specific locations. Should use the new
     consolidated ~/mc/config/ structure instead.
 
-    Steps to reproduce:
-    1. Clean slate - remove/backup all MC directories
-    2. Run: mc case 04347611
-    3. Check directory creation
-
-    Expected:
-    - Directories ONLY created under ~/mc/
-    - NO directories in ~/.mc
-    - NO directories in ~/Library/Application Support/mc/ (macOS)
-    - NO directories in ~/.config/mc or ~/.local/share/mc (Linux)
-
-    Actual (before fix):
-    - ~/Library/Application Support/mc/bashrc created (macOS)
-    - ~/.local/share/mc/bashrc created (Linux)
-
-    This test ensures fresh installs only create directories in consolidated ~/mc/ location.
+    This test uses MC_ENV isolation so it operates on ~/mc-test-fresh-install/
+    and never touches the production ~/mc/ directory.
 
     UAT Test: 1.1 Fresh Install - Lazy Initialization
     Fixed in: 2026-02-04 (shell.py updated to use consolidated directory structure)
     """
     import platform
     import shutil
-    from datetime import datetime
+    import time
 
-    # Detect platform for old directory paths
+    # --- MC_ENV isolation: all config/state goes to ~/mc-test-fresh-install/ ---
+    monkeypatch.setenv("MC_ENV", "test-fresh-install")
+
+    mc_env_dir = Path.home() / "mc-test-fresh-install"
+
+    # Detect platform for old directory paths that should NOT be created
     is_macos = platform.system() == "Darwin"
     is_linux = platform.system() == "Linux"
 
-    # Define old directory paths that should NOT be created
-    old_dirs_to_check = []
-    old_dirs_backup_info = []
-
+    old_dirs_to_check: list[Path] = []
     if is_macos:
         old_dirs_to_check.extend([
             Path.home() / ".mc",
@@ -478,58 +466,37 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
             Path.home() / ".local" / "share" / "mc",
         ])
 
-    # Backup existing directories (move them with timestamp)
-    timestamp = datetime.now().strftime("%y%m%d-%H%M")
+    # Snapshot old platformdirs paths BEFORE the test so we can diff after
+    old_dirs_snapshot: dict[Path, set[str]] = {}
     for old_dir in old_dirs_to_check:
         if old_dir.exists():
-            backup_dir = old_dir.parent / f"{old_dir.name}.{timestamp}"
-            print(f"Backing up {old_dir} to {backup_dir}")
-            shutil.move(str(old_dir), str(backup_dir))
-            old_dirs_backup_info.append((old_dir, backup_dir))
-
-    # Also backup ~/mc if it exists (for complete fresh install test)
-    mc_home_dir = Path.home() / "mc"
-    mc_backup_dir = None
-    if mc_home_dir.exists():
-        mc_backup_dir = Path.home() / f"mc.{timestamp}"
-        print(f"Backing up {mc_home_dir} to {mc_backup_dir}")
-        shutil.move(str(mc_home_dir), str(mc_backup_dir))
+            old_dirs_snapshot[old_dir] = {str(p) for p in old_dir.rglob("*")}
+        else:
+            old_dirs_snapshot[old_dir] = set()
 
     try:
-        # Verify clean slate - no old directories exist
-        for old_dir in old_dirs_to_check:
-            assert not old_dir.exists(), f"Old directory should not exist after backup: {old_dir}"
-        assert not mc_home_dir.exists(), f"~/mc should not exist after backup: {mc_home_dir}"
-
-        # Setup: Create minimal config with API credentials in NEW location
-        # This simulates a fresh install after running config wizard
-        config_dir = Path.home() / "mc" / "config"
+        # Setup: Create minimal config with API credentials in MC_ENV location
+        config_dir = mc_env_dir / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_path = config_dir / "config.toml"
 
-        # Get real credentials for Red Hat API
-        from mc.config.manager import ConfigManager as RealConfigManager
-        real_config = RealConfigManager()
+        # Get real credentials from production config (read-only access)
+        prod_config_path = Path.home() / "mc" / "config" / "config.toml"
+        real_cfg = tomllib.load(open(prod_config_path, "rb"))
 
-        # Find the backed up config or load from current location
-        if mc_backup_dir and (mc_backup_dir / "config" / "config.toml").exists():
-            real_cfg = tomllib.load(open(mc_backup_dir / "config" / "config.toml", "rb"))
-        else:
-            real_cfg = real_config.load()
-
-        # Create minimal config
+        # Create minimal config in the isolated env directory
         minimal_config = {
             "api": {
                 "rh_api_offline_token": real_cfg["api"]["rh_api_offline_token"]
             },
-            "base_directory": str(Path.home() / "mc")
+            "base_directory": str(mc_env_dir),
         }
 
         import tomli_w
         with open(config_path, "wb") as f:
             tomli_w.dump(minimal_config, f)
 
-        # Setup real components
+        # Setup real components using isolated config
         config_manager = ConfigManager()
         config_manager._config_path = config_path
 
@@ -549,8 +516,8 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
         # Initialize real Podman client
         podman_client = PodmanClient()
 
-        # Use real state database in new location
-        state_dir = Path.home() / "mc" / "state"
+        # Use real state database in isolated location
+        state_dir = mc_env_dir / "state"
         state_dir.mkdir(parents=True, exist_ok=True)
         state_db = StateDatabase(str(state_dir / "containers.db"))
 
@@ -583,42 +550,41 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
             )
 
             # Give system time to create any directories
-            import time
             time.sleep(1)
 
-            # CRITICAL ASSERTIONS: Verify NO old directories were created
+            # CRITICAL ASSERTIONS: Diff old platformdirs paths — no NEW files
             for old_dir in old_dirs_to_check:
                 if old_dir.exists():
-                    # Bug reproduced! Old directory was created
-                    dir_contents = list(old_dir.rglob("*"))
-                    pytest.fail(
-                        f"✗ BUG REPRODUCED: Old directory created during fresh install!\n"
-                        f"Directory: {old_dir}\n"
-                        f"Contents: {dir_contents}\n"
-                        f"Expected: No directories in old platformdirs locations\n"
-                        f"Fix: Update src/mc/terminal/shell.py to use ~/mc/config/ instead of platformdirs"
-                    )
+                    current_files = {str(p) for p in old_dir.rglob("*")}
+                    new_files = current_files - old_dirs_snapshot[old_dir]
+                    if new_files:
+                        pytest.fail(
+                            f"BUG REPRODUCED: New files created in old directory!\n"
+                            f"Directory: {old_dir}\n"
+                            f"New files: {sorted(new_files)}\n"
+                            f"Expected: No new files in old platformdirs locations\n"
+                            f"Fix: Update src/mc/terminal/shell.py to use "
+                            f"~/mc/config/ instead of platformdirs"
+                        )
 
-            # Verify directories WERE created in new consolidated location
-            assert mc_home_dir.exists(), "~/mc should be created"
-            assert config_dir.exists(), "~/mc/config should exist"
-            assert state_dir.exists(), "~/mc/state should exist"
+            # Verify directories WERE created in isolated MC_ENV location
+            assert mc_env_dir.exists(), "~/mc-test-fresh-install should be created"
+            assert config_dir.exists(), "~/mc-test-fresh-install/config should exist"
+            assert state_dir.exists(), "~/mc-test-fresh-install/state should exist"
 
-            # Verify bashrc was created in NEW location (not old platformdirs location)
-            bashrc_new_location = Path.home() / "mc" / "config" / "bashrc"
-            if not bashrc_new_location.exists():
-                # If bashrc isn't in new location, that's also a problem
-                # (means it might be in old location or not created at all)
+            # Verify bashrc was created in isolated location (not old platformdirs)
+            bashrc_location = mc_env_dir / "config" / "bashrc"
+            if not bashrc_location.exists():
                 pytest.fail(
-                    f"✗ Bashrc directory not found in new location: {bashrc_new_location}\n"
-                    f"Expected: ~/mc/config/bashrc/\n"
+                    f"Bashrc directory not found in isolated location: {bashrc_location}\n"
+                    f"Expected: ~/mc-test-fresh-install/config/bashrc/\n"
                     f"This suggests bashrc is being created in old platformdirs location."
                 )
 
-            # Success! Bug is fixed
-            print("✓ Test PASSED: Fresh install creates directories ONLY in ~/mc/")
-            print(f"✓ Verified no directories in old locations: {old_dirs_to_check}")
-            print(f"✓ Verified bashrc in new location: {bashrc_new_location}")
+            # Success!
+            print("Test PASSED: Fresh install creates directories ONLY in isolated env")
+            print(f"Verified no new files in old locations: {old_dirs_to_check}")
+            print(f"Verified bashrc in isolated location: {bashrc_location}")
 
             # Get container for cleanup
             try:
@@ -651,26 +617,10 @@ def test_fresh_install_no_old_directories_created_regression(mocker, tmp_path):
                 pass
 
     finally:
-        # Restore backed up directories
-        print("\nRestoring backed up directories...")
-
-        # Remove test directories in ~/mc
-        if mc_home_dir.exists():
-            print(f"Removing test directory: {mc_home_dir}")
-            shutil.rmtree(mc_home_dir, ignore_errors=True)
-
-        # Restore ~/mc backup
-        if mc_backup_dir and mc_backup_dir.exists():
-            print(f"Restoring {mc_backup_dir} to {mc_home_dir}")
-            shutil.move(str(mc_backup_dir), str(mc_home_dir))
-
-        # Restore old directories
-        for old_dir, backup_dir in old_dirs_backup_info:
-            if backup_dir.exists():
-                print(f"Restoring {backup_dir} to {old_dir}")
-                shutil.move(str(backup_dir), str(old_dir))
-
-        print("Restore complete.")
+        # Clean up isolated MC_ENV directory — never touches ~/mc/
+        if mc_env_dir.exists():
+            print(f"Cleaning up isolated test directory: {mc_env_dir}")
+            shutil.rmtree(mc_env_dir, ignore_errors=True)
 
 
 @pytest.mark.integration
