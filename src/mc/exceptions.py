@@ -30,6 +30,17 @@ class MCError(Exception):
         super().__init__(message)
         self.suggestion = suggestion
 
+    def __str__(self) -> str:
+        """Return message with suggestion appended when present.
+
+        Ensures callers using str(e) or f"{e}" see both the error message
+        and the actionable suggestion (e.g., VPN hint).
+        """
+        message = super().__str__()
+        if self.suggestion:
+            return f"{message} ({self.suggestion})"
+        return message
+
 
 class AuthenticationError(MCError):
     """Authentication failed.
