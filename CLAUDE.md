@@ -34,18 +34,24 @@ uv run pytest --cov=mc --cov-report=html  # With coverage report
 podman build -t mc-rhel10:latest -f container/Containerfile .
 ```
 
-**Push Container to Registry** (required after any Containerfile change):
+**Push Container to Registry (automated via CI):**
+
+Container image builds and pushes are automated via GitHub Actions. The workflow
+at `.github/workflows/release-container.yml` triggers on version tag push (`v*`)
+and automatically builds and publishes the container image to
+`quay.io/rhn_support_dsquirre/mc-container:latest`.
+
+The CI pipeline:
+1. Runs the full test suite (test gate)
+2. Builds the container image
+3. Pushes to quay.io (requires `QUAY_USERNAME` and `QUAY_PASSWORD` GitHub Actions secrets)
+
+For manual builds during development:
 ```bash
-# Build then push to quay.io
 ./container/build.sh
 podman push mc-rhel10:latest quay.io/rhn_support_dsquirre/mc-container:latest
-
-# Verify the push
-podman pull quay.io/rhn_support_dsquirre/mc-container:latest
 ```
 
-> Any phase that modifies `container/Containerfile` must build and push to quay.io as part of phase completion — the UAT cannot pass with a stale image.
->
 > **All tests (unit, integration, and UAT) must pull from `quay.io/rhn_support_dsquirre/mc-container:latest`**, not a locally built image. Local builds are for development iteration only. Tests that pass against a local image but not the published image are not considered passing.
 
 
