@@ -552,3 +552,112 @@ def test_mc_79_ocm_config_readonly_mount_regression():
                     ocm_config.parent.rmdir()
                 except OSError:
                     pass
+
+
+def _get_host_timezone() -> str:
+    """Detect the host timezone as an IANA tz name (e.g. 'Australia/Brisbane').
+
+    Checks TZ env var first, then falls back to /etc/localtime symlink.
+    Returns 'UTC' only if the host truly cannot determine its timezone.
+    """
+    tz = os.environ.get("TZ")
+    if tz:
+        return tz
+
+    # macOS and Linux: /etc/localtime is typically a symlink into zoneinfo
+    try:
+        link = os.path.realpath("/etc/localtime")
+        for marker in ("zoneinfo/",):
+            idx = link.find(marker)
+            if idx != -1:
+                return link[idx + len(marker):]
+    except Exception:
+        pass
+
+    return "UTC"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_mc_107_container_timezone_regression():
+    """Regression test for MC-107: container uses UTC instead of host timezone.
+
+    Bug discovered: 2026-07-13
+    Platform: Both
+    Severity: major
+    Source: MC-107
+
+    Problem:
+    ContainerManager.create() builds the environment dict without a TZ variable.
+    The RHEL 10 UBI container image defaults to UTC, so all timestamps inside the
+    container (e.g. `date`, log entries, file modification times) show UTC regardless
+    of the host's timezone setting.
+
+    Steps to reproduce:
+    1. On a host with a non-UTC timezone (e.g. Australia/Brisbane / AEST).
+    2. Run `mc case 12345678` to create a container.
+    3. Inside the container, run `date`.
+    4. Output shows UTC time instead of AEST.
+
+    Expected: Container TZ environment variable is set to the host's timezone
+              (e.g. 'Australia/Brisbane'), so timestamps match the host.
+    Actual:   TZ is not set in the container; all timestamps default to UTC.
+
+    This test ensures the bug does not regress.
+    """
+    host_tz = _get_host_timezone()
+    assert host_tz != "UTC", (
+        f"Host timezone is UTC -- cannot distinguish from bug. "
+        f"This test must run on a host with a non-UTC timezone."
+    )
+
+    case_number = "55550107"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "TimezoneTest")
+
+            # Check TZ env var inside the container via podman exec.
+            # This is the correct assertion depth for a host->container boundary
+            # bug: we must verify the actual in-container state, not just the
+            # Python environment dict that was supposed to produce it.
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "bash", "-c", "echo TZ=$TZ",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0, f"podman exec failed: {result.stderr}"
+
+            # The container must have TZ set to the host timezone.
+            assert f"TZ={host_tz}" in result.stdout, (
+                f"Container TZ does not match host timezone.\n"
+                f"Expected: TZ={host_tz}\n"
+                f"Got:      {result.stdout.strip()}\n"
+                f"Container is using UTC instead of host timezone."
+            )
+
+        finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
