@@ -1,7 +1,7 @@
 """Unit tests for validation module."""
 
 import pytest
-from mc.utils.validation import validate_case_number
+from mc.utils.validation import validate_case_number, validate_ticket_id
 
 
 def test_validate_case_number_success():
@@ -75,3 +75,85 @@ def test_validate_case_number_with_leading_zeros():
     """Test validation accepts case number with leading zeros."""
     result = validate_case_number("00012345")
     assert result == "00012345"
+
+
+# --- validate_ticket_id tests ---
+
+
+class TestValidateTicketIdAcceptsValidFormats:
+    """Test that validate_ticket_id accepts valid PROJECT-123 format tickets."""
+
+    @pytest.mark.parametrize(
+        "ticket_id,expected",
+        [
+            ("MC-1", "MC-1"),
+            ("MC-123", "MC-123"),
+            ("OCPBUGS-12345", "OCPBUGS-12345"),
+            ("A-1", "A-1"),  # single-char project prefix
+            ("ABCDEFGHIJ-999", "ABCDEFGHIJ-999"),  # 10-char prefix (max)
+        ],
+    )
+    def test_valid_ticket_ids(self, ticket_id: str, expected: str) -> None:
+        """Valid PROJECT-NNN ticket IDs are returned unchanged."""
+        assert validate_ticket_id(ticket_id) == expected
+
+
+class TestValidateTicketIdNormalizesCase:
+    """Test that validate_ticket_id normalizes lowercase input to uppercase."""
+
+    @pytest.mark.parametrize(
+        "ticket_id,expected",
+        [
+            ("mc-123", "MC-123"),
+            ("ocpbugs-456", "OCPBUGS-456"),
+            ("Mc-1", "MC-1"),
+            ("aBcDeF-99", "ABCDEF-99"),
+        ],
+    )
+    def test_lowercase_normalized_to_uppercase(self, ticket_id: str, expected: str) -> None:
+        """Lowercase project prefixes are normalized to uppercase."""
+        assert validate_ticket_id(ticket_id) == expected
+
+
+class TestValidateTicketIdRejectsInvalidFormats:
+    """Test that validate_ticket_id rejects malformed ticket IDs."""
+
+    def test_rejects_empty_string(self) -> None:
+        """Empty string is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("")
+
+    def test_rejects_digits_only(self) -> None:
+        """Digits-only input is rejected (no project prefix)."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("12345")
+
+    def test_rejects_no_hyphen(self) -> None:
+        """Input without a hyphen separator is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("MC123")
+
+    def test_rejects_missing_number_after_hyphen(self) -> None:
+        """Project prefix with hyphen but no number is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("MC-")
+
+    def test_rejects_missing_project_prefix(self) -> None:
+        """Hyphen followed by digits but no project prefix is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("-123")
+
+    def test_rejects_prefix_longer_than_10_chars(self) -> None:
+        """Project prefix exceeding 10 characters is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("ABCDEFGHIJK-1")  # 11-char prefix
+
+    def test_rejects_non_alpha_prefix(self) -> None:
+        """Project prefix containing non-alphabetic characters is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("MC2-123")
+
+    def test_rejects_whitespace_only(self) -> None:
+        """Whitespace-only input is rejected."""
+        with pytest.raises(ValueError, match="Invalid ticket ID"):
+            validate_ticket_id("   ")
