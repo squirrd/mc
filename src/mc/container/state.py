@@ -89,15 +89,6 @@ class StateDatabase:
                 )
             """)
 
-            # case_ticket_links: many-to-many mapping between cases and Jira tickets (MC-16)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS case_ticket_links (
-                    case_number TEXT NOT NULL,
-                    ticket_id TEXT NOT NULL,
-                    PRIMARY KEY (case_number, ticket_id)
-                )
-            """)
-
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         """Context manager for database connections.

@@ -49,7 +49,7 @@ def main() -> ExitCode:
             help='Available commands',
             metavar=(
                 '{attachments,att,check,chk,create,new,comments,cmt,'
-                'case,cs,ldap,who,launch,url,container,agent,agt}'
+                'case,cs,jira,ldap,who,launch,url,container,agent,agt}'
             ),
         )
 
@@ -139,6 +139,15 @@ def main() -> ExitCode:
             a for a in subparsers._choices_actions if a.dest != 'quick_access'
         ]
 
+        # Jira subcommand
+        parser_jira = subparsers.add_parser('jira',
+                                            help='Attach terminal to Jira ticket container')
+        parser_jira.set_defaults(command='jira')
+        parser_jira.add_argument('ticket_id', type=str,
+                                  help='Jira ticket ID (e.g. OHSS-52338)')
+        parser_jira.add_argument('--link', dest='link_case', type=str, default=None,
+                                  help='Manually link a case number to this ticket')
+
         # Agent subcommand (runs inside container in agent mode)
         agent_parser = subparsers.add_parser('agent', aliases=['agt'],
                                              help='Agent-mode commands (container-internal)')
@@ -220,6 +229,9 @@ def main() -> ExitCode:
             other.ls(args.uid, show_all=args.all)
         elif args.command == 'launch':
             other.go(args.case_number, launch=not args.link)
+        elif args.command == 'jira':
+            from mc.cli.commands.jira import jira_command
+            jira_command(args)
         elif args.command == 'container':
             if args.container_command == 'list':
                 container.list_containers(args)
