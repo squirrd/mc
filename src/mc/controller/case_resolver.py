@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mc.exceptions import WorkspaceError
+from mc.exceptions import MCError, WorkspaceError
 from mc.utils.formatters import shorten_and_format
 
 if TYPE_CHECKING:
@@ -135,3 +135,100 @@ class CaseResolver:
             account_name=account_name,
             case_summary=case_summary
         )
+
+    def discover_linked_tickets(
+        self,
+        case_number: str,
+        jira_config_path: str | None = None,
+    ) -> list[str]:
+        """Discover and process Jira tickets linked to a SFDC case.
+
+        Fetches SFDC metadata for the case, extracts linked Jira ticket IDs,
+        fetches each ticket via JiraClient, scaffolds Ticket Workspaces, and
+        records case-ticket links in the StateDatabase.
+
+        Args:
+            case_number: 8-digit SFDC case number.
+            jira_config_path: Optional path to jr config file.
+
+        Returns:
+            List of discovered Jira ticket IDs.
+        """
+        from mc.container.state import StateDatabase
+        from mc.controller.ticket_workspace import TicketWorkspaceManager
+        from mc.integrations.jira import JiraClient
+
+        # Get SFDC metadata for this case
+        case_data, _account_data, _was_cached = self.cache_manager.get_or_fetch(case_number)
+
+        # Extract linked Jira ticket IDs from SFDC metadata
+        # SFDC case data may contain linked ticket references in various fields
+        linked_ticket_ids = self._extract_ticket_ids_from_sfdc(case_data)
+
+        if not linked_ticket_ids:
+            logger.info("No linked Jira tickets found for case %s", case_number)
+            return []
+
+        logger.info(
+            "Found %d linked ticket(s) for case %s: %s",
+            len(linked_ticket_ids),
+            case_number,
+            ", ".join(linked_ticket_ids),
+        )
+
+        client = JiraClient(config_path=jira_config_path)
+        state_db = StateDatabase()
+        discovered: list[str] = []
+
+        for ticket_id in linked_ticket_ids:
+            try:
+                # Fetch ticket data
+                ticket_data = client.fetch_ticket(ticket_id)
+
+                # Scaffold workspace
+                workspace_mgr = TicketWorkspaceManager(
+                    base_dir=str(self.base_dir),
+                    ticket_id=ticket_id,
+                )
+                workspace_mgr.create_workspace(ticket_data)
+
+                # Record link
+                state_db.add_case_ticket_link(case_number, ticket_id)
+                discovered.append(ticket_id)
+
+                logger.info(
+                    "Processed linked ticket %s for case %s", ticket_id, case_number
+                )
+            except MCError as e:
+                logger.warning(
+                    "Failed to process linked ticket %s: %s", ticket_id, e
+                )
+
+        return discovered
+
+    @staticmethod
+    def _extract_ticket_ids_from_sfdc(case_data: dict[str, str]) -> list[str]:
+        """Extract Jira ticket IDs from SFDC case metadata.
+
+        Looks for ticket references in known SFDC fields.
+
+        Args:
+            case_data: SFDC case metadata dict.
+
+        Returns:
+            List of Jira ticket ID strings.
+        """
+        import re
+
+        ticket_ids: list[str] = []
+        ticket_pattern = re.compile(r"[A-Z]{1,10}-\d+")
+
+        # Check known fields that may contain Jira references
+        for field_name in ("jira_tickets", "linked_tickets", "external_references"):
+            value = case_data.get(field_name, "")
+            if value:
+                for match in ticket_pattern.findall(str(value)):
+                    if match not in ticket_ids:
+                        ticket_ids.append(match)
+
+        return ticket_ids
