@@ -222,7 +222,7 @@ class TestAuthMount:
 
 
 class TestClaudeJsonMount:
-    """Tests for ~/.claude.json read-only mount (MC-74 regression guard)."""
+    """Tests for ~/.claude.json mount (MC-74 presence guard, MC-108 rw mode)."""
 
     @pytest.mark.backwards_compatibility
     @patch('mc.container.manager.get_claude_global_config_path')
@@ -231,14 +231,15 @@ class TestClaudeJsonMount:
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_claude_json_mounted_readonly_when_present(
+    def test_claude_json_mounted_readwrite_when_present(
         self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
         mock_adc_path, mock_claude_json_path
     ):
-        """~/.claude.json is added to volumes dict with mode 'ro' when it exists.
+        """~/.claude.json is added to volumes dict with mode 'rw' when it exists.
 
         This file contains hasCompletedOnboarding and hasTrustDialogAccepted state.
         Without it, each new container forces Claude Code re-onboarding.
+        Must be rw so Claude Code can persist trust-prompt acceptance (MC-108).
         """
         mc_config = MagicMock()
         mc_config.exists.return_value = True
@@ -275,8 +276,8 @@ class TestClaudeJsonMount:
             f"claude.json mount bind target is wrong. "
             f"Got: {volumes['/home/user/.claude.json']['bind']}"
         )
-        assert volumes["/home/user/.claude.json"]["mode"] == "ro", (
-            f"claude.json mount must be ro to prevent container writes back to host. "
+        assert volumes["/home/user/.claude.json"]["mode"] == "rw", (
+            f"claude.json mount must be rw for trust-prompt persistence (MC-108). "
             f"Got: {volumes['/home/user/.claude.json']['mode']}"
         )
 
@@ -573,6 +574,72 @@ class TestVertexEnvForwarding:
         )
         assert "GOOGLE_APPLICATION_CREDENTIALS" not in env, (
             f"GOOGLE_APPLICATION_CREDENTIALS should not be set when ADC absent. Got: {env}"
+        )
+
+
+class TestClaudeJsonRwMount:
+    """Tests for ~/.claude.json read-write mount (MC-108 regression guard).
+
+    Claude Code writes trust-prompt acceptance and onboarding state back to
+    ~/.claude.json at runtime.  When the file is mounted read-only the write
+    fails silently and Claude Code exits, forcing re-onboarding on every
+    container launch.
+    """
+
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_claude_json_mounted_readwrite_when_present(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path
+    ):
+        """~/.claude.json must be mounted rw so Claude Code can persist trust acceptance.
+
+        MC-108: ~/.claude.json was previously mounted ro, causing Claude Code to
+        silently exit because it could not write hasTrustDialogAccepted back to
+        the file.
+        """
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
+        claude_json = MagicMock()
+        claude_json.exists.return_value = True
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        call_kwargs = podman.client.containers.create.call_args[1]
+        volumes = call_kwargs["volumes"]
+        assert "/home/user/.claude.json" in volumes, (
+            f"~/.claude.json is not volume-mounted. "
+            f"Volumes: {list(volumes.keys())}"
+        )
+        assert volumes["/home/user/.claude.json"]["bind"] == "/home/mcuser/.claude.json", (
+            f"claude.json mount bind target is wrong. "
+            f"Got: {volumes['/home/user/.claude.json']['bind']}"
+        )
+        assert volumes["/home/user/.claude.json"]["mode"] == "rw", (
+            f"claude.json mount must be rw for trust-prompt persistence (MC-108). "
+            f"Got: {volumes['/home/user/.claude.json']['mode']}"
         )
 
 

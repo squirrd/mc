@@ -187,12 +187,14 @@ class ContainerManager:
         if claude_dir.exists():
             volumes[str(claude_dir)] = {"bind": "/home/mcuser/.claude", "mode": "rw"}
 
-        # Mount Claude global config file (~/.claude.json) if present (ro)
+        # Mount Claude global config file (~/.claude.json) if present (rw)
         # Contains hasCompletedOnboarding + hasTrustDialogAccepted — prevents
         # re-onboarding and re-trust on every new container launch.
+        # Must be rw: Claude Code writes trust-prompt acceptance back to this
+        # file at runtime; a read-only mount causes a silent exit (MC-108).
         claude_json = get_claude_global_config_path()
         if claude_json.exists():
-            volumes[str(claude_json)] = {"bind": "/home/mcuser/.claude.json", "mode": "ro"}
+            volumes[str(claude_json)] = {"bind": "/home/mcuser/.claude.json", "mode": "rw"}
 
         # Mount GCP ADC credentials file if present (enables claude Vertex auth inside container)
         adc_path = get_gcloud_adc_path()
