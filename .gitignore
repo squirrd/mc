@@ -88,6 +88,7 @@ tmp/
 
 # TDD worktrees and issue tracking (local only)
 .tdd/
+local/
 
 # GSD planning artifacts (local only)
 .planning/
