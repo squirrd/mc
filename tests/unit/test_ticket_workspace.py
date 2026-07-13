@@ -10,6 +10,26 @@ import pytest
 from mc.controller.ticket_workspace import TicketWorkspaceManager
 
 
+class TestTicketWorkspaceManagerInit:
+    """Tests for TicketWorkspaceManager constructor."""
+
+    def test_init_stores_base_dir_as_path(self, tmp_path: Path) -> None:
+        """Constructor converts string base_dir to Path and stores it."""
+        mgr = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-1234")
+        assert mgr.base_dir == tmp_path
+        assert isinstance(mgr.base_dir, Path)
+
+    def test_init_stores_ticket_id(self, tmp_path: Path) -> None:
+        """Constructor stores the ticket_id."""
+        mgr = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-1234")
+        assert mgr.ticket_id == "OCPBUGS-1234"
+
+    def test_init_accepts_path_base_dir(self, tmp_path: Path) -> None:
+        """Constructor also accepts Path objects for base_dir."""
+        mgr = TicketWorkspaceManager(base_dir=tmp_path, ticket_id="OCPBUGS-5678")
+        assert mgr.base_dir == tmp_path
+
+
 class TestTicketWorkspaceManagerCreate:
     """Tests for TicketWorkspaceManager.create_workspace()."""
 
@@ -57,6 +77,34 @@ class TestTicketWorkspaceManagerCreate:
         assert not (tmp_path / "jira").exists()
         mgr.create_workspace({"key": "MC-42", "fields": {}})
         assert (tmp_path / "jira").is_dir()
+
+    def test_note_files_are_empty(self, tmp_path: Path) -> None:
+        """Note files are created empty (like workspace.py pattern)."""
+        mgr = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-1234")
+        mgr.create_workspace({"key": "OCPBUGS-1234"})
+        ticket_dir = tmp_path / "jira" / "OCPBUGS-1234"
+        for name in ("notes-01.md", "notes-02.md", "notes-03.md", "tmp.md"):
+            assert (ticket_dir / name).read_text() == ""
+
+    def test_idempotent_does_not_overwrite_existing_json(self, tmp_path: Path) -> None:
+        """Calling create_workspace twice does not overwrite existing JSON."""
+        mgr = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-1234")
+        original_data = {"key": "OCPBUGS-1234", "summary": "original"}
+        mgr.create_workspace(ticket_data=original_data)
+        # Second call with different data should not overwrite
+        mgr.create_workspace(ticket_data={"key": "OCPBUGS-1234", "summary": "changed"})
+        json_file = tmp_path / "jira" / "OCPBUGS-1234" / "OCPBUGS-1234.json"
+        written = json.loads(json_file.read_text())
+        assert written == original_data
+
+    def test_different_ticket_ids_get_separate_dirs(self, tmp_path: Path) -> None:
+        """Two different ticket IDs get separate directories."""
+        mgr1 = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-1111")
+        mgr1.create_workspace(ticket_data={"key": "OCPBUGS-1111"})
+        mgr2 = TicketWorkspaceManager(base_dir=str(tmp_path), ticket_id="OCPBUGS-2222")
+        mgr2.create_workspace(ticket_data={"key": "OCPBUGS-2222"})
+        assert (tmp_path / "jira" / "OCPBUGS-1111").is_dir()
+        assert (tmp_path / "jira" / "OCPBUGS-2222").is_dir()
 
 
 class TestStateDatabaseTicketLinks:

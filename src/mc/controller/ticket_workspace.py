@@ -21,7 +21,7 @@ class TicketWorkspaceManager:
         ticket_id: Normalized Jira ticket ID (e.g. ``OHSS-52338``).
     """
 
-    def __init__(self, base_dir: str, ticket_id: str) -> None:
+    def __init__(self, base_dir: str | Path, ticket_id: str) -> None:
         self.base_dir = Path(base_dir)
         self.ticket_id = ticket_id
         self.ticket_dir = self.base_dir / "jira" / ticket_id
@@ -49,10 +49,11 @@ class TicketWorkspaceManager:
         self.ticket_dir.mkdir(parents=True, exist_ok=True)
         logger.debug("Created ticket workspace: %s", self.ticket_dir)
 
-        # Write ticket JSON
+        # Write ticket JSON (only if it does not already exist)
         json_path = self.ticket_dir / f"{self.ticket_id}.json"
-        json_path.write_text(json.dumps(ticket_data, indent=2) + "\n")
-        logger.debug("Wrote ticket data to %s", json_path)
+        if not json_path.exists():
+            json_path.write_text(json.dumps(ticket_data, indent=2) + "\n")
+            logger.debug("Wrote ticket data to %s", json_path)
 
         # Create note files
         for note_file in ("notes-01.md", "notes-02.md", "notes-03.md", "tmp.md"):
