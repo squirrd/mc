@@ -700,3 +700,76 @@ class TestErrorHandling:
 
         # Verify reconcile not called on state (due to early failure)
         state_db.reconcile.assert_not_called()
+
+
+class TestCreateTimezoneEnv:
+    """Tests for TZ environment variable forwarding into containers."""
+
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_create_includes_tz_env_from_host(
+        self, mock_makedirs, mock_get_ocm_config_path, mock_get_mc_config_path,
+        mock_get_claude_config_path, mock_get_gcloud_adc_path,
+        mock_get_claude_global_config_path
+    ):
+        """Test that create() forwards the host TZ into the container environment.
+
+        When the host has a detectable timezone, the environment dict passed to
+        containers.create() must include a TZ key with the IANA timezone name.
+        """
+        # Mock all path helpers as absent/present as needed
+        mock_ocm_path = MagicMock()
+        mock_ocm_path.exists.return_value = False
+        mock_get_ocm_config_path.return_value = mock_ocm_path
+
+        mock_mc_path = MagicMock()
+        mock_mc_path.exists.return_value = True
+        mock_mc_path.__str__ = lambda self: "/fake/home/mc/config"
+        mock_get_mc_config_path.return_value = mock_mc_path
+
+        mock_claude_path = MagicMock()
+        mock_claude_path.exists.return_value = False
+        mock_get_claude_config_path.return_value = mock_claude_path
+
+        mock_adc_path = MagicMock()
+        mock_adc_path.exists.return_value = False
+        mock_get_gcloud_adc_path.return_value = mock_adc_path
+
+        mock_claude_json = MagicMock()
+        mock_claude_json.exists.return_value = False
+        mock_get_claude_global_config_path.return_value = mock_claude_json
+
+        # Setup mocks
+        podman_client = Mock(spec=PodmanClient)
+        state_db = Mock(spec=StateDatabase)
+
+        podman_client.client.containers.list.return_value = []
+        state_db.get_container.return_value = None
+
+        mock_image = MagicMock()
+        podman_client.client.images.get.return_value = mock_image
+
+        mock_container = MagicMock()
+        mock_container.id = "abc123"
+        mock_container.status = "running"
+        podman_client.client.containers.create.return_value = mock_container
+
+        manager = ContainerManager(podman_client, state_db)
+
+        # Simulate host TZ env var being set
+        with patch.dict(os.environ, {"TZ": "Australia/Brisbane"}):
+            manager.create("12345678", "/path/to/workspace", "TestCustomer")
+
+        # Verify TZ is in the environment passed to containers.create
+        create_call = podman_client.client.containers.create.call_args
+        env = create_call.kwargs["environment"]
+        assert "TZ" in env, (
+            f"Expected 'TZ' key in container environment but got: {sorted(env.keys())}"
+        )
+        assert env["TZ"] == "Australia/Brisbane", (
+            f"Expected TZ='Australia/Brisbane' but got TZ='{env.get('TZ')}'"
+        )

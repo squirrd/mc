@@ -207,6 +207,11 @@ class ContainerManager:
             "MC_RUNTIME_MODE": "agent",
         }
 
+        # Forward host timezone so container clock matches the user's local time
+        host_tz = self._detect_host_timezone()
+        if host_tz:
+            environment["TZ"] = host_tz
+
         # Forward GCP Vertex / Claude auth env vars from host when set
         for env_var in (
             "CLAUDE_CODE_USE_VERTEX",
@@ -364,6 +369,46 @@ class ContainerManager:
                 f"  podman build -t {image_name} -f container/Containerfile .\n\n"
                 f"Or wait for the image to be published to the registry."
             ) from pull_error
+
+    @staticmethod
+    def _detect_host_timezone() -> str | None:
+        """Detect the host IANA timezone name.
+
+        Strategy:
+        1. Check TZ environment variable (explicit user override).
+        2. Read /etc/localtime symlink and extract IANA name from path
+           (e.g. /usr/share/zoneinfo/Australia/Brisbane -> Australia/Brisbane).
+        3. Return None if timezone cannot be determined (caller should skip
+           setting TZ rather than setting it to an empty string).
+
+        Returns:
+            IANA timezone string (e.g. "Australia/Brisbane") or None.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # 1. Explicit TZ env var takes priority
+        tz_env = os.environ.get("TZ")
+        if tz_env:
+            return tz_env
+
+        # 2. Resolve /etc/localtime symlink (Linux and macOS)
+        localtime = Path("/etc/localtime")
+        try:
+            if localtime.is_symlink():
+                target = str(localtime.resolve())
+                # Extract IANA name after "zoneinfo/"
+                marker = "zoneinfo/"
+                idx = target.find(marker)
+                if idx != -1:
+                    iana_name = target[idx + len(marker):]
+                    if iana_name:
+                        return iana_name
+        except OSError:
+            pass
+
+        logger.debug("Could not detect host timezone; TZ will not be set in container")
+        return None
 
     def _reconcile(self) -> None:
         """Reconcile state with Podman reality.
