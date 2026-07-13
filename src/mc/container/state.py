@@ -80,6 +80,14 @@ class StateDatabase:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_created_at ON containers(created_at)"
             )
+            # Case-ticket linking table for Jira integration (MC-16)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS case_ticket_links (
+                    case_number TEXT NOT NULL,
+                    ticket_id TEXT NOT NULL,
+                    PRIMARY KEY (case_number, ticket_id)
+                )
+            """)
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
@@ -226,6 +234,72 @@ class StateDatabase:
             conn.execute(
                 f"UPDATE containers SET {fields} WHERE case_number = ?",
                 values,
+            )
+
+    # ------------------------------------------------------------------
+    # Case-ticket linking (MC-16 Jira integration)
+    # ------------------------------------------------------------------
+
+    def add_case_ticket_link(self, case_number: str, ticket_id: str) -> None:
+        """Link a Salesforce case to a Jira ticket.
+
+        Idempotent: adding the same link again is a no-op.
+
+        Args:
+            case_number: 8-digit SFDC case number.
+            ticket_id: Jira ticket identifier (e.g. ``OHSS-52338``).
+        """
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO case_ticket_links (case_number, ticket_id) VALUES (?, ?)",
+                (case_number, ticket_id),
+            )
+
+    def get_tickets_for_case(self, case_number: str) -> list[str]:
+        """Get all Jira ticket IDs linked to a case.
+
+        Args:
+            case_number: 8-digit SFDC case number.
+
+        Returns:
+            List of ticket ID strings.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT ticket_id FROM case_ticket_links WHERE case_number = ?",
+                (case_number,),
+            ).fetchall()
+            return [row["ticket_id"] for row in rows]
+
+    def get_cases_for_ticket(self, ticket_id: str) -> list[str]:
+        """Get all SFDC case numbers linked to a ticket.
+
+        Args:
+            ticket_id: Jira ticket identifier (e.g. ``OHSS-52338``).
+
+        Returns:
+            List of case number strings.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT case_number FROM case_ticket_links WHERE ticket_id = ?",
+                (ticket_id,),
+            ).fetchall()
+            return [row["case_number"] for row in rows]
+
+    def remove_case_ticket_link(self, case_number: str, ticket_id: str) -> None:
+        """Remove a case-ticket link.
+
+        No-op if the link does not exist.
+
+        Args:
+            case_number: 8-digit SFDC case number.
+            ticket_id: Jira ticket identifier (e.g. ``OHSS-52338``).
+        """
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM case_ticket_links WHERE case_number = ? AND ticket_id = ?",
+                (case_number, ticket_id),
             )
 
     def reconcile(self, podman_container_ids: set[str]) -> None:
