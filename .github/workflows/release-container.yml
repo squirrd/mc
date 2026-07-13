@@ -1,0 +1,66 @@
+# CI Container Publish — build and push MC container image on version release
+#
+# Triggered on version tag push (v*). Runs the test suite first; the container
+# build-and-push job is gated on passing tests.
+
+name: Release Container
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  test:
+    name: Run test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -q --tb=short -p no:cov
+
+  build-and-push:
+    name: Build and push container image
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo jq
+          # yq (mikefarah/yq)
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Log in to quay.io
+        run: |
+          podman login quay.io \
+            --username "${{ secrets.QUAY_USERNAME }}" \
+            --password "${{ secrets.QUAY_PASSWORD }}"
+
+      - name: Build and push container
+        run: |
+          export REGISTRY_AUTH_FILE="${XDG_RUNTIME_DIR}/containers/auth.json"
+          podman build -t mc-rhel10:latest -f container/Containerfile .
+          podman push mc-rhel10:latest \
+            docker://quay.io/rhn_support_dsquirre/mc-container:latest
+
+      - name: Verify pushed image
+        run: |
+          skopeo inspect \
+            docker://quay.io/rhn_support_dsquirre/mc-container:latest \
+            --format '{{.Digest}}'
