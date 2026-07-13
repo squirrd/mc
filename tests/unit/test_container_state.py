@@ -442,3 +442,117 @@ class TestClusterIdMigration:
         result = db.get_container("12345678")
         assert result is not None
         assert result.cluster_id == ""
+
+
+class TestCaseTicketLinks:
+    """Tests for case_ticket_links table and CRUD methods (MC-16)."""
+
+    # --- Schema ---
+
+    def test_case_ticket_links_table_created_on_init(self):
+        """case_ticket_links table exists after StateDatabase initialization."""
+        db = StateDatabase(":memory:")
+        with db._connection() as conn:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name='case_ticket_links'"
+            )
+            tables = cursor.fetchall()
+        assert len(tables) == 1
+        assert tables[0]["name"] == "case_ticket_links"
+
+    # --- add_case_ticket_link ---
+
+    def test_add_case_ticket_link_basic(self):
+        """Adding a link stores the (case_number, ticket_id) pair."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        tickets = db.get_tickets_for_case("12345678")
+        assert tickets == ["MC-101"]
+
+    def test_add_case_ticket_link_idempotent(self):
+        """Inserting the same link twice does not raise and stores only one row."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        db.add_case_ticket_link("12345678", "MC-101")  # duplicate -- should be ignored
+        tickets = db.get_tickets_for_case("12345678")
+        assert tickets == ["MC-101"]
+
+    def test_add_multiple_tickets_for_one_case(self):
+        """A single case can be linked to multiple tickets."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        db.add_case_ticket_link("12345678", "MC-102")
+        db.add_case_ticket_link("12345678", "MC-103")
+        tickets = db.get_tickets_for_case("12345678")
+        assert sorted(tickets) == ["MC-101", "MC-102", "MC-103"]
+
+    def test_add_one_ticket_linked_to_multiple_cases(self):
+        """A single ticket can be linked to multiple cases."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("11111111", "MC-200")
+        db.add_case_ticket_link("22222222", "MC-200")
+        cases = db.get_cases_for_ticket("MC-200")
+        assert sorted(cases) == ["11111111", "22222222"]
+
+    # --- get_tickets_for_case ---
+
+    def test_get_tickets_for_case_no_links(self):
+        """Returns empty list when no tickets are linked to the case."""
+        db = StateDatabase(":memory:")
+        assert db.get_tickets_for_case("99999999") == []
+
+    def test_get_tickets_for_case_does_not_leak_other_cases(self):
+        """Only tickets for the requested case are returned."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("11111111", "MC-1")
+        db.add_case_ticket_link("22222222", "MC-2")
+        assert db.get_tickets_for_case("11111111") == ["MC-1"]
+        assert db.get_tickets_for_case("22222222") == ["MC-2"]
+
+    # --- get_cases_for_ticket ---
+
+    def test_get_cases_for_ticket_no_links(self):
+        """Returns empty list when no cases are linked to the ticket."""
+        db = StateDatabase(":memory:")
+        assert db.get_cases_for_ticket("MC-999") == []
+
+    def test_get_cases_for_ticket_does_not_leak_other_tickets(self):
+        """Only cases for the requested ticket are returned."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("11111111", "MC-1")
+        db.add_case_ticket_link("22222222", "MC-2")
+        assert db.get_cases_for_ticket("MC-1") == ["11111111"]
+        assert db.get_cases_for_ticket("MC-2") == ["22222222"]
+
+    # --- remove_case_ticket_link ---
+
+    def test_remove_case_ticket_link_existing(self):
+        """Removing an existing link removes it from the database."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        db.remove_case_ticket_link("12345678", "MC-101")
+        assert db.get_tickets_for_case("12345678") == []
+
+    def test_remove_case_ticket_link_nonexistent(self):
+        """Removing a link that does not exist does not raise."""
+        db = StateDatabase(":memory:")
+        db.remove_case_ticket_link("12345678", "MC-999")  # should not raise
+
+    def test_remove_only_targeted_link(self):
+        """Removing one link leaves other links for the same case intact."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        db.add_case_ticket_link("12345678", "MC-102")
+        db.remove_case_ticket_link("12345678", "MC-101")
+        assert db.get_tickets_for_case("12345678") == ["MC-102"]
+
+    # --- Interaction with containers table ---
+
+    def test_ticket_links_independent_of_containers(self):
+        """Ticket links work without any containers in the database."""
+        db = StateDatabase(":memory:")
+        db.add_case_ticket_link("12345678", "MC-101")
+        assert db.get_tickets_for_case("12345678") == ["MC-101"]
+        # The containers table should still be empty
+        assert db.list_all() == []
