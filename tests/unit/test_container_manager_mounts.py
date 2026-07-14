@@ -1,5 +1,6 @@
 """Unit tests for ContainerManager mount and pre-flight behavior (Phase 33)."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch, call
 import pytest
@@ -222,24 +223,24 @@ class TestAuthMount:
 
 
 class TestClaudeJsonMount:
-    """Tests for ~/.claude.json mount (MC-74 presence guard, MC-108 rw mode)."""
+    """Tests for ~/.claude.json handling (MC-74 presence guard, MC-122 seed-via-cp)."""
 
     @pytest.mark.backwards_compatibility
+    @patch('mc.container.manager.subprocess')
     @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_claude_json_mounted_readwrite_when_present(
+    def test_claude_json_not_bind_mounted_when_present(
         self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
-        mock_adc_path, mock_claude_json_path
+        mock_adc_path, mock_claude_json_path, mock_subprocess
     ):
-        """~/.claude.json is added to volumes dict with mode 'rw' when it exists.
+        """~/.claude.json must NOT be bind-mounted (MC-122 fix).
 
-        This file contains hasCompletedOnboarding and hasTrustDialogAccepted state.
-        Without it, each new container forces Claude Code re-onboarding.
-        Must be rw so Claude Code can persist trust-prompt acceptance (MC-108).
+        MC-122: rw bind-mount caused virtiofs caching desync to corrupt the host
+        file. The file is now seeded via podman cp after start instead.
         """
         mc_config = MagicMock()
         mc_config.exists.return_value = True
@@ -268,19 +269,13 @@ class TestClaudeJsonMount:
 
         call_kwargs = podman.client.containers.create.call_args[1]
         volumes = call_kwargs["volumes"]
-        assert "/home/user/.claude.json" in volumes, (
-            f"~/.claude.json is not volume-mounted. "
-            f"Volumes: {list(volumes.keys())}"
-        )
-        assert volumes["/home/user/.claude.json"]["bind"] == "/home/mcuser/.claude.json", (
-            f"claude.json mount bind target is wrong. "
-            f"Got: {volumes['/home/user/.claude.json']['bind']}"
-        )
-        assert volumes["/home/user/.claude.json"]["mode"] == "rw", (
-            f"claude.json mount must be rw for trust-prompt persistence (MC-108). "
-            f"Got: {volumes['/home/user/.claude.json']['mode']}"
+        claude_json_keys = [k for k in volumes if ".claude.json" in k]
+        assert len(claude_json_keys) == 0, (
+            f"~/.claude.json must NOT be bind-mounted (MC-122). "
+            f"Found: {claude_json_keys}"
         )
 
+    @patch('mc.container.manager.subprocess')
     @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
@@ -289,7 +284,7 @@ class TestClaudeJsonMount:
     @patch('mc.container.manager.os.makedirs')
     def test_claude_json_absent_from_volumes_when_missing(
         self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
-        mock_adc_path, mock_claude_json_path
+        mock_adc_path, mock_claude_json_path, mock_subprocess
     ):
         """~/.claude.json is not in volumes when the file does not exist."""
         mc_config = MagicMock()
@@ -328,8 +323,9 @@ class TestClaudeJsonMount:
 
 
 class TestAllMountsTogether:
-    """Tests for workspace + mc/config + OCM + claude + claude.json combined mount scenarios."""
+    """Tests for workspace + mc/config + OCM + claude combined mount scenarios."""
 
+    @patch('mc.container.manager.subprocess')
     @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
@@ -338,9 +334,13 @@ class TestAllMountsTogether:
     @patch('mc.container.manager.os.makedirs')
     def test_all_mounts_present_when_all_paths_exist(
         self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
-        mock_adc_path, mock_claude_json_path
+        mock_adc_path, mock_claude_json_path, mock_subprocess
     ):
-        """Workspace, mc/config, OCM, claude, and claude.json all mounted when all host paths exist."""
+        """Workspace, mc/config, OCM, and claude all mounted when host paths exist.
+
+        Note: ~/.claude.json is NOT bind-mounted (MC-122); it is seeded via
+        podman cp after start.
+        """
         mc_config = MagicMock()
         mc_config.exists.return_value = True
         mc_config.__str__ = lambda self: "/home/user/mc/config"
@@ -377,10 +377,11 @@ class TestAllMountsTogether:
         assert "/home/user/mc/config" in volumes
         assert "/home/user/.config/ocm/ocm.json" in volumes
         assert "/home/user/.claude" in volumes
-        assert "/home/user/.claude.json" in volumes
+        # ~/.claude.json is NOT bind-mounted (MC-122); seeded via podman cp
+        assert "/home/user/.claude.json" not in volumes
         assert mc_state_path in volumes
         assert mc_auth_path in volumes
-        assert len(volumes) == 7
+        assert len(volumes) == 6
 
 
 class TestVertexEnvForwarding:
@@ -577,30 +578,35 @@ class TestVertexEnvForwarding:
         )
 
 
-class TestClaudeJsonRwMount:
-    """Tests for ~/.claude.json read-write mount (MC-108 regression guard).
+class TestClaudeJsonSeedViaCp:
+    """Tests for ~/.claude.json seed via podman cp (MC-122 fix, supersedes MC-108 rw mount).
 
-    Claude Code writes trust-prompt acceptance and onboarding state back to
-    ~/.claude.json at runtime.  When the file is mounted read-only the write
-    fails silently and Claude Code exits, forcing re-onboarding on every
-    container launch.
+    MC-108: ~/.claude.json was originally mounted ro, causing Claude Code to
+    silently exit because it could not write hasTrustDialogAccepted. The fix
+    was to mount rw.
+
+    MC-122: rw bind-mount caused virtiofs file-caching desync on macOS/Podman,
+    corrupting the host file. Fix: seed via podman cp after start — container
+    gets an isolated writable copy that cannot propagate writes back to the host.
+    This satisfies MC-108 (container can write) while fixing MC-122 (no host
+    corruption).
     """
 
+    @patch('mc.container.manager.subprocess')
     @patch('mc.container.manager.get_claude_global_config_path')
     @patch('mc.container.manager.get_gcloud_adc_path')
     @patch('mc.container.manager.get_claude_config_path')
     @patch('mc.container.manager.get_ocm_config_path')
     @patch('mc.container.manager.get_mc_config_path')
     @patch('mc.container.manager.os.makedirs')
-    def test_claude_json_mounted_readwrite_when_present(
+    def test_claude_json_seeded_via_podman_cp_after_start(
         self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
-        mock_adc_path, mock_claude_json_path
+        mock_adc_path, mock_claude_json_path, mock_subprocess
     ):
-        """~/.claude.json must be mounted rw so Claude Code can persist trust acceptance.
+        """podman cp seeds ~/.claude.json into container after start (MC-122).
 
-        MC-108: ~/.claude.json was previously mounted ro, causing Claude Code to
-        silently exit because it could not write hasTrustDialogAccepted back to
-        the file.
+        Verifies that subprocess.run is called with the correct podman cp
+        command after container.start(), giving the container an isolated copy.
         """
         mc_config = MagicMock()
         mc_config.exists.return_value = True
@@ -627,20 +633,104 @@ class TestClaudeJsonRwMount:
         manager, podman = _make_manager()
         manager.create("12345678", "/workspace", "Customer")
 
-        call_kwargs = podman.client.containers.create.call_args[1]
-        volumes = call_kwargs["volumes"]
-        assert "/home/user/.claude.json" in volumes, (
-            f"~/.claude.json is not volume-mounted. "
-            f"Volumes: {list(volumes.keys())}"
+        # Verify podman cp was called with the right args
+        mock_subprocess.run.assert_called_once_with(
+            [
+                "podman", "cp",
+                "/home/user/.claude.json",
+                "abc123:/home/mcuser/.claude.json",
+            ],
+            capture_output=True,
+            check=True,
         )
-        assert volumes["/home/user/.claude.json"]["bind"] == "/home/mcuser/.claude.json", (
-            f"claude.json mount bind target is wrong. "
-            f"Got: {volumes['/home/user/.claude.json']['bind']}"
+
+    @patch('mc.container.manager.subprocess')
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_claude_json_not_seeded_when_absent(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path, mock_subprocess
+    ):
+        """podman cp is NOT called when ~/.claude.json does not exist on host."""
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
+        claude_json = MagicMock()
+        claude_json.exists.return_value = False
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
+        manager, podman = _make_manager()
+        manager.create("12345678", "/workspace", "Customer")
+
+        # No podman cp call when the file doesn't exist
+        mock_subprocess.run.assert_not_called()
+
+    @patch('mc.container.manager.subprocess')
+    @patch('mc.container.manager.get_claude_global_config_path')
+    @patch('mc.container.manager.get_gcloud_adc_path')
+    @patch('mc.container.manager.get_claude_config_path')
+    @patch('mc.container.manager.get_ocm_config_path')
+    @patch('mc.container.manager.get_mc_config_path')
+    @patch('mc.container.manager.os.makedirs')
+    def test_claude_json_cp_failure_is_nonfatal(
+        self, mock_makedirs, mock_mc_path, mock_ocm_path, mock_claude_path,
+        mock_adc_path, mock_claude_json_path, mock_subprocess
+    ):
+        """Container creation succeeds even if podman cp fails (non-fatal).
+
+        If podman cp fails, the container still runs — Claude Code will simply
+        re-run onboarding inside the container.
+        """
+        mc_config = MagicMock()
+        mc_config.exists.return_value = True
+        mc_config.__str__ = lambda self: "/home/user/mc/config"
+        mock_mc_path.return_value = mc_config
+
+        ocm_config = MagicMock()
+        ocm_config.exists.return_value = False
+        mock_ocm_path.return_value = ocm_config
+
+        claude_dir = MagicMock()
+        claude_dir.exists.return_value = False
+        mock_claude_path.return_value = claude_dir
+
+        adc = MagicMock()
+        adc.exists.return_value = False
+        mock_adc_path.return_value = adc
+
+        claude_json = MagicMock()
+        claude_json.exists.return_value = True
+        claude_json.__str__ = lambda self: "/home/user/.claude.json"
+        mock_claude_json_path.return_value = claude_json
+
+        # Make subprocess.run raise an exception
+        mock_subprocess.run.side_effect = subprocess.CalledProcessError(
+            1, "podman cp"
         )
-        assert volumes["/home/user/.claude.json"]["mode"] == "rw", (
-            f"claude.json mount must be rw for trust-prompt persistence (MC-108). "
-            f"Got: {volumes['/home/user/.claude.json']['mode']}"
-        )
+
+        manager, podman = _make_manager()
+        # Should NOT raise — cp failure is swallowed
+        container = manager.create("12345678", "/workspace", "Customer")
+        assert container is not None
 
 
 class TestOcmConfigMountMode:

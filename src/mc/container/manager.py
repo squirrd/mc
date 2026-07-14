@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -187,14 +188,15 @@ class ContainerManager:
         if claude_dir.exists():
             volumes[str(claude_dir)] = {"bind": "/home/mcuser/.claude", "mode": "rw"}
 
-        # Mount Claude global config file (~/.claude.json) if present (rw)
+        # ~/.claude.json — seed after start, do NOT bind-mount (MC-122).
         # Contains hasCompletedOnboarding + hasTrustDialogAccepted — prevents
         # re-onboarding and re-trust on every new container launch.
-        # Must be rw: Claude Code writes trust-prompt acceptance back to this
-        # file at runtime; a read-only mount causes a silent exit (MC-108).
+        # Previously mounted rw for trust-prompt persistence (MC-108), but
+        # virtiofs file-caching desync on macOS/Podman caused container writes
+        # to corrupt the host file (MC-122). Now seeded via podman cp after
+        # start: container gets an isolated writable copy that cannot propagate
+        # writes back to the host.
         claude_json = get_claude_global_config_path()
-        if claude_json.exists():
-            volumes[str(claude_json)] = {"bind": "/home/mcuser/.claude.json", "mode": "rw"}
 
         # Mount GCP ADC credentials file if present (enables claude Vertex auth inside container)
         adc_path = get_gcloud_adc_path()
@@ -267,6 +269,27 @@ class ContainerManager:
         except Exception:
             # Reload is best-effort - if it fails, continue
             pass
+
+        # 8c. Seed ~/.claude.json into container (isolated writable copy — MC-122)
+        # Previously bind-mounted rw (MC-108), but virtiofs caching desync on
+        # macOS/Podman caused container writes to corrupt the host file (MC-122).
+        # podman cp gives the container its own writable copy that cannot
+        # propagate writes back to the host.
+        if claude_json.exists():
+            try:
+                subprocess.run(
+                    [
+                        "podman", "cp",
+                        str(claude_json),
+                        f"{container.id}:/home/mcuser/.claude.json",  # type: ignore[attr-defined]
+                    ],
+                    capture_output=True,
+                    check=True,
+                )
+            except Exception:
+                # Non-fatal: container works without claude.json
+                # (Claude Code will re-run onboarding)
+                pass
 
         # 9. Record in state database
         try:
