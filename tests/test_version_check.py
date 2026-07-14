@@ -143,7 +143,7 @@ class TestNotificationDisplay:
 
         captured = capsys.readouterr()
         assert "mc v2.0.5 available" in captured.err
-        assert "uvx --reinstall mc-cli@latest" in captured.err
+        assert "mc-update upgrade" in captured.err
 
     def test_notification_throttled_within_day(self):
         """Should not display if shown less than 24 hours ago."""
@@ -173,7 +173,7 @@ class TestNotificationDisplay:
 
         captured = capsys.readouterr()
         assert "mc v2.0.5 available" in captured.err
-        assert "uvx --reinstall mc-cli@latest" in captured.err
+        assert "mc-update upgrade" in captured.err
 
 
 class TestThreadLifecycle:
@@ -343,11 +343,15 @@ class TestTimingAndNonBlocking:
 
         # Run CLI command that triggers version check
         start = time.time()
+        repo_root = subprocess.run(
+            ['git', 'rev-parse', '--show-toplevel'],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
         result = subprocess.run(
             ['python3', '-m', 'mc.cli.main', '--help'],
             capture_output=True,
-            timeout=2,  # Should never take this long
-            cwd='/Users/dsquirre/Repos/mc'
+            timeout=2,
+            cwd=repo_root
         )
         elapsed = time.time() - start
 
