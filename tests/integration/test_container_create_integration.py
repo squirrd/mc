@@ -1,5 +1,6 @@
 """Integration test for container creation with real Podman."""
 
+import json
 import os
 import platform
 import subprocess
@@ -7,7 +8,11 @@ import tempfile
 
 import pytest
 
-from mc.container.manager import ContainerManager, get_ocm_config_path
+from mc.container.manager import (
+    ContainerManager,
+    get_claude_global_config_path,
+    get_ocm_config_path,
+)
 from mc.container.state import StateDatabase
 from mc.integrations.podman import PodmanClient
 
@@ -654,6 +659,128 @@ def test_mc_107_container_timezone_regression():
             )
 
         finally:
+            if container:
+                try:
+                    container.stop(timeout=2)  # type: ignore[no-untyped-call]
+                    container.remove()  # type: ignore[no-untyped-call]
+                except Exception:
+                    pass
+            subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _podman_available(), reason="Podman not available")
+def test_mc_122_claude_json_rw_mount_corruption_regression():
+    """Regression test for MC-122: rw bind-mount of ~/.claude.json causes host corruption.
+
+    Bug discovered: 2026-07-14
+    Platform: macOS (virtiofs), potentially Linux
+    Severity: critical
+    Source: MC-122
+
+    Problem:
+    ContainerManager.create() bind-mounts ~/.claude.json with mode "rw" into the
+    container. On macOS/Podman with virtiofs, the container's file-caching layer
+    can see a stale or truncated snapshot of the file. When Claude Code (or any
+    process) inside the container writes back to /home/mcuser/.claude.json, the
+    stale data overwrites the host's ~/.claude.json, corrupting it.
+
+    The host file was observed overwritten with a 907-byte truncated version;
+    Claude Code inside the container then hangs on the truncated invalid JSON.
+
+    Steps to reproduce:
+    1. Ensure ~/.claude.json exists on the host with valid JSON (e.g. 6 KB).
+    2. Run `mc case 12345678` to create a container (mounts ~/.claude.json rw).
+    3. Inside the container, any write to /home/mcuser/.claude.json propagates
+       back to the host via the rw bind-mount.
+    4. virtiofs caching desync causes the container to read a stale/truncated
+       copy, which it then writes back, corrupting the host file.
+
+    Expected: Writes to /home/mcuser/.claude.json inside the container do NOT
+              propagate back to the host ~/.claude.json. The container gets an
+              isolated copy of the file content (e.g. via podman cp or seed
+              script), so Claude Code can read/write freely without risking
+              host file corruption.
+    Actual:   The rw bind-mount causes all container writes to propagate to the
+              host file. virtiofs file-caching desync corrupts the host copy.
+
+    This test ensures the bug does not regress.
+    """
+    claude_json = get_claude_global_config_path()
+    if not claude_json.exists():
+        pytest.skip("~/.claude.json does not exist on this host")
+
+    case_number = "55550122"
+    container_name = f"mc-{case_number}"
+
+    # PRE-TEST CLEANUP
+    subprocess.run(["podman", "rm", "-f", container_name], capture_output=True)
+
+    # Read the original host content before creating container
+    original_content = claude_json.read_text()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        workspace_path = os.path.join(tmpdir, "workspace")
+        os.makedirs(workspace_path)
+
+        client = PodmanClient()
+        state_db = StateDatabase(db_path)
+        manager = ContainerManager(client, state_db)
+
+        container = None
+        try:
+            container = manager.create(case_number, workspace_path, "ClaudeJsonRWTest")
+
+            # Write a canary marker to .claude.json INSIDE the container.
+            # If the rw bind-mount is active, this write propagates to the host.
+            canary = "MC122_CORRUPTION_CANARY"
+            result = subprocess.run(
+                [
+                    "podman", "exec", container_name,
+                    "bash", "-c",
+                    f'python3 -c "'
+                    f"import json, pathlib; "
+                    f"p = pathlib.Path('/home/mcuser/.claude.json'); "
+                    f"d = json.loads(p.read_text()) if p.exists() else {{}}; "
+                    f"d['_mc122_canary'] = '{canary}'; "
+                    f"p.write_text(json.dumps(d, indent=2)); "
+                    f"print('CANARY_WRITTEN')"
+                    f'"',
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0, (
+                f"podman exec failed: {result.stderr}"
+            )
+            assert "CANARY_WRITTEN" in result.stdout, (
+                f"Failed to write canary inside container: {result.stdout} {result.stderr}"
+            )
+
+            # Now check the HOST file. If the canary is visible, the rw mount is
+            # propagating container writes back to the host (= the bug).
+            host_content = claude_json.read_text()
+            host_data = json.loads(host_content)
+
+            # The host file must NOT contain the canary. When the bug is present
+            # (rw bind-mount), the canary WILL appear in the host file, so this
+            # assertion FAILS -- confirming RED.
+            assert "_mc122_canary" not in host_data, (
+                "HOST ~/.claude.json was modified from inside the container! "
+                "The rw bind-mount allows container writes to propagate to the "
+                "host, creating a corruption vector via virtiofs file-caching "
+                f"desync. Canary value found: {host_data.get('_mc122_canary')}"
+            )
+
+        finally:
+            # Restore original host file content (undo canary injection)
+            try:
+                claude_json.write_text(original_content)
+            except Exception:
+                pass
+
             if container:
                 try:
                     container.stop(timeout=2)  # type: ignore[no-untyped-call]
