@@ -187,6 +187,7 @@ RUN dnf install -y \
     openssl \
     less \
     jq \
+    bind-utils \
     && dnf clean all && \
     rm -rf /var/cache/dnf
 
