@@ -100,14 +100,14 @@ cn: Test User
 
 def test_ldap_search_input_too_short():
     """Test LDAP search raises ValidationError for input shorter than 4 characters."""
-    with pytest.raises(ValidationError, match="must be between 4 and 15 characters"):
+    with pytest.raises(ValidationError, match="must be between 4 and 128 characters"):
         ldap_search("abc")
 
 
 def test_ldap_search_input_too_long():
-    """Test LDAP search raises ValidationError for input longer than 15 characters."""
-    with pytest.raises(ValidationError, match="must be between 4 and 15 characters"):
-        ldap_search("a" * 16)
+    """Test LDAP search raises ValidationError for input longer than 128 characters."""
+    with pytest.raises(ValidationError, match="must be between 4 and 128 characters"):
+        ldap_search("a" * 129)
 
 
 def test_ldap_search_command_not_found(mocker):
@@ -195,7 +195,7 @@ def test_ldap_search_term_length_5_to_14_chars(mocker):
 
 
 def test_ldap_search_term_length_15_chars(mocker):
-    """Test search term for exactly 15 characters uses uid-only search."""
+    """Test search term for exactly 15 characters uses uid+cn search (MC-178 fix)."""
     search_term = "a" * 15
     mock_result = Mock()
     mock_result.stdout = f"dn: uid={search_term},dc=redhat,dc=com\nuid: {search_term}\n"
@@ -205,10 +205,35 @@ def test_ldap_search_term_length_15_chars(mocker):
 
     ldap_search(search_term)
 
-    # Verify search term is uid-only (not including cn)
+    # After MC-178 fix: 15 chars falls in 5-128 range, so uses uid+cn filter
     call_args = mock_subprocess.call_args[0][0]
-    # Search term should be "(uid=*aaa...*)"
-    assert f"(uid=*{search_term}*)" in call_args
+    assert f"(|(uid=*{search_term}*)(cn=*{search_term}*))" in call_args
+
+
+# MC-178 regression: long names must not be rejected
+
+
+@pytest.mark.backwards_compatibility
+def test_ldap_search_long_name_passes_validation(mocker):
+    """MC-178: ldap_search must accept names longer than 15 chars (e.g. 'Arjjun Somasundaran').
+
+    The old upper bound of 15 rejected legitimate full names. The new upper bound
+    is 128 to accommodate full names, email local parts, etc.
+    """
+    long_name = "ArjjunSomasundar"  # 16 chars -- was rejected by old limit of 15
+    mock_result = Mock()
+    mock_result.stdout = (
+        f"dn: uid={long_name},ou=people,dc=redhat,dc=com\nuid: {long_name}\n"
+        f"cn: Arjjun Somasundaran\n"
+    )
+    mock_result.returncode = 0
+
+    mocker.patch("subprocess.run", return_value=mock_result)
+
+    # This must NOT raise ValidationError -- 16 chars is within the valid range (4-128)
+    success, output = ldap_search(long_name)
+    assert success is True
+    assert long_name in output
 
 
 # Parsing tests (realistic output)

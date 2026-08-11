@@ -25,11 +25,11 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
         uid = uid[: -len("@redhat.com")]
 
     # Validate search term length
-    if not (4 <= len(uid) <= 15):
-        raise ValidationError(f"Search term '{uid}' must be between 4 and 15 characters")
+    if not (4 <= len(uid) <= 128):
+        raise ValidationError(f"Search term '{uid}' must be between 4 and 128 characters")
 
     # Determine search pattern
-    if not (5 <= len(uid) < 15):
+    if not (5 <= len(uid) < 128):
         search_term = f"(uid=*{uid}*)"
     else:
         search_term = f"(|(uid=*{uid}*)(cn=*{uid}*))"
@@ -51,7 +51,7 @@ def ldap_search(uid: str, show_all: bool = False) -> tuple[bool, str]:
 
     try:
         # LDAP search using subprocess is safe - command and args are hardcoded,
-        # only search_term parameter is user input and it's validated (length 4-15)
+        # only search_term parameter is user input and it's validated (length 4-128)
         # nosec B603
         result = subprocess.run(command, capture_output=True, text=True, check=True)  # nosec B603
         output = result.stdout
