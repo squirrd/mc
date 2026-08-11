@@ -179,6 +179,8 @@ LABEL version="2.0"
 # nodejs required as the runtime for the Claude Code CLI
 # jq: JSON processing for oc/kubectl output, API responses
 # bind-utils: nslookup/dig for DNS diagnostics during case work
+# iproute: ip/ss for network interface and socket diagnostics
+# traceroute: network path tracing during case work
 RUN dnf install -y \
     python3 \
     nodejs \
@@ -189,6 +191,8 @@ RUN dnf install -y \
     less \
     jq \
     bind-utils \
+    iproute \
+    traceroute \
     && dnf clean all && \
     rm -rf /var/cache/dnf
 
