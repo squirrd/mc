@@ -987,7 +987,7 @@ def test_mc_88_container_network_tools_regression_tests_acceptance(
 def test_mc_88_container_network_tools_extended_net_tools_acceptance(
     container_manager, temp_workspace, cleanup_containers, podman_client
 ):
-    """Acceptance test: extended network tools (ip, ss, traceroute) in container.
+    """Acceptance test: extended network tools (ip, ss, mtr) in container.
 
     Feature: MC-88 — Add network diagnostic tools to mc-container image
     Slice: extended-net-tools
@@ -995,19 +995,22 @@ def test_mc_88_container_network_tools_extended_net_tools_acceptance(
     Source: MC-88
 
     Acceptance criterion:
-    The container must include ip, ss, and traceroute commands, which are
+    The container must include ip, ss, and mtr commands, which are
     essential for network diagnostics during support case work. ip and ss
-    are provided by iproute; traceroute is provided by the traceroute
-    package.
+    are provided by iproute (pre-installed in RHEL 10 UBI base image);
+    mtr is provided by the mtr package (traceroute is not available in
+    RHEL 10 UBI repos, mtr is the modern replacement combining
+    traceroute + ping).
 
     Expected (after feature implemented):
     - `which ip` exits 0
     - `which ss` exits 0
-    - `which traceroute` exits 0
+    - `which mtr` exits 0
 
     Expected RED reason (before feature):
-    - AssertionError: iproute and traceroute packages are not installed
-      in the Containerfile, so ip, ss, and traceroute are not available.
+    - AssertionError: mtr package is not installed in the Containerfile,
+      so mtr is not available. ip and ss are pre-installed via iproute
+      in the base image.
     """
     import subprocess
 
@@ -1023,7 +1026,7 @@ def test_mc_88_container_network_tools_extended_net_tools_acceptance(
     )
     cleanup_containers(container.id)  # type: ignore[attr-defined]
 
-    # Check for ip (provided by iproute)
+    # Check for ip (provided by iproute, pre-installed in RHEL 10 UBI base)
     ip_result = subprocess.run(
         ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "ip"],
         capture_output=True,
@@ -1031,7 +1034,7 @@ def test_mc_88_container_network_tools_extended_net_tools_acceptance(
         timeout=10,
     )
 
-    # Check for ss (provided by iproute)
+    # Check for ss (provided by iproute, pre-installed in RHEL 10 UBI base)
     ss_result = subprocess.run(
         ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "ss"],
         capture_output=True,
@@ -1039,9 +1042,10 @@ def test_mc_88_container_network_tools_extended_net_tools_acceptance(
         timeout=10,
     )
 
-    # Check for traceroute (provided by traceroute package)
-    traceroute_result = subprocess.run(
-        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "traceroute"],
+    # Check for mtr (provided by mtr package; replaces traceroute which is
+    # not available in RHEL 10 UBI repos)
+    mtr_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "mtr"],
         capture_output=True,
         text=True,
         timeout=10,
@@ -1050,15 +1054,15 @@ def test_mc_88_container_network_tools_extended_net_tools_acceptance(
     assert ip_result.returncode == 0, (
         f"ip not found in container.\n"
         f"stdout: {ip_result.stdout!r}, stderr: {ip_result.stderr!r}\n"
-        f"Fix: Add iproute to the dnf install list in Containerfile Stage 7 (final)."
+        f"Fix: iproute should be pre-installed in RHEL 10 UBI base image."
     )
     assert ss_result.returncode == 0, (
         f"ss not found in container.\n"
         f"stdout: {ss_result.stdout!r}, stderr: {ss_result.stderr!r}\n"
-        f"Fix: Add iproute to the dnf install list in Containerfile Stage 7 (final)."
+        f"Fix: iproute should be pre-installed in RHEL 10 UBI base image."
     )
-    assert traceroute_result.returncode == 0, (
-        f"traceroute not found in container.\n"
-        f"stdout: {traceroute_result.stdout!r}, stderr: {traceroute_result.stderr!r}\n"
-        f"Fix: Add traceroute to the dnf install list in Containerfile Stage 7 (final)."
+    assert mtr_result.returncode == 0, (
+        f"mtr not found in container.\n"
+        f"stdout: {mtr_result.stdout!r}, stderr: {mtr_result.stderr!r}\n"
+        f"Fix: Add mtr to the dnf install list in Containerfile Stage 7 (final)."
     )
