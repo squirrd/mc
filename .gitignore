@@ -92,3 +92,6 @@ local/
 
 # GSD planning artifacts (local only)
 .planning/
+
+# TDD worktrees and issue tracking (local only)
+local/tdd-state/
