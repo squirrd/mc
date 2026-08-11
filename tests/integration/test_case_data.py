@@ -201,3 +201,96 @@ def test_MC_85_vpn_hint_api_errors_regression(tmp_path, mocker):
         f"f-string interpolation of APIConnectionError must show VPN hint "
         f"but got: {warning_message!r}"
     )
+
+
+@pytest.mark.integration
+def test_mc_119_ocm_external_id_lookup_regression(tmp_path, mocker):
+    """Regression test for fix/MC-119-ocm-external-id-lookup (MC-119).
+
+    Bug discovered: 2026-08-11
+    Platform: In-container
+    Severity: major
+    Source: MC-119
+
+    Problem:
+    init_case_data() passes the SFDC external_id UUID directly to
+    ``ocm get cluster <external_id>``, but OCM's ``get cluster`` command
+    expects an internal cluster ID. When given an external_id UUID, OCM
+    returns a 404:
+
+        {"kind": "Error", "id": "404", "code": "CLUSTERS-MGMT-404",
+         "reason": "Cluster '6b22598e-...' not found"}
+
+    The fix is to use the OCM search API endpoint:
+        ocm get /api/clusters_mgmt/v1/clusters --parameter search="external_id='<uuid>'"
+
+    Steps to reproduce:
+    1. Have a case with openshiftClusterID set to an external_id UUID
+    2. Call init_case_data() for that case
+    3. Observe the subprocess.run command constructed for OCM
+
+    Expected: Command uses the search API with external_id filter.
+    Actual:   Command passes external_id directly as ``ocm get cluster <uuid>``,
+              causing a 404 on OCM.
+
+    This test ensures the bug does not regress.
+    """
+    from mc.agent.case_data import init_case_data
+
+    external_id = "6b22598e-5bdc-408f-a500-5c8a6d091413"
+
+    case_details = {
+        "summary": "Pod OOMKilled on prod",
+        "accountNumberRef": "9876543",
+        "status": "Open",
+        "severity": "2 (High)",
+        "product": "OpenShift Container Platform",
+        "customerName": "Acme Corp",
+        "openshiftClusterID": external_id,
+    }
+
+    # Mock external dependencies (API calls, auth) — not subprocess under test
+    mock_config_mgr = mocker.MagicMock()
+    mock_config_mgr.load.return_value = {"api": {"rh_api_offline_token": "tok"}}
+    mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
+    mocker.patch("mc.utils.auth.get_access_token", return_value="access_token")
+
+    mock_api = mocker.MagicMock()
+    mock_api.fetch_case_details.return_value = case_details
+    mock_api.fetch_case_comments.return_value = []
+    mocker.patch(
+        "mc.integrations.redhat_api.RedHatAPIClient", return_value=mock_api
+    )
+
+    # Mock subprocess.run so we can inspect the command without calling ocm
+    mock_subprocess = mocker.patch(
+        "subprocess.run",
+        return_value=mocker.MagicMock(
+            returncode=0,
+            stdout='{"items": [{"kind": "Cluster", "id": "abc-internal-123"}]}',
+        ),
+    )
+
+    init_case_data("12345678", case_dir=str(tmp_path))
+
+    # subprocess.run must have been called for the OCM lookup
+    mock_subprocess.assert_called_once()
+
+    actual_cmd = mock_subprocess.call_args[0][0]
+
+    # The command must NOT be the naive "ocm get cluster <external_id>" form
+    assert actual_cmd != ["ocm", "get", "cluster", external_id], (
+        f"Bug present: code passes external_id directly to 'ocm get cluster' "
+        f"instead of using the OCM search API. Got: {actual_cmd}"
+    )
+
+    # The command must use the OCM search API endpoint
+    cmd_str = " ".join(actual_cmd)
+    assert "/api/clusters_mgmt/v1/clusters" in cmd_str, (
+        f"Expected OCM search API endpoint in command, got: {actual_cmd}"
+    )
+
+    # The command must include external_id in a search parameter
+    assert "external_id" in cmd_str, (
+        f"Expected external_id filter in search parameter, got: {actual_cmd}"
+    )
