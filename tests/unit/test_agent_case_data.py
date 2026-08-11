@@ -183,14 +183,16 @@ class TestOcmBehavior:
             "subprocess.run",
             return_value=mocker.MagicMock(
                 returncode=0,
-                stdout='{"kind": "Cluster", "id": "abc-cluster-123"}',
+                stdout=json.dumps({"kind": "ClusterList", "total": 1, "items": [{"kind": "Cluster", "id": "abc-cluster-123"}]}),
             ),
         )
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
         ocm_path = tmp_path / "ocm-cluster.json"
         assert ocm_path.exists()
-        assert "abc-cluster-123" in ocm_path.read_text()
+        data = json.loads(ocm_path.read_text())
+        assert data["id"] == "abc-cluster-123"
+        assert data["kind"] == "Cluster"
 
     def test_ocm_cluster_json_not_written_when_cluster_id_absent(self, tmp_path, mocker):
         """ocm-cluster.json is NOT written when API returns no cluster ID."""
@@ -239,6 +241,38 @@ class TestOcmBehavior:
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
         assert not (tmp_path / "ocm-cluster.json").exists()
+
+    def test_ocm_lookup_uses_search_api_with_external_id(self, tmp_path, mocker):
+        """OCM lookup must use search API with external_id, not naive 'ocm get cluster <id>'."""
+        _mock_init(mocker, BASE_CASE_DETAILS_WITH_CLUSTER)
+        mock_run = mocker.patch(
+            "subprocess.run",
+            return_value=mocker.MagicMock(
+                returncode=0,
+                stdout=json.dumps({
+                    "kind": "ClusterList",
+                    "total": 1,
+                    "items": [{"kind": "Cluster", "id": "abc-cluster-123", "external_id": "abc-cluster-123"}],
+                }),
+            ),
+        )
+        init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
+
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        # Must use the search API endpoint, not the naive form
+        assert "/api/clusters_mgmt/v1/clusters" in cmd, (
+            f"Expected search API endpoint in command, got: {cmd}"
+        )
+        # Must include external_id in search parameter
+        cmd_str = " ".join(cmd)
+        assert "external_id" in cmd_str, (
+            f"Expected 'external_id' in search parameter, got: {cmd_str}"
+        )
+        # Must NOT be the naive ['ocm', 'get', 'cluster', <id>] form
+        assert cmd != ["ocm", "get", "cluster", "abc-cluster-123"], (
+            "Must not use naive 'ocm get cluster <id>' — OCM expects internal ID, not external_id"
+        )
 
 
 # ---------------------------------------------------------------------------

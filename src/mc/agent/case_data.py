@@ -100,19 +100,24 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
     with open(env_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
-    # 9. If cluster_external_id is non-empty, run ocm get cluster (non-fatal)
+    # 9. If cluster_external_id is non-empty, search OCM by external_id (non-fatal)
     if cluster_external_id:
         try:
             result = subprocess.run(
-                ["ocm", "get", "cluster", cluster_external_id],
+                ["ocm", "get", "/api/clusters_mgmt/v1/clusters", "--parameter", f"search=external_id='{cluster_external_id}'"],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
             if result.returncode == 0:
-                ocm_cluster_path = os.path.join(case_dir, "ocm-cluster.json")
-                with open(ocm_cluster_path, "w") as f:
-                    f.write(result.stdout)
+                response = json.loads(result.stdout)
+                items = response.get("items", [])
+                if items:
+                    ocm_cluster_path = os.path.join(case_dir, "ocm-cluster.json")
+                    with open(ocm_cluster_path, "w") as f:
+                        f.write(json.dumps(items[0], indent=2))
+                else:
+                    print(f"Warning: no OCM cluster found for external_id={cluster_external_id}")
             else:
                 print(f"Warning: ocm get cluster failed (exit {result.returncode}): {result.stderr.strip()}")
         except subprocess.TimeoutExpired:
