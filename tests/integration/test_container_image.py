@@ -826,3 +826,239 @@ def test_agent_base_dir_override_regression(
         f"Fix: When MC_RUNTIME_MODE=agent, override base_dir to "
         f"os.path.expanduser('~/mc') regardless of config.toml value."
     )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)",
+)
+def test_mc_88_container_network_tools_add_bind_utils_acceptance(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Acceptance test: bind-utils package provides nslookup and dig in container.
+
+    Feature: MC-88 — Add network diagnostic tools to mc-container image
+    Slice: add-bind-utils
+    Scope: full-stack (Containerfile + integration test)
+    Source: MC-88
+
+    Acceptance criterion:
+    When a container is created from the published mc-container image,
+    nslookup and dig must be installed and executable (exit code 0 from
+    `which nslookup` and `which dig`). These tools are provided by the
+    bind-utils package.
+
+    Expected (after feature implemented):
+    - `which nslookup` exits 0 and prints a valid path
+    - `which dig` exits 0 and prints a valid path
+
+    Expected RED reason (before feature):
+    - AssertionError: bind-utils is not installed in the Containerfile,
+      so nslookup and dig are not available in the container.
+    """
+    import subprocess
+
+    if not check_image_exists(podman_client):
+        pytest.skip("mc-rhel10:latest image not found")
+
+    CASE_NUMBER = "99988801"
+
+    container = container_manager.create(
+        case_number=CASE_NUMBER,
+        workspace_path=temp_workspace,
+        customer_name="MC-88 bind-utils acceptance",
+    )
+    cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+    # Check for nslookup (provided by bind-utils)
+    nslookup_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "nslookup"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Check for dig (provided by bind-utils)
+    dig_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "dig"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert nslookup_result.returncode == 0, (
+        f"nslookup not found in container.\n"
+        f"stdout: {nslookup_result.stdout!r}, stderr: {nslookup_result.stderr!r}\n"
+        f"Fix: Add bind-utils to the dnf install list in Containerfile Stage 7 (final)."
+    )
+    assert dig_result.returncode == 0, (
+        f"dig not found in container.\n"
+        f"stdout: {dig_result.stdout!r}, stderr: {dig_result.stderr!r}\n"
+        f"Fix: Add bind-utils to the dnf install list in Containerfile Stage 7 (final)."
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)",
+)
+def test_mc_88_container_network_tools_regression_tests_acceptance(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Acceptance test: nslookup and dig are functional inside the container.
+
+    Feature: MC-88 — Add network diagnostic tools to mc-container image
+    Slice: regression-tests
+    Scope: full-stack (Containerfile + integration test)
+    Source: MC-88
+
+    Acceptance criterion:
+    Beyond merely being installed, nslookup and dig must be functional.
+    Running `nslookup --version` and `dig -v` inside the container must
+    exit successfully (exit code 0) and produce version output, proving
+    the binaries are not just present but linked and operational.
+
+    Expected (after feature implemented):
+    - `nslookup -version` exits 0 and outputs version info
+    - `dig -v` exits 0 and outputs version info
+
+    Expected RED reason (before feature):
+    - AssertionError: bind-utils is not installed, so nslookup and dig
+      binaries do not exist and cannot produce version output.
+    """
+    import subprocess
+
+    if not check_image_exists(podman_client):
+        pytest.skip("mc-rhel10:latest image not found")
+
+    CASE_NUMBER = "99988802"
+
+    container = container_manager.create(
+        case_number=CASE_NUMBER,
+        workspace_path=temp_workspace,
+        customer_name="MC-88 regression acceptance",
+    )
+    cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+    # Verify nslookup is functional (not just present) by running version check
+    nslookup_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "bash", "-c", "nslookup -version 2>&1"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Verify dig is functional (not just present) by running version check
+    dig_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "bash", "-c", "dig -v 2>&1"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert nslookup_result.returncode == 0, (
+        f"nslookup is not functional in the container.\n"
+        f"stdout: {nslookup_result.stdout!r}, stderr: {nslookup_result.stderr!r}\n"
+        f"Fix: Install bind-utils in Containerfile Stage 7 to provide working nslookup."
+    )
+    assert "nslookup" in nslookup_result.stdout.lower() or len(nslookup_result.stdout) > 0, (
+        f"nslookup produced no output — binary may be a stub.\n"
+        f"stdout: {nslookup_result.stdout!r}"
+    )
+
+    assert dig_result.returncode == 0, (
+        f"dig is not functional in the container.\n"
+        f"stdout: {dig_result.stdout!r}, stderr: {dig_result.stderr!r}\n"
+        f"Fix: Install bind-utils in Containerfile Stage 7 to provide working dig."
+    )
+    assert "dig" in dig_result.stdout.lower() or len(dig_result.stdout) > 0, (
+        f"dig produced no output — binary may be a stub.\n"
+        f"stdout: {dig_result.stdout!r}"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not os.environ.get("MC_TEST_INTEGRATION"),
+    reason="Integration tests disabled (set MC_TEST_INTEGRATION=1 to enable)",
+)
+def test_mc_88_container_network_tools_extended_net_tools_acceptance(
+    container_manager, temp_workspace, cleanup_containers, podman_client
+):
+    """Acceptance test: extended network tools (ip, ss, traceroute) in container.
+
+    Feature: MC-88 — Add network diagnostic tools to mc-container image
+    Slice: extended-net-tools
+    Scope: full-stack (Containerfile + integration test)
+    Source: MC-88
+
+    Acceptance criterion:
+    The container must include ip, ss, and traceroute commands, which are
+    essential for network diagnostics during support case work. ip and ss
+    are provided by iproute; traceroute is provided by the traceroute
+    package.
+
+    Expected (after feature implemented):
+    - `which ip` exits 0
+    - `which ss` exits 0
+    - `which traceroute` exits 0
+
+    Expected RED reason (before feature):
+    - AssertionError: iproute and traceroute packages are not installed
+      in the Containerfile, so ip, ss, and traceroute are not available.
+    """
+    import subprocess
+
+    if not check_image_exists(podman_client):
+        pytest.skip("mc-rhel10:latest image not found")
+
+    CASE_NUMBER = "99988803"
+
+    container = container_manager.create(
+        case_number=CASE_NUMBER,
+        workspace_path=temp_workspace,
+        customer_name="MC-88 extended net tools acceptance",
+    )
+    cleanup_containers(container.id)  # type: ignore[attr-defined]
+
+    # Check for ip (provided by iproute)
+    ip_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "ip"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Check for ss (provided by iproute)
+    ss_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "ss"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    # Check for traceroute (provided by traceroute package)
+    traceroute_result = subprocess.run(
+        ["podman", "exec", f"mc-{CASE_NUMBER}", "which", "traceroute"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert ip_result.returncode == 0, (
+        f"ip not found in container.\n"
+        f"stdout: {ip_result.stdout!r}, stderr: {ip_result.stderr!r}\n"
+        f"Fix: Add iproute to the dnf install list in Containerfile Stage 7 (final)."
+    )
+    assert ss_result.returncode == 0, (
+        f"ss not found in container.\n"
+        f"stdout: {ss_result.stdout!r}, stderr: {ss_result.stderr!r}\n"
+        f"Fix: Add iproute to the dnf install list in Containerfile Stage 7 (final)."
+    )
+    assert traceroute_result.returncode == 0, (
+        f"traceroute not found in container.\n"
+        f"stdout: {traceroute_result.stdout!r}, stderr: {traceroute_result.stderr!r}\n"
+        f"Fix: Add traceroute to the dnf install list in Containerfile Stage 7 (final)."
+    )
