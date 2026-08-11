@@ -1,6 +1,31 @@
 """Integration test specific fixtures."""
 
+import os
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def skip_image_pull_for_local_builds(monkeypatch):
+    """Skip registry image pull when testing against a locally-built container image.
+
+    Set MC_TEST_LOCAL_IMAGE=1 to prevent ContainerManager._ensure_image() from
+    pulling from the registry.  This is required during development iteration on
+    Containerfile changes: the local image has the changes, but the registry
+    image does not yet.
+
+    Without this, _ensure_image() detects a digest mismatch and overwrites the
+    local image with the (stale) registry version, causing the test to fail even
+    though the Containerfile change is correct.
+    """
+    if os.environ.get("MC_TEST_LOCAL_IMAGE"):
+        from mc.container.manager import ContainerManager
+
+        monkeypatch.setattr(
+            ContainerManager,
+            "_ensure_image",
+            lambda self, image_name, registry_image: None,
+        )
 
 
 def pytest_configure(config):
