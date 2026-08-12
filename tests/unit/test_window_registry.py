@@ -1,5 +1,6 @@
 """Unit tests for WindowRegistry class."""
 
+import sys
 import time
 from pathlib import Path
 
@@ -386,6 +387,7 @@ class TestWindowRegistry:
         db.remove("12345678")
         assert db.get_terminal_type("12345678") is None
 
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launcher test")
     def test_validate_window_exists_creates_iterm2_launcher(self, mocker):
         """_validate_window_exists creates a MacOSLauncher with terminal=iTerm2 on Darwin."""
         db = WindowRegistry(":memory:")
@@ -402,6 +404,7 @@ class TestWindowRegistry:
         mock_launcher_cls.assert_called_once_with(terminal="iTerm2")
         mock_launcher_instance._window_exists_by_id.assert_called_once_with("window-123")
 
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only launcher test")
     def test_validate_window_exists_creates_terminal_app_launcher(self, mocker):
         """_validate_window_exists creates a MacOSLauncher with terminal=Terminal.app on Darwin."""
         db = WindowRegistry(":memory:")
