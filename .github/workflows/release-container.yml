@@ -27,7 +27,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Run unit tests
-        run: uv run --extra dev pytest tests/unit/ -q --tb=short -p no:cov
+        run: uv run --extra dev pytest tests/unit/ -q --tb=short --no-cov
 
   build-and-push:
     name: Build and push container image
