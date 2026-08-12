@@ -30,7 +30,7 @@
   │ DONE   │         │        │ remove the max length cap. No architectural impact.                                                                      │
   ├────────┼─────────┼────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
   │ MC-88  │ Feature │ Low    │ Container image is missing nslookup, dig, and similar network diagnostic tools. Fix is adding a dnf install bind-utils   │
-  │ InProg │         │        │ (or equivalent) line to the Containerfile. Trivial change, just needs a container rebuild.                               │
+  │ DONE   │         │        │ (or equivalent) line to the Containerfile. Trivial change, just needs a container rebuild.                               │
   ├────────┼─────────┼────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
   │ MC-28  │ Task    │ Low    │ Research task — evaluate whether openshift/rosa Claude skills from the upstream repo can be integrated into mc. No code  │
   │        │         │        │ changes; exploratory only. Could be closed as wontfix or kept as a backlog idea.                                         │
