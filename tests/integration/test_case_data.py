@@ -10,6 +10,121 @@ import json
 import pytest
 
 
+# ---------------------------------------------------------------------------
+# MC-106 quiet startup regression tests
+# ---------------------------------------------------------------------------
+
+CASE_NUMBER = "12345678"
+
+
+@pytest.mark.integration
+def test_mc_106_quiet_startup_no_token_silent_regression(tmp_path, mocker, capsys) -> None:
+    """Regression test for fix/MC-106-quiet-startup (MC-106).
+
+    Bug discovered: 2026-08-23
+    Platform: In-container
+    Severity: minor
+    Source: MC-106
+
+    Problem:
+    When a container shell opens, attach.py runs
+    'mc agent init-case || true; mc agent backplane-login || true' before the
+    interactive bash session. If no offline token is configured, init_case_data()
+    prints to stdout:
+
+        Warning: No offline token in config — cannot fetch case data
+
+    This message appears before the first bash prompt, degrading the UX with
+    unexpected noise.
+
+    Steps to reproduce:
+    1. Ensure no offline token is in the mc config (e.g., first-run container)
+    2. Attach to a container: the init-case command runs before exec bash
+    3. Observe "Warning: No offline token in config — cannot fetch case data" in terminal
+
+    Expected: init_case_data() silently skips when no token is configured —
+              no stdout output (use logger.debug() for internal diagnostics only).
+    Actual:   print("Warning: No offline token in config — cannot fetch case data")
+              is called, producing noise before the bash prompt.
+
+    This test ensures the bug does not regress.
+    """
+    from mc.agent.case_data import init_case_data
+
+    # Simulate container with no offline token in config (common on first run)
+    mock_config_mgr = mocker.MagicMock()
+    mock_config_mgr.load.return_value = {"api": {}}  # no token key
+    mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
+
+    init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
+
+    captured = capsys.readouterr()
+    assert captured.out == "", (
+        f"init_case_data() must produce no stdout when token is absent "
+        f"(use logger.debug not print for skipped-fetch conditions), got:\n{captured.out!r}"
+    )
+
+
+@pytest.mark.integration
+def test_mc_106_quiet_startup_ocm_failure_silent_regression(tmp_path, mocker, capsys) -> None:
+    """Regression test for fix/MC-106-quiet-startup — OCM lookup path (MC-106).
+
+    Bug discovered: 2026-08-23
+    Platform: In-container
+    Severity: minor
+    Source: MC-106
+
+    Problem:
+    When the SFDC case has an openshiftClusterID and OCM is not logged in,
+    init_case_data() prints to stdout:
+
+        Warning: ocm get cluster failed (exit 1): Cluster not found
+
+    This appears before the bash prompt.
+
+    Expected: OCM lookup failures are logged at debug level only — no stdout.
+    Actual:   print("Warning: ocm get cluster failed ...") produces terminal noise.
+
+    This test ensures the bug does not regress.
+    """
+    from mc.agent.case_data import init_case_data
+
+    # Config with valid token so we get past the token check
+    mock_config_mgr = mocker.MagicMock()
+    mock_config_mgr.load.return_value = {"api": {"rh_api_offline_token": "fake-token"}}
+    mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
+    mocker.patch("mc.utils.auth.get_access_token", return_value="access_token")
+
+    # SFDC API returns a case that has a cluster external ID
+    case_details = {
+        "caseNumber": CASE_NUMBER,
+        "customerName": "ACME Corp",
+        "summary": "Cluster node NotReady",
+        "severity": "3 (Normal)",
+        "status": "Waiting on Customer",
+        "product": "OpenShift Container Platform",
+        "openshiftClusterID": "abc-cluster-ext-id-123",
+    }
+    mock_api = mocker.MagicMock()
+    mock_api.fetch_case_details.return_value = case_details
+    mock_api.fetch_case_comments.return_value = []
+    mocker.patch("mc.integrations.redhat_api.RedHatAPIClient", return_value=mock_api)
+
+    # OCM is not logged in — lookup fails with non-zero exit code (404)
+    mocker.patch(
+        "subprocess.run",
+        return_value=mocker.MagicMock(returncode=1, stderr="Cluster not found (404)"),
+    )
+
+    init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
+
+    captured = capsys.readouterr()
+    assert captured.out == "", (
+        f"init_case_data() must produce no stdout when OCM lookup fails "
+        f"(use logger.debug not print), got:\n{captured.out!r}"
+    )
+
+
 @pytest.mark.integration
 def test_sfdc_file_save_path_regression(tmp_path, mocker):
     """Regression test for fix/sfdc-file-save-path (MC-73).
