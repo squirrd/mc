@@ -2020,3 +2020,58 @@ def test_MC_81_test_config_isolation_regression() -> None:
         "Fix: Use MC_ENV isolation so the test operates on ~/mc-test-fresh-install/ "
         "and never touches ~/mc/."
     )
+
+
+@pytest.mark.integration
+def test_fix_mc125_bashrc_env_isolation_regression(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression test for MC-125: get_bashrc_path() must respect MC_ENV.
+
+    Bug discovered: 2026-08-23
+    Platform: macOS / Linux
+    Severity: minor
+    Source: MC-125
+
+    Problem:
+        When MC_ENV is set (e.g., MC_ENV=test-fresh-install), get_bashrc_path()
+        still writes the bashrc under ~/mc/config/bashrc/ instead of the
+        isolated ~/mc-test-fresh-install/config/bashrc/ directory.
+
+        This breaks environment isolation: UAT and dev environments share the
+        same bashrc files as production, making it impossible to test bashrc
+        changes without affecting live case sessions.
+
+    Root cause:
+        get_bashrc_path() in terminal/shell.py hardcodes
+        Path.home() / "mc" / "config" / "bashrc" without reading MC_ENV,
+        unlike ConfigManager.get_config_path() which correctly derives the
+        directory name from MC_ENV.
+
+    Expected (after fix):
+        With MC_ENV=test-fresh-install, get_bashrc_path("12345678") returns a
+        path under ~/mc-test-fresh-install/config/bashrc/.
+
+    Actual (before fix):
+        get_bashrc_path("12345678") always returns a path under
+        ~/mc/config/bashrc/ regardless of MC_ENV.
+
+    Test approach:
+        Sets MC_ENV via monkeypatch, calls get_bashrc_path(), and asserts the
+        returned path is under the isolated environment directory.
+        No Podman or network access required.
+    """
+    mc_env = "test-fresh-install"
+    monkeypatch.setenv("MC_ENV", mc_env)
+
+    from mc.terminal.shell import get_bashrc_path
+
+    bashrc_path = get_bashrc_path("12345678")
+
+    expected_prefix = str(Path.home() / f"mc-{mc_env}" / "config" / "bashrc")
+
+    assert bashrc_path.startswith(expected_prefix), (
+        f"get_bashrc_path() does not respect MC_ENV={mc_env}.\n"
+        f"Expected path under: {expected_prefix}\n"
+        f"Got:                 {bashrc_path}\n"
+        f"Bashrc must be written to the MC_ENV-isolated directory, "
+        f"not the production ~/mc/config/bashrc/."
+    )

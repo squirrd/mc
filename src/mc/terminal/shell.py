@@ -212,11 +212,16 @@ def get_bashrc_path(case_number: str) -> str:
         case_number: Case number (e.g., "12345678")
 
     Returns:
-        Absolute path to bashrc file (e.g., ~/mc/config/bashrc/mc-12345678.bashrc)
+        Absolute path to bashrc file. When MC_ENV is set, uses
+        ~/mc-{MC_ENV}/config/bashrc/mc-{case_number}.bashrc for isolation,
+        otherwise ~/mc/config/bashrc/mc-{case_number}.bashrc.
     """
     # Use consolidated directory structure: ~/mc/config/bashrc/
+    # When MC_ENV is set, use ~/mc-{MC_ENV}/config/bashrc/ for isolation
     # (instead of platform-specific platformdirs locations)
-    bashrc_dir = Path.home() / "mc" / "config" / "bashrc"
+    mc_env = os.environ.get("MC_ENV")
+    dir_name = f"mc-{mc_env}" if mc_env else "mc"
+    bashrc_dir = Path.home() / dir_name / "config" / "bashrc"
 
     # Create directory if it doesn't exist
     bashrc_dir.mkdir(parents=True, exist_ok=True)

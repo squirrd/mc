@@ -454,6 +454,35 @@ class TestGetBashrcPath:
         # Should create bashrc directory with parents=True, exist_ok=True
         mock_mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
+    @patch("mc.terminal.shell.Path.mkdir")
+    def test_get_bashrc_path_respects_mc_env(self, mock_mkdir):
+        """Verify get_bashrc_path uses MC_ENV-isolated directory when MC_ENV is set."""
+        case_number = "12345678"
+        mc_env = "test-env-isolation"
+
+        with patch.dict(os.environ, {"MC_ENV": mc_env}):
+            path = get_bashrc_path(case_number)
+
+        expected_prefix = str(Path.home() / f"mc-{mc_env}" / "config" / "bashrc")
+        assert path.startswith(expected_prefix), (
+            f"get_bashrc_path() did not respect MC_ENV={mc_env}.\n"
+            f"  Expected prefix: {expected_prefix}\n"
+            f"  Got:             {path}"
+        )
+        assert path.endswith(f"mc-{case_number}.bashrc")
+
+    @patch("mc.terminal.shell.Path.mkdir")
+    def test_get_bashrc_path_no_mc_env_uses_default(self, mock_mkdir):
+        """Verify get_bashrc_path uses ~/mc/ when MC_ENV is not set."""
+        case_number = "12345678"
+        env = {k: v for k, v in os.environ.items() if k != "MC_ENV"}
+
+        with patch.dict(os.environ, env, clear=True):
+            path = get_bashrc_path(case_number)
+
+        expected = str(Path.home() / "mc" / "config" / "bashrc" / f"mc-{case_number}.bashrc")
+        assert path == expected
+
 
 class TestWriteBashrc:
     """Tests for write_bashrc function."""
