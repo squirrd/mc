@@ -280,8 +280,8 @@ class TestOcmBehavior:
 # ---------------------------------------------------------------------------
 
 class TestFailureHandling:
-    def test_sfdc_api_failure_prints_warning_does_not_raise(self, tmp_path, mocker, capsys):
-        """When authentication fails, warning is printed and function returns silently."""
+    def test_sfdc_api_failure_silent_does_not_raise(self, tmp_path, mocker, capsys):
+        """When authentication fails, function returns silently with no stdout output."""
         mock_config_mgr = mocker.MagicMock()
         mock_config_mgr.load.return_value = {"api": {"rh_api_offline_token": "tok"}}
         mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
@@ -294,10 +294,12 @@ class TestFailureHandling:
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
         captured = capsys.readouterr()
-        assert "Warning" in captured.out
+        assert captured.out == "", (
+            "init_case_data() must produce no stdout on auth failure (use logger.debug not print)"
+        )
 
-    def test_case_details_failure_prints_warning_does_not_raise(self, tmp_path, mocker, capsys):
-        """When fetch_case_details fails, warning is printed and function returns silently."""
+    def test_case_details_failure_silent_does_not_raise(self, tmp_path, mocker, capsys):
+        """When fetch_case_details fails, function returns silently with no stdout output."""
         mock_config_mgr = mocker.MagicMock()
         mock_config_mgr.load.return_value = {"api": {"rh_api_offline_token": "tok"}}
         mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
@@ -309,7 +311,9 @@ class TestFailureHandling:
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
         captured = capsys.readouterr()
-        assert "Warning" in captured.out
+        assert captured.out == "", (
+            "init_case_data() must produce no stdout on case details failure (use logger.debug not print)"
+        )
         # No files should be written
         assert not (tmp_path / "sfdc" / "sfdc-case.json").exists()
 
@@ -322,8 +326,8 @@ class TestFailureHandling:
         assert comments_path.exists()
         assert json.loads(comments_path.read_text()) == []
 
-    def test_no_offline_token_prints_warning_does_not_raise(self, tmp_path, mocker, capsys):
-        """When no offline token is configured, warning is printed and function returns."""
+    def test_no_offline_token_silent_does_not_raise(self, tmp_path, mocker, capsys):
+        """When no offline token is configured, function returns silently with no stdout output."""
         mock_config_mgr = mocker.MagicMock()
         mock_config_mgr.load.return_value = {"api": {}}
         mocker.patch("mc.config.manager.ConfigManager", return_value=mock_config_mgr)
@@ -331,7 +335,9 @@ class TestFailureHandling:
         init_case_data(CASE_NUMBER, case_dir=str(tmp_path))
 
         captured = capsys.readouterr()
-        assert "Warning" in captured.out
+        assert captured.out == "", (
+            "init_case_data() must produce no stdout when token is absent (use logger.debug not print)"
+        )
         assert not (tmp_path / "sfdc" / "sfdc-case.json").exists()
 
 

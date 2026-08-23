@@ -21,8 +21,8 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
     """Fetch case data from Red Hat API and write files to case directory.
 
     Called inside the container before the interactive shell opens.
-    On any SFDC API failure: prints warning and returns (does not raise).
-    On OCM failure: prints warning, skips ocm-cluster.json, continues.
+    On any SFDC API failure: logs debug warning and returns (does not raise).
+    On OCM failure: logs debug warning, skips ocm-cluster.json, continues.
     All files are always overwritten (no skip-if-exists logic).
 
     Args:
@@ -36,7 +36,7 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
     config = config_mgr.load()
     offline_token = config.get("api", {}).get("rh_api_offline_token") or config.get("api", {}).get("offline_token")
     if not offline_token:
-        print("Warning: No offline token in config — cannot fetch case data")
+        logger.debug("No offline token in config — cannot fetch case data")
         return
 
     # 2. Exchange for access token
@@ -45,7 +45,7 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
     try:
         access_token = get_access_token(offline_token)
     except Exception as e:
-        print(f"Warning: Failed to authenticate for case data fetch: {e}")
+        logger.debug("Failed to authenticate for case data fetch: %s", e)
         return
 
     # 3. Fetch case details (non-fatal on failure)
@@ -55,14 +55,14 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
         api_client = RedHatAPIClient(access_token)
         case_details = api_client.fetch_case_details(case_number)
     except Exception as e:
-        print(f"Warning: Failed to fetch case details: {e}")
+        logger.debug("Failed to fetch case details: %s", e)
         return
 
     # 4. Fetch comments (non-fatal on failure — write empty list on failure)
     try:
         comments = api_client.fetch_case_comments(case_number)
     except Exception as e:
-        print(f"Warning: Failed to fetch case comments: {e}")
+        logger.debug("Failed to fetch case comments: %s", e)
         comments = []
 
     # 5. Write sfdc-case.json to sfdc/ subdirectory
@@ -117,12 +117,12 @@ def init_case_data(case_number: str, case_dir: str = CASE_DIR) -> None:
                     with open(ocm_cluster_path, "w") as f:
                         f.write(json.dumps(items[0], indent=2))
                 else:
-                    print(f"Warning: no OCM cluster found for external_id={cluster_external_id}")
+                    logger.debug("No OCM cluster found for external_id=%s", cluster_external_id)
             else:
-                print(f"Warning: ocm get cluster failed (exit {result.returncode}): {result.stderr.strip()}")
+                logger.debug("ocm get cluster failed (exit %d): %s", result.returncode, result.stderr.strip())
         except subprocess.TimeoutExpired:
-            print("Warning: ocm get cluster timed out — skipping ocm-cluster.json")
+            logger.debug("ocm get cluster timed out — skipping ocm-cluster.json")
         except FileNotFoundError:
-            print("Warning: ocm binary not found — skipping ocm-cluster.json")
+            logger.debug("ocm binary not found — skipping ocm-cluster.json")
         except Exception as e:
-            print(f"Warning: ocm get cluster failed: {e}")
+            logger.debug("ocm get cluster failed: %s", e)
