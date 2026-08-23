@@ -11,6 +11,7 @@ the expected structure for automated container publishing.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -195,4 +196,57 @@ def test_mc_86_ci_container_publish_verify_docs_acceptance() -> None:
     assert has_ci_container_ref, (
         "CLAUDE.md does not document the automated container publish pipeline. "
         "It should explain that container builds are automated via GitHub Actions on release."
+    )
+
+
+@pytest.mark.integration
+def test_quay_creds_refresh_regression() -> None:
+    """Regression test for MC-206: QUAY_USERNAME and QUAY_PASSWORD secrets missing.
+
+    Feature  : MC-206-quay-creds-refresh
+    Slice    : secrets-configured
+    Source   : MC-206
+    Criterion: The GitHub Actions secrets QUAY_USERNAME and QUAY_PASSWORD must both
+               be set in the repo's Actions secrets so that the release-container
+               workflow can authenticate to quay.io and push the container image.
+
+    Bug: The release-container workflow's `podman login quay.io` step receives empty
+    strings for both username and password because the secrets were never configured,
+    producing:
+        Error: getting username and password: reading username: EOF
+
+    This test verifies:
+    1. `gh secret list --app actions` succeeds (gh CLI is authenticated)
+    2. QUAY_USERNAME appears in the Actions secrets list
+    3. QUAY_PASSWORD appears in the Actions secrets list
+    """
+    result = subprocess.run(
+        ["gh", "secret", "list", "--app", "actions"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, (
+        f"gh secret list failed (exit {result.returncode}). "
+        f"Ensure gh CLI is authenticated and has repo access.\n"
+        f"stderr: {result.stderr.strip()}"
+    )
+
+    secret_names = [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
+
+    assert "QUAY_USERNAME" in secret_names, (
+        f"Secret QUAY_USERNAME is not configured in GitHub Actions secrets. "
+        f"Found secrets: {secret_names}. "
+        f"Without this secret, `podman login quay.io` receives an empty username "
+        f"and fails with: Error: getting username and password: reading username: EOF. "
+        f"Fix: gh secret set QUAY_USERNAME --body '<your-quay-robot-username>'"
+    )
+
+    assert "QUAY_PASSWORD" in secret_names, (
+        f"Secret QUAY_PASSWORD is not configured in GitHub Actions secrets. "
+        f"Found secrets: {secret_names}. "
+        f"Without this secret, `podman login quay.io` receives an empty password "
+        f"and fails with: Error: getting username and password: reading username: EOF. "
+        f"Fix: gh secret set QUAY_PASSWORD --body '<your-quay-robot-token>'"
     )
