@@ -15,8 +15,8 @@
   ├────────┼─────────┼────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
   │        │         │        │ Container fails OCM login, SFDC download, and backplane login when the corporate proxy (squid.corp.redhat.com) is        │
   │ MC-89  │ Bug     │ High   │ unreachable from inside the container. DNS resolution fails for the proxy host, leaving the container with no cluster    │
-  │        │         │        │ access and no case data. Likely a proxy/network config not being forwarded into the Podman container — needs             │
-  │        │         │        │ investigation into how host proxy settings are passed.                                                                   │
+  │ DONE   │         │        │ access and no case data. Likely a proxy/network config not being forwarded into the Podman container — needs             │
+  │        │         │        │ investigation into how host proxy settings are passed. Resolved — container now logs in successfully.                    │
   ├────────┼─────────┼────────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
   │        │         │        │ Fresh installs with MC_ENV isolation don't create the bashrc directory at the env-specific path                          │
   │ MC-125 │ Bug     │ Medium │ (~/mc-{env}/config/bashrc/). The bashrc creation code isn't respecting the MC_ENV prefix. Scoped fix — likely a          │
